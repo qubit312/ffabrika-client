@@ -31,12 +31,12 @@ jobs:
             cd $TARGET_DIR
             git fetch --all --prune
             git reset --hard origin/main
-            pnpm install --prod --frozen-lockfile
+            pnpm install
             pnpm run build
             if pm2 list | grep -q $APP_NAME; then
               pm2 reload $APP_NAME
             else
-              pm2 start .output/server/index.mjs --name $APP_NAME -- --port=$PORT
+              pm2 start npx --name ffabrika-dev -- nuxi dev . --host 0.0.0.0 --port 3000
             fi
             pm2 save
           EOF
