@@ -19,24 +19,17 @@ jobs:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
       - name: Deploy to VPS via SSH
-        env:
-          HOST: ${{ secrets.VPS_HOST }}
-          USERNAME: ${{ secrets.VPS_USER }}
-          TARGET_DIR: /home/${{ secrets.VPS_USER }}/ffabrika-client
-          APP_NAME: ffabrika-client
-          PORT: 3000
-        run: |
-          set -e
-          ssh -vvv -o StrictHostKeyChecking=no $USERNAME@$HOST << 'EOF'
-            cd $TARGET_DIR
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: fastuser
+          password: ${{ secrets.VPS_PASSWORD }}
+          port: 22
+          script: |
+            cd /home/fastuser/ffabrika-client
             git fetch --all --prune
             git reset --hard origin/main
             pnpm install
             pnpm run build
-            if pm2 list | grep -q $APP_NAME; then
-              pm2 reload $APP_NAME
-            else
-              pm2 start npx --name ffabrika-dev -- nuxi dev . --host 0.0.0.0 --port 3000
-            fi
+            pm2 reload ffabrika-client || pm2 start npx --name ffabrika-client -- nuxi dev . --host 0.0.0.0 --port 3000
             pm2 save
-          EOF
