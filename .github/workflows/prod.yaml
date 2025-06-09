@@ -13,3 +13,19 @@ jobs:
         run: |
           cd /home/fastuser/ffabrika-client
           git pull origin main
+
+      - name: Install dependencies
+        run: |
+          cd /home/fastuser/ffabrika-client
+          npm install
+
+      - name: Build project
+        run: |
+          cd /home/fastuser/ffabrika-client
+          npm run build
+
+      - name: Reload with PM2
+        run: |
+          cd /home/fastuser/ffabrika-client
+          pm2 reload ffabrika-client \
+            || pm2 start npx --name ffabrika-client -- nuxi dev . --host 0.0.0.0 --port 3000
