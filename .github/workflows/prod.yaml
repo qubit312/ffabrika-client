@@ -7,7 +7,7 @@ on:
 
 jobs:
   deploy:
-    runs-on: [self-hosted, ffabrika-client]
+    runs-on: [self-hosted, ffabrika]
 
     steps:
       - name: Checkout code
