@@ -18,18 +18,24 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
+      - name: Install sshpass
+        run: sudo apt-get update && sudo apt-get install -y sshpass
+
       - name: Deploy to VPS via SSH
-        uses: appleboy/ssh-action@v0.1.7
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: fastuser
-          password: ${{ secrets.VPS_PASSWORD }}
-          port: 22
-          script: |
-            cd /home/fastuser/ffabrika-client
+        env:
+          HOST: ${{ secrets.VPS_HOST }}
+          USERNAME: fastuser
+          VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
+          TARGET_DIR: /home/fastuser/ffabrika-client
+          APP_NAME: ffabrika-client
+        run: |
+          set -e
+          sshpass -p "$VPS_PASSWORD" ssh -o StrictHostKeyChecking=no $USERNAME@$HOST << 'EOF'
+            cd $TARGET_DIR
             git fetch --all --prune
             git reset --hard origin/main
             pnpm install
             pnpm run build
-            pm2 reload ffabrika-client || pm2 start npx --name ffabrika-client -- nuxi dev . --host 0.0.0.0 --port 3000
+            pm2 reload $APP_NAME || pm2 start npx --name $APP_NAME -- nuxi dev . --host 0.0.0.0 --port 3000
             pm2 save
+          EOF
