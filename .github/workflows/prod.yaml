@@ -1,15 +1,15 @@
-name: Deploy to VPS via SSH
+name: Auto Deploy FFabrika Client
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
 
 jobs:
-  pull:
-    runs-on: [self-hosted, ffabrika]
+  deploy-client:
+    runs-on: [self-hosted, linux, x64]
+
     steps:
-      - name: Pull latest code on server
+      - name: Pull latest FFabrika Client
         run: |
           cd /home/fastuser/ffabrika-client
           git pull origin main
