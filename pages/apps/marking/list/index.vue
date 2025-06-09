@@ -72,7 +72,7 @@ const deleteProduct = async (id: number) => {
   <div>
     <!-- marking -->
     <VCard
-      title="Этикетки Тестируем 5"
+      title="Этикетки 5"
       class="mb-6"
     >
       <VDivider />
