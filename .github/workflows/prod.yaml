@@ -26,6 +26,9 @@ jobs:
               -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile=~/.ssh/known_hosts \
               -tt fastuser@${{ secrets.VPS_HOST }} << 'EOF'
+            
+            export TARGET_DIR=/home/fastuser/ffabrika-client
+            export APP_NAME=ffabrika-client
 
             sudo chown -R fastuser:fastuser "$TARGET_DIR"
             sudo find "$TARGET_DIR" -type d -exec chmod 755 {} \;
