@@ -14,10 +14,18 @@ jobs:
           cd /home/fastuser/ffabrika-client
           git pull origin main
 
+      - name: Fix ownership before install
+        run: |
+          sudo chown -R fastuser:fastuser /home/fastuser/ffabrika-client
+
       - name: Install dependencies
         run: |
           cd /home/fastuser/ffabrika-client
           pnpm install --reporter=append-only --loglevel=debug
+
+      - name: Fix ownership before build
+        run: |
+          sudo chown -R fastuser:fastuser /home/fastuser/ffabrika-client
 
       - name: Build project
         run: |
