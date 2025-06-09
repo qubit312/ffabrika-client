@@ -27,6 +27,7 @@ jobs:
               -o UserKnownHostsFile=~/.ssh/known_hosts \
               -tt fastuser@${{ secrets.VPS_HOST }} << 'EOF'
             
+            set -x
             export TARGET_DIR=/home/fastuser/ffabrika-client
             export APP_NAME=ffabrika-client
 
