@@ -9,8 +9,7 @@ jobs:
     runs-on: [self-hosted, ffabrika]
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
       - name: Write SSH key
         run: |
@@ -18,25 +17,8 @@ jobs:
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
 
-      - name: Normalize key line endings
-        run: |
-          sudo apt-get update && sudo apt-get install -y dos2unix
-          dos2unix ~/.ssh/id_ed25519
-
-      - name: Check SSH key file
-        run: |
-          ls -l ~/.ssh
-          head -n3 ~/.ssh/id_ed25519
-          tail -n3 ~/.ssh/id_ed25519
-
       - name: Add VPS to known_hosts
         run: ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
-
-      - name: SSH debug (verbose)
-        run: |
-          ssh -vvv -i ~/.ssh/id_ed25519 \
-              -o StrictHostKeyChecking=no \
-              fastuser@${{ secrets.VPS_HOST }} echo "SSH_DEBUG_OK"
 
       - name: Deploy to VPS
         run: |
