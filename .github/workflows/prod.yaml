@@ -18,21 +18,11 @@ jobs:
         run: |
           sudo chown -R fastuser:fastuser /home/fastuser/ffabrika-client
 
-      - name: Ensure esbuild binaries are executable
-        run: |
-          sudo find /home/fastuser/ffabrika-client/node_modules/.pnpm \
-            -type f \
-            -path '*/@esbuild/*/node_modules/@esbuild/*/bin/esbuild' \
-            -exec chmod +x {} \;
-
       - name: Install dependencies
         run: |
           cd /home/fastuser/ffabrika-client
+          chmod +x node_modules/.pnpm/@esbuild+linux-x64@*/node_modules/@esbuild/linux-x64/bin/esbuild
           pnpm install --reporter=append-only --loglevel=debug
-
-      - name: Fix ownership before build
-        run: |
-          sudo chown -R fastuser:fastuser /home/fastuser/ffabrika-client
 
       - name: Build project
         run: |
