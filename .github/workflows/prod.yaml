@@ -17,12 +17,12 @@ jobs:
       - name: Install dependencies
         run: |
           cd /home/fastuser/ffabrika-client
-          npm install
+          pnpm install --reporter=append-only --loglevel=debug
 
       - name: Build project
         run: |
           cd /home/fastuser/ffabrika-client
-          npm run build
+          pnpm run build
 
       - name: Reload with PM2
         run: |
