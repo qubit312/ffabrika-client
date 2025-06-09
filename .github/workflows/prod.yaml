@@ -26,30 +26,30 @@ jobs:
               -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile=~/.ssh/known_hosts \
               -tt fastuser@${{ secrets.VPS_HOST }} << 'EOF'
-set -x
-export TARGET_DIR=/home/fastuser/ffabrika-client
-export APP_NAME=ffabrika-client
+          set -x
+          export TARGET_DIR=/home/fastuser/ffabrika-client
+          export APP_NAME=ffabrika-client
 
-echo ">>> chown"
-sudo -n chown -R fastuser:fastuser "$TARGET_DIR"
+          echo ">>> chown"
+          sudo -n chown -R fastuser:fastuser "$TARGET_DIR"
 
-echo ">>> chmod dirs"
-sudo -n find "$TARGET_DIR" -type d -exec chmod 755 {} \;
+          echo ">>> chmod dirs"
+          sudo -n find "$TARGET_DIR" -type d -exec chmod 755 {} \;
 
-echo ">>> chmod files"
-sudo -n find "$TARGET_DIR" -type f -exec chmod 644 {} \;
+          echo ">>> chmod files"
+          sudo -n find "$TARGET_DIR" -type f -exec chmod 644 {} \;
 
-echo ">>> chmod node_modules executables"
-sudo -n find "$TARGET_DIR/node_modules" -type f -exec chmod u+rx {} \;
+          echo ">>> chmod node_modules executables"
+          sudo -n find "$TARGET_DIR/node_modules" -type f -exec chmod u+rx {} \;
 
-echo ">>> cd & build"
-cd "$TARGET_DIR"
-git fetch --all --prune
-git reset --hard origin/main
-pnpm install
-pnpm run build
+          echo ">>> cd & build"
+          cd "$TARGET_DIR"
+          git fetch --all --prune
+          git reset --hard origin/main
+          pnpm install
+          pnpm run build
 
-echo ">>> restart pm2"
-pm2 reload $APP_NAME || pm2 start npx --name $APP_NAME -- nuxi dev . --host 0.0.0.0 --port 3000
-pm2 save
-EOF
+          echo ">>> restart pm2"
+          pm2 reload $APP_NAME || pm2 start npx --name $APP_NAME -- nuxi dev . --host 0.0.0.0 --port 3000
+          pm2 save
+          EOF
