@@ -27,7 +27,7 @@ jobs:
           PORT: 3000
         run: |
           set -e
-          ssh -o StrictHostKeyChecking=no $USERNAME@$HOST << 'EOF'
+          ssh -vvv -o StrictHostKeyChecking=no $USERNAME@$HOST << 'EOF'
             cd $TARGET_DIR
             git fetch --all --prune
             git reset --hard origin/main
