@@ -1,133 +1,116 @@
 <script setup lang="ts">
-import { defineProps } from 'vue';
+import PrintLabelDialog from '@/components/dialogs/PrintLabelDialog.vue';
+import type { ShortEntityParams } from '@db/apps/marking/types';
+import { defineProps, onMounted, ref } from 'vue';
 
 interface Props {
   markingId: string
+  name: string
+  article: string
+  composition: string
+  color: string
+  size: string
+  client: ShortEntityParams | null
 }
 
 type MarkingVariants = {
   id: string;
   size: string;
   barcode: string;
+  printableLabelCount: number,
   markingId: string;
 };
 
+const props = defineProps<Props>();
+
 const markingVariants: MarkingVariants[] = [
-  {
-    id: '1',
-    size: 'S',
-    barcode: '4000000000001',
-    markingId: '1'
-  },
-  {
-    id: '2',
-    size: 'M',
-    barcode: '4000000000002',
-    markingId: '2'
-  },
-  {
-    id: '3',
-    size: 'L',
-    barcode: '4000000000003',
-    markingId: '3'
-  },
-  {
-    id: '4',
-    size: 'XL',
-    barcode: '4000000000004',
-    markingId: '4'
-  }
+  { id: '1', size: 'S', barcode: '4000000000001', printableLabelCount: 21,  markingId: '1' },
+  { id: '2', size: 'M', barcode: '4000000000002', printableLabelCount: 12, markingId: '2' },
+  { id: '3', size: 'L', barcode: '4000000000003', printableLabelCount: 43, markingId: '3' },
+  { id: '4', size: 'XL', barcode: '4000000000004', printableLabelCount: 3, markingId: '4' },
 ];
 
-const props = defineProps<Props>()
+const isDialogVisible = ref(false);
+let currentItem = ref<MarkingVariants | null>(null);
 
-const editDialog = ref(false)
-const deleteDialog = ref(false)
+const editDialog = ref(false);
+const deleteDialog = ref(false);
+const defaultItem = ref<MarkingVariants>({ id: '-1', size: '', printableLabelCount: 0, barcode: '', markingId: '' });
+const editedItem = ref<MarkingVariants>(defaultItem.value);
+const editedIndex = ref(-1);
+const userList = ref<MarkingVariants[]>([]);
 
-const defaultItem = ref<MarkingVariants>({
-  id: "-1",
-  size: '',
-  barcode: '',
-  markingId: ''
-})
-
-const editedItem = ref<MarkingVariants>(defaultItem.value)
-const editedIndex = ref(-1)
-const userList = ref<MarkingVariants[]>([])
-
-// headers
 const headers = [
   { title: 'Баркод', key: 'barcode', sortable: false },
   { title: 'Размер', key: 'size', sortable: false },
+  { title: 'Кол-во Честных знаков', key: 'printableLabelCount', sortable: false },
   { title: '', key: 'actions', sortable: false },
-]
+];
 
-// 👉 methods
 const editItem = (item: MarkingVariants) => {
-  editedIndex.value = userList.value.indexOf(item)
-  editedItem.value = { ...item }
-  editDialog.value = true
-}
+  editedIndex.value = userList.value.indexOf(item);
+  editedItem.value = { ...item };
+  editDialog.value = true;
+};
 
 const addItem = () => {
-  editedIndex.value = -1
-  editedItem.value = { id: '', size: '', barcode: '', markingId: props.markingId }
-  editDialog.value = true
-}
+  editedIndex.value = -1;
+  editedItem.value = { id: '', size: '', barcode: '', printableLabelCount: 0, markingId: props.markingId };
+  editDialog.value = true;
+};
 
 const deleteItem = (item: MarkingVariants) => {
-  editedIndex.value = userList.value.indexOf(item)
-  editedItem.value = { ...item }
-  deleteDialog.value = true
-}
+  editedIndex.value = userList.value.indexOf(item);
+  editedItem.value = { ...item };
+  deleteDialog.value = true;
+};
 
-const close = () => {
-  editDialog.value = false
-  editedIndex.value = -1
-  editedItem.value = { ...defaultItem.value }
-}
+const openPrintDialog = (item: MarkingVariants) => {
+  currentItem.value = item;
+  isDialogVisible.value = true;
+};
+
+const closeEdit = () => {
+  editDialog.value = false;
+  editedIndex.value = -1;
+};
 
 const closeDelete = () => {
-  deleteDialog.value = false
-  editedIndex.value = -1
-  editedItem.value = { ...defaultItem.value }
-}
+  deleteDialog.value = false;
+  editedIndex.value = -1;
+};
 
 const save = () => {
   if (editedIndex.value > -1) {
-    Object.assign(userList.value[editedIndex.value], editedItem.value)
+    Object.assign(userList.value[editedIndex.value], editedItem.value);
   } else {
-    editedItem.value.id = Date.now().toString()
-    editedItem.value.markingId = props.markingId
-    userList.value.push({ ...editedItem.value })
+    editedItem.value.id = Date.now().toString();
+    editedItem.value.markingId = props.markingId;
+    userList.value.push({ ...editedItem.value });
   }
-
-  close()
-}
+  closeEdit();
+};
 
 const deleteItemConfirm = () => {
-  userList.value.splice(editedIndex.value, 1)
-  closeDelete()
-}
+  userList.value.splice(editedIndex.value, 1);
+  closeDelete();
+};
 
 onMounted(() => {
-  userList.value = markingVariants.filter(v => v.markingId === props.markingId)
-})
-
+  userList.value = markingVariants.filter(v => v.markingId === props.markingId);
+});
 </script>
 
 <template>
-  <!-- 👉 Datatable  -->
-    <VBtn color="primary" class="mb-4" @click="addItem">
-        Добавить вариант
-    </VBtn>
+  <VBtn color="primary" class="mb-4" @click="addItem">
+      Добавить вариант
+  </VBtn>
 
   <VDataTable
     :headers="headers"
     :items="userList"
     :items-per-page="5"
   >
-    <!-- Actions -->
     <template #item.actions="{ item }">
       <div class="d-flex gap-1">
         <IconBtn @click="editItem(item)">
@@ -136,11 +119,13 @@ onMounted(() => {
         <IconBtn @click="deleteItem(item)">
           <VIcon icon="tabler-trash" />
         </IconBtn>
+        <IconBtn @click="openPrintDialog(item)">
+          <VIcon icon="tabler-printer" />
+        </IconBtn>
       </div>
     </template>
   </VDataTable>
 
-  <!-- 👉 Edit Dialog  -->
   <VDialog
     v-model="editDialog"
     max-width="600px"
@@ -153,7 +138,6 @@ onMounted(() => {
       <VCardText>
         <VContainer>
           <VRow>
-            <!-- barcode -->
             <VCol
               cols="12"
               sm="6"
@@ -165,7 +149,6 @@ onMounted(() => {
               />
             </VCol>
 
-            <!-- size -->
             <VCol
               cols="12"
               sm="6"
@@ -186,7 +169,7 @@ onMounted(() => {
         <VBtn
           color="error"
           variant="outlined"
-          @click="close"
+          @click="closeEdit"
         >
           Закрыть
         </VBtn>
@@ -234,4 +217,14 @@ onMounted(() => {
         </VCardActions>
     </VCard>
   </VDialog>
+  <PrintLabelDialog
+    v-model:visible="isDialogVisible"
+    :name="currentItem?.id ?? ''"
+    :article="currentItem?.barcode ?? ''"
+    :composition="composition ?? ''"
+    :color="color ?? ''"
+    :size="currentItem?.size ?? ''"
+    :client="client ?? null"
+    :printableLabelCount="currentItem?.printableLabelCount ?? 0"
+  />
 </template>

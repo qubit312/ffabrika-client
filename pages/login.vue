@@ -1,9 +1,4 @@
-<!-- ❗Errors in the form are set on line 60 -->
 <script setup lang="ts">
-import type { NuxtError } from 'nuxt/app'
-import type { User } from 'next-auth'
-
-import { VForm } from 'vuetify/components/VForm'
 import AuthProvider from '@/views/pages/authentication/AuthProvider.vue'
 import { useGenerateImageVariant } from '@core/composable/useGenerateImageVariant'
 import authV2LoginIllustrationBorderedDark from '@images/pages/auth-v2-login-illustration-bordered-dark.png'
@@ -15,79 +10,27 @@ import authV2MaskLight from '@images/pages/misc-mask-light.png'
 import { VNodeRenderer } from '@layouts/components/VNodeRenderer'
 import { themeConfig } from '@themeConfig'
 
-const { signIn, data: sessionData } = useAuth()
-
-const authThemeImg = useGenerateImageVariant(authV2LoginIllustrationLight, authV2LoginIllustrationDark, authV2LoginIllustrationBorderedLight, authV2LoginIllustrationBorderedDark, true)
-
-const authThemeMask = useGenerateImageVariant(authV2MaskLight, authV2MaskDark)
-
 definePageMeta({
   layout: 'blank',
-  unauthenticatedOnly: true,
 
+})
+
+const form = ref({
+  email: '',
+  password: '',
+  remember: false,
 })
 
 const isPasswordVisible = ref(false)
 
-const route = useRoute()
+const authThemeImg = useGenerateImageVariant(
+  authV2LoginIllustrationLight,
+  authV2LoginIllustrationDark,
+  authV2LoginIllustrationBorderedLight,
+  authV2LoginIllustrationBorderedDark,
+  true)
 
-const ability = useAbility()
-
-const errors = ref<Record<string, string | undefined>>({
-  email: undefined,
-  password: undefined,
-})
-
-const refVForm = ref<VForm>()
-
-const credentials = ref({
-  email: 'admin@demo.com',
-  password: 'admin',
-})
-
-const rememberMe = ref(false)
-
-async function login() {
-  const response = await signIn('credentials', {
-    callbackUrl: '/',
-    redirect: false,
-    ...credentials.value,
-  })
-
-  // If error is not null => Error is occurred
-  if (response && response.error) {
-    const apiStringifiedError = response.error
-    const apiError: NuxtError = JSON.parse(apiStringifiedError)
-
-    errors.value = apiError.data as Record<string, string | undefined>
-
-    // If err => Don't execute further
-    return
-  }
-
-  // Reset error on successful login
-  errors.value = {}
-
-  // Update user abilities
-  const { user } = sessionData.value!
-
-  useCookie<Partial<User>>('userData').value = user
-
-  // Save user abilities in cookie so we can retrieve it back on refresh
-  useCookie<User['abilityRules']>('userAbilityRules').value = user.abilityRules
-
-  ability.update(user.abilityRules ?? [])
-
-  navigateTo(route.query.to ? String(route.query.to) : '/', { replace: true })
-}
-
-const onSubmit = () => {
-  refVForm.value?.validate()
-    .then(({ valid: isValid }) => {
-      if (isValid)
-        login()
-    })
-}
+const authThemeMask = useGenerateImageVariant(authV2MaskLight, authV2MaskDark)
 </script>
 
 <template>
@@ -162,48 +105,41 @@ const onSubmit = () => {
           </VAlert>
         </VCardText>
         <VCardText>
-          <VForm
-            ref="refVForm"
-            @submit.prevent="onSubmit"
-          >
+          <VForm @submit.prevent="() => { }">
             <VRow>
               <!-- email -->
               <VCol cols="12">
                 <AppTextField
-                  v-model="credentials.email"
-                  label="Email"
-                  placeholder="johndoe@email.com"
-                  type="email"
+                  v-model="form.email"
                   autofocus
-                  :rules="[requiredValidator, emailValidator]"
-                  :error-messages="errors.email"
+                  label="Email"
+                  type="email"
+                  placeholder="johndoe@email.com"
                 />
               </VCol>
 
               <!-- password -->
               <VCol cols="12">
                 <AppTextField
-                  v-model="credentials.password"
+                  v-model="form.password"
                   label="Password"
                   placeholder="············"
-                  :rules="[requiredValidator]"
                   :type="isPasswordVisible ? 'text' : 'password'"
-                  :error-messages="errors.password"
                   :append-inner-icon="isPasswordVisible ? 'tabler-eye-off' : 'tabler-eye'"
                   @click:append-inner="isPasswordVisible = !isPasswordVisible"
                 />
 
-                <div class="d-flex align-center flex-wrap justify-space-between my-6">
+                <div class="d-flex align-center flex-wrap justify-space-between mt-2 mb-4">
                   <VCheckbox
-                    v-model="rememberMe"
+                    v-model="form.remember"
                     label="Remember me"
                   />
-                  <NuxtLink
+                  <a
                     class="text-primary ms-2 mb-1"
-                    :to="{ name: 'forgot-password' }"
+                    href="#"
                   >
                     Forgot Password?
-                  </NuxtLink>
+                  </a>
                 </div>
 
                 <VBtn
@@ -220,12 +156,13 @@ const onSubmit = () => {
                 class="text-center"
               >
                 <span>New on our platform?</span>
-                <NuxtLink
-                  class="text-primary ms-1"
-                  :to="{ name: 'register' }"
+
+                <a
+                  class="text-primary ms-2"
+                  href="#"
                 >
                   Create an account
-                </NuxtLink>
+                </a>
               </VCol>
               <VCol
                 cols="12"

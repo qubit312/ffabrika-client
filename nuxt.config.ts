@@ -1,7 +1,6 @@
 import { fileURLToPath } from 'node:url'
-import VueI18nPlugin from '@intlify/unplugin-vue-i18n/vite'
-import svgLoader from 'vite-svg-loader'
 import vuetify from 'vite-plugin-vuetify'
+import svgLoader from 'vite-svg-loader'
 
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
@@ -28,26 +27,9 @@ export default defineNuxtConfig({
     '@/plugins/iconify/icons.css',
   ],
 
-  /*
-    ❗ Please read the docs before updating runtimeConfig
-    https://nuxt.com/docs/guide/going-further/runtime-config
-  */
-  runtimeConfig: {
-    // Private keys are only available on the server
-    AUTH_ORIGIN: process.env.AUTH_ORIGIN,
-    AUTH_SECRET: process.env.AUTH_SECRET,
-
-    // Public keys that are exposed to the client.
-    public: {
-      apiBaseUrl: process.env.NUXT_PUBLIC_API_BASE_URL || '/api',
-    },
-  },
   components: {
     dirs: [{
       path: '@/@core/components',
-      pathPrefix: false,
-    }, {
-      path: '@/views/demos',
       pathPrefix: false,
     }, {
       path: '~/components/global',
@@ -58,25 +40,11 @@ export default defineNuxtConfig({
     }],
   },
 
-  auth: {
-    baseURL: process.env.AUTH_ORIGIN,
-    globalAppMiddleware: false,
-
-    provider: {
-      type: 'authjs',
-    },
-  },
-
-  plugins: [
-    '@/plugins/casl/index.ts',
-    '@/plugins/vuetify/index.ts',
-    '@/plugins/i18n/index.ts',
-    '@/plugins/iconify/index.ts',
-  ],
+  plugins: ['@/plugins/vuetify/index.ts', '@/plugins/iconify/index.ts'],
 
   imports: {
     dirs: ['./@core/utils', './@core/composable/', './plugins/*/composables/*'],
-    presets: ['vue-i18n'],
+    presets: [],
   },
 
   hooks: {},
@@ -152,14 +120,7 @@ export default defineNuxtConfig({
           configFile: 'assets/styles/variables/_vuetify.scss',
         },
       }),
-      VueI18nPlugin({
-        runtimeOnly: true,
-        compositionOnly: true,
-        ssr: true,
-        include: [
-          fileURLToPath(new URL('./plugins/i18n/locales/**', import.meta.url)),
-        ],
-      }),
+      null,
     ],
   },
 
@@ -167,5 +128,5 @@ export default defineNuxtConfig({
     transpile: ['vuetify'],
   },
 
-  modules: ['@vueuse/nuxt', '@nuxtjs/device', '@sidebase/nuxt-auth', '@pinia/nuxt'],
+  modules: ['@vueuse/nuxt', '@nuxtjs/device', '@pinia/nuxt'],
 })
