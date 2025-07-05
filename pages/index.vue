@@ -2,24 +2,38 @@
   <div>
     <VCard
       class="mb-6"
-      title="Kick start your project 🚀"
+      title="Добро пожаловать в FFabrika 🚀"
     >
-      <VCardText>All the best for your new project.</VCardText>
       <VCardText>
-        Please make sure to read our <a
-          href="https://demos.pixinvent.com/vuexy-vuejs-admin-template/documentation/"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="text-decoration-none"
-        >
-          Template Documentation
-        </a> to understand where to go from here and how to use our template.
+        FFabrika — ваш универсальный CRM-сервис для автоматизации процессов на предприятии: управление товарами, заказами, маркировкой и многое другое.
       </VCardText>
     </VCard>
 
-    <VCard title="Want to integrate JWT? 🔒">
-      <VCardText>We carefully crafted JWT flow so you can implement JWT with ease and with minimum efforts.</VCardText>
-      <VCardText>Please read our  JWT Documentation to get more out of JWT authentication.</VCardText>
+    <VCard
+      class="mb-6"
+      title="Управление товарами и заказами 📦"
+    >
+      <VCardText>
+        Добавляйте и редактируйте товары, отслеживайте остатки на складе и обрабатывайте заказы клиентов в одном месте.
+      </VCardText>
+      <VCardText>
+        Перейдите в раздел <router-link to="/product/list" class="text-decoration-none">Товары</router-link> и 
+        <router-link to="/client/list" class="text-decoration-none">Клиенты</router-link>, чтобы начать.
+      </VCardText>
+    </VCard>
+
+    <VCard title="Маркировка и импорт данных 🗂️">
+      <VCardText>
+        Загружайте CSV-файлы с данными и настраивайте наклейки для товаров и размеров.
+      </VCardText>
+      <VCardText>
+        Перейдите в раздел <router-link to="/marking/list" class="text-decoration-none">
+          Маркировка
+        </router-link> для начала работы.
+      </VCardText>
     </VCard>
   </div>
 </template>
+
+<script setup lang="ts">
+</script>

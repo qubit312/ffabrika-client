@@ -1,12 +1,17 @@
 export default [
   {
-    title: 'Home',
-    to: { name: 'index' },
-    icon: { icon: 'tabler-smart-home' },
+    title: 'Товары',
+    to: { name: 'product-list' },
+    icon: { icon: 'tabler-box' },
   },
   {
-    title: 'Second page',
-    to: { name: 'second-page' },
-    icon: { icon: 'tabler-file' },
+    title: 'Маркировка',
+    to: { name: 'marking-list' },
+    icon: { icon: 'tabler-barcode' },
   },
-]
+  {
+    title: 'Клиенты',
+    to: { name: 'client-list' },
+    icon: { icon: 'tabler-users' },
+  },
+];

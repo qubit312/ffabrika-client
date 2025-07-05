@@ -1,18 +1,39 @@
 <script setup lang="ts">
-import type { MarkingParams } from '@types/marking';
+import { useApi } from '@/composables/useApi';
 import { computed, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
-import { getCategoryLabel } from '../../../constants/productCategories';
-import { getLabels, removeLabel } from '../../../services/labels';
 
-const router = useRouter()
-const markingsData = ref<{ markings: MarkingParams[]; total: number }>({ markings: [], total: 0 })
+export interface Product {
+  id: number;
+  order_id: number;
+  client_id: number;
+  parent_id: number | null;
+  name: string;
+  qty: number;
+  color: string;
+  size: string[];
+  complect: number;
+  delivered: number;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  children: Product[];
+  services: Service[];
+}
+
+export interface Service {
+  id: number;
+  product_id: number;
+}
+
+const entityData = ref<Product[]>([])
+const token = localStorage.getItem('access_token') || ''
 
 const headers = [
-  { title: 'Наименование', key: 'name', sortable: false },
-  { title: 'Категория', key: 'category', sortable: false },
-  { title: 'Клиент', key: 'client', sortable: false },
+  { title: 'Название', key: 'name', sortable: false },
+  // { title: 'Категория', key: 'category' },
+  // { title: 'Клиент', key: 'client' },
   { title: 'Цвет', key: 'color', sortable: false },
+  { title: 'Количество', key: 'qty', sortable: false },
   { title: '', key: 'actions', sortable: false },
 ]
 
@@ -29,54 +50,69 @@ const updateOptions = (options: any) => {
   orderBy.value = options.sortBy[0]?.order
 }
 
-const resolveCategory = (category: string) => {
-  switch (category) {
-    case 'Accessories': return { color: 'error', icon: 'tabler-device-watch' }
-    case 'Home Decor': return { color: 'info', icon: 'tabler-home' }
-    case 'Electronics': return { color: 'primary', icon: 'tabler-device-imac' }
-    case 'Shoes': return { color: 'success', icon: 'tabler-shoe' }
-    case 'Office': return { color: 'warning', icon: 'tabler-briefcase' }
-    case 'Games': return { color: 'primary', icon: 'tabler-device-gamepad-2' }
-  }
-}
-
-const fetchMarkings = async () => {
-  const { data, error } = await getLabels()
+const fetchData = async () => {
+  const { data, error } = await useApi<Product[]>('/api/products', {
+    method: 'GET',
+    headers: token
+      ? { Authorization: `Bearer ${token}` }
+      : {},
+  })
   if (error.value) {
-    console.error('Ошибка при загрузке меток', error.value)
+    console.error('Ошибка при загрузке клиентов:', error.value)
     return
   }
-
-  if (data.value) {
-    markingsData.value = {
-      markings: data.value.data,
-      total:    data.value.total,
-    }
-  }
+  entityData.value = data.value
+  console.log(entityData.value)
 }
 
-const deleteLabel = async (id: number) => {
+const deleteProduct = async (id: number) => {
   try {
-    const res = await removeLabel(id)
-    console.log(res)
-    await fetchMarkings()
-  } catch (err: any) {
+    const { error } = await useApi(`/api/products/${id}`, {
+      method: 'DELETE',
+      headers: token
+        ? { Authorization: `Bearer ${token}` }
+        : {},
+    })
+    if (error.value) throw error.value
+    await fetchData()
+  }
+  catch (err: any) {
     console.error('Ошибка при удалении метки:', err)
   }
 }
 
-const markings = computed<MarkingParams[]>(() => markingsData.value.markings)
-const totalMarkings = computed<number>(() => markingsData.value.total)
+const entities = computed<Product[]>(() => entityData.value)
+const totalEntities = computed<number>(() => entities.value.length)
 
 onMounted(() => {
-  fetchMarkings()
+  fetchData()
 })
+
+const categoryLabels: Record<string, string> = {
+  COMMON:                            'Общие',
+  COSMETICS_AND_HOUSEHOLD_CHEMICALS: 'Косметика и бытовая химия',
+  CLOTHES:                           'Одежда',
+  FOOTWEAR:                          'Обувь',
+  BOOKS:                             'Книги',
+  TEXTILE_AND_ACCESSORIES:           'Текстиль и аксессуары',
+  LEATHER:                           'Кожа',
+  DISHES:                            'Посуда',
+  GLASSES:                           'Стекло',
+  PRODUCTS_FOR_ADULTS:               'Товары для взрослых',
+  SOIL:                              'Почва',
+  JEWELRY:                           'Ювелирные изделия',
+  FOOD_AND_PET_SUPPLIES:             'Корма и товары для животных',
+}
+
+const getCategoryLabel = (code: string) => categoryLabels[code] || code
+
 </script>
 
 <template>
   <div>
+    <!-- product -->
     <VCard
-      title="Наклейки"
+      title="Товары"
       class="mb-6"
     >
       <VDivider />
@@ -106,21 +142,22 @@ onMounted(() => {
           <VBtn
             color="primary"
             prepend-icon="tabler-plus"
-            @click="router.push({ name: 'marking-details-id', params: { id: 0 } })"
+            @click="$router.push({ name: 'product-details-id', params: { id: 0 } })"
           >
-            Добавить наклейку
+            Добавить товар
           </VBtn>
         </div>
       </div>
 
       <VDivider class="mt-4" />
+
       <VDataTableServer
         v-model:items-per-page="itemsPerPage"
         v-model:page="page"
         :headers="headers"
         show-select
-        :items="markings"
-        :items-length="totalMarkings"
+        :items="entities"
+        :items-length="totalEntities"
         class="text-no-wrap"
         @update:options="updateOptions"
       >
@@ -138,7 +175,7 @@ onMounted(() => {
               :image="item.image"
             />
             <div class="d-flex flex-column">
-              <RouterLink :to="{ name: 'marking-details-id', params: { id: item.id } }">
+              <RouterLink :to="{ name: 'product-details-id', params: { id: item.id } }">
                 {{ item.name }}
               </RouterLink>
             </div>
@@ -146,39 +183,28 @@ onMounted(() => {
         </template>
 
         <!-- category -->
-        <template #item.category="{ item }">
-          <VAvatar
-            size="30"
-            variant="tonal"
-            :color="resolveCategory(item.category)?.color"
-            class="me-4"
-          >
-            <VIcon
-              :icon="resolveCategory(item.category)?.icon"
-              size="18"
-            />
-          </VAvatar>
+        <!-- <template #item.category="{ item }">
           <span class="text-body-1 text-high-emphasis">{{ getCategoryLabel(item.category) }}</span>
-        </template>
+        </template> -->
 
         <!-- client -->
-        <template #item.client="{ item }">
+        <!-- <template #item.client="{ item }">
           <div class="d-flex flex-column">
               <span class="text-body-1 font-weight-medium text-high-emphasis">{{ item.client.name }}</span>
           </div>
-        </template>
+        </template> -->
 
         <!-- color -->
-        <template #item.status="{ item }">
+        <template #item.color="{ item }">
           <div class="d-flex flex-column">
-              <span class="text-body-1 font-weight-medium text-high-emphasis">{{ item.status }}</span>
+              <span class="text-body-1 font-weight-medium text-high-emphasis">{{ item.color }}</span>
           </div>
         </template>
 
-        <!-- Actions -->
+        <!-- actions -->
         <template #item.actions="{ item }">
           <IconBtn>
-            <RouterLink :to="{ name: 'marking-details-id', params: { id: item.id } }">
+            <RouterLink :to="{ name: 'product-details-id', params: { id: item.id } }">
               <VIcon icon="tabler-edit" />
             </RouterLink>
           </IconBtn>
@@ -190,20 +216,27 @@ onMounted(() => {
                 <VListItem
                   value="delete"
                   prepend-icon="tabler-trash"
-                  @click="deleteLabel(item.id)"
+                  @click="deleteProduct(item.id)"
                 >
                   Удалить
                 </VListItem>
+                <!-- <VListItem
+                  value="duplicate"
+                  prepend-icon="tabler-copy"
+                >
+                  Дублировать
+                </VListItem> -->
               </VList>
             </VMenu>
           </IconBtn>
         </template>
 
+        <!-- pagination -->
         <template #bottom>
           <TablePagination
             v-model:page="page"
             :items-per-page="itemsPerPage"
-            :total-items="totalMarkings"
+            :total-items="totalEntities"
           />
         </template>
       </VDataTableServer>
@@ -212,4 +245,9 @@ onMounted(() => {
 </template>
 
 <style scoped>
+  .development-note {
+    margin-top: 4px;
+    font-size: 0.9rem;
+    color: grey;
+  }
 </style>

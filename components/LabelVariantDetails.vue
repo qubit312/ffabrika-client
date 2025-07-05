@@ -1,114 +1,219 @@
 <script setup lang="ts">
 import PrintLabelDialog from '@/components/dialogs/PrintLabelDialog.vue';
 import type { ShortEntityParams } from '@db/apps/marking/types';
-import { defineProps, onMounted, ref } from 'vue';
+import { defineExpose, defineProps, ref, watch } from 'vue';
 
 interface Props {
-  markingId: string
+  product: ShortEntityParams | null
   name: string
   article: string
   composition: string
   color: string
-  size: string
   client: ShortEntityParams | null
+  labelId: number
 }
 
-type MarkingVariants = {
-  id: string;
-  size: string;
-  barcode: string;
-  printableLabelCount: number,
-  markingId: string;
-};
+interface ProductSize {
+  id: number
+  product_id: number
+  value: string
+  barcode: string
+  availableLabelsCount: number
+}
 
-const props = defineProps<Props>();
+interface ApiResponse<T> {
+  success: boolean
+  data: T
+}
 
-const markingVariants: MarkingVariants[] = [
-  { id: '1', size: 'S', barcode: '4000000000001', printableLabelCount: 21,  markingId: '1' },
-  { id: '2', size: 'M', barcode: '4000000000002', printableLabelCount: 12, markingId: '2' },
-  { id: '3', size: 'L', barcode: '4000000000003', printableLabelCount: 43, markingId: '3' },
-  { id: '4', size: 'XL', barcode: '4000000000004', printableLabelCount: 3, markingId: '4' },
-];
+interface PaginatedResponse<T> {
+  data: T[]
+}
 
-const isDialogVisible = ref(false);
-let currentItem = ref<MarkingVariants | null>(null);
+const props = defineProps<Props>()
 
-const editDialog = ref(false);
-const deleteDialog = ref(false);
-const defaultItem = ref<MarkingVariants>({ id: '-1', size: '', printableLabelCount: 0, barcode: '', markingId: '' });
-const editedItem = ref<MarkingVariants>(defaultItem.value);
-const editedIndex = ref(-1);
-const userList = ref<MarkingVariants[]>([]);
+const productSizeList = ref<ProductSize[]>([])
+const editDialog = ref(false)
+const deleteDialog = ref(false)
+const currentItem = ref<ProductSize | null>(null)
+const editedIndex = ref<number | null>(null)
+const editedItem = ref<ProductSize>({ id: 0, value: '', barcode: '', availableLabelsCount: 0, product_id: 0 })
+const token = localStorage.getItem('access_token') || ''
+const apiHeaders = token ? { Authorization: `Bearer ${token}` } : {}
+const showLabelDialog = ref(false)
 
 const headers = [
   { title: 'Баркод', key: 'barcode', sortable: false },
-  { title: 'Размер', key: 'size', sortable: false },
-  { title: 'Кол-во Честных знаков', key: 'printableLabelCount', sortable: false },
+  { title: 'Размер', key: 'value', sortable: false },
+  { title: 'Кол-во Честных знаков', key: 'availableLabelsCount', sortable: false },
   { title: '', key: 'actions', sortable: false },
 ];
 
-const editItem = (item: MarkingVariants) => {
-  editedIndex.value = userList.value.indexOf(item);
+const mapPS = (ps: ProductSize): ProductSize => ({
+  id: ps.id,
+  product_id: ps.product_id,
+  value: ps.value,
+  barcode: ps.barcode,
+  availableLabelsCount: ps.available_labels_count,
+})
+
+const fetchVariants = async (productId) => {
+  const { data, error } = await useApi<PaginatedResponse<ProductSize>>(
+    '/api/product-sizes',
+    {
+      method: 'GET', 
+      params: { product_id: productId },
+      headers: apiHeaders
+    }
+  )
+  if (error.value) {
+    console.error('Ошибка загрузки размеров:', error.value)
+    return
+  }
+  productSizeList.value = data.value.data.map(mapPS)
+}
+
+watch(
+  () => props.product,
+  (newProduct: ShortEntityParams) => {
+    if (newProduct?.id != null) {
+      fetchVariants(newProduct.id)
+    }
+  },
+  { immediate: true }
+)
+
+const isDialogVisible = ref(false);
+
+const editItem = (item: ProductSize) => {
+  editedIndex.value = productSizeList.value.indexOf(item);
   editedItem.value = { ...item };
   editDialog.value = true;
 };
+
+const saveVariant = async () => {
+  try {
+    if (editedIndex.value !== null && editedIndex.value > -1) {
+      const { data: resp, error } = await useApi<ApiResponse<ProductSize>>(
+        `/api/product-sizes/${editedItem.value.id}`,
+        {
+          method: 'PUT',
+          body: {
+            product_id: props.product.id,
+            value:      editedItem.value.value,
+            barcode:    editedItem.value.barcode,
+          },
+          headers: apiHeaders
+        }
+      )
+      if (error.value || !resp.value.success) {
+        throw new Error('Не удалось обновить вариант')
+      }
+      const updated = resp.value.data
+      productSizeList.value[editedIndex.value] = mapPS(updated)
+    } else {
+      const { data: resp, error } = await useApi<ApiResponse<ProductSize>>(
+        '/api/product-sizes',
+        {
+          method: 'POST',
+          body: {
+            product_id: props.product.id,
+            value:      editedItem.value.value,
+            barcode:    editedItem.value.barcode,
+          },
+          headers: apiHeaders
+        }
+      )
+      if (error.value) {
+        throw new Error('Не удалось создать вариант. Ошибка: ' + resp.value)
+      }
+      const created = resp.value
+      productSizeList.value.push(mapPS(created))
+    }
+  } catch (e: any) {
+    console.error('Ошибка сохранения:', e)
+  } finally {
+    editDialog.value   = false
+    editedIndex.value  = null
+  }
+}
+
+const deleteVariant = async () => {
+  try {
+    const { error } = await useApi(
+      `/api/product-sizes/${editedItem.value.id}`,
+      { 
+        method: 'DELETE',
+        headers: apiHeaders
+      }
+    )
+    if (error.value) throw error.value
+    if (editedIndex.value !== null && editedIndex.value > -1) {
+      productSizeList.value.splice(editedIndex.value, 1)
+    }
+  } catch (e: any) {
+    console.error('Ошибка удаления:', e)
+  } finally {
+    deleteDialog.value = false
+    editedIndex.value = null
+  }
+}
+
+const openPrintDialog = (item: ProductSize) => {
+  currentItem.value = item
+  isDialogVisible.value = true
+}
 
 const addItem = () => {
-  editedIndex.value = -1;
-  editedItem.value = { id: '', size: '', barcode: '', printableLabelCount: 0, markingId: props.markingId };
-  editDialog.value = true;
-};
-
-const deleteItem = (item: MarkingVariants) => {
-  editedIndex.value = userList.value.indexOf(item);
-  editedItem.value = { ...item };
-  deleteDialog.value = true;
-};
-
-const openPrintDialog = (item: MarkingVariants) => {
-  currentItem.value = item;
-  isDialogVisible.value = true;
-};
+  editedIndex.value = null
+  editedItem.value = { id: 0, value: '', barcode: '', availableLabelsCount: 0, product_id: 0 }
+  editDialog.value = true
+}
 
 const closeEdit = () => {
-  editDialog.value = false;
-  editedIndex.value = -1;
-};
+  editDialog.value = false
+  editedIndex.value = null
+}
+
+const deleteItem = (item: ProductSize) => {
+  editedIndex.value = productSizeList.value.indexOf(item)
+  editedItem.value = { ...item }
+  deleteDialog.value = true
+}
 
 const closeDelete = () => {
-  deleteDialog.value = false;
-  editedIndex.value = -1;
-};
+  deleteDialog.value = false
+  editedIndex.value = null
+}
 
-const save = () => {
-  if (editedIndex.value > -1) {
-    Object.assign(userList.value[editedIndex.value], editedItem.value);
-  } else {
-    editedItem.value.id = Date.now().toString();
-    editedItem.value.markingId = props.markingId;
-    userList.value.push({ ...editedItem.value });
-  }
-  closeEdit();
-};
+const deleteItemConfirm = async () => {
+  await deleteVariant()
+}
 
-const deleteItemConfirm = () => {
-  userList.value.splice(editedIndex.value, 1);
-  closeDelete();
-};
+defineExpose({ onLabelsUpdated })
 
-onMounted(() => {
-  userList.value = markingVariants.filter(v => v.markingId === props.markingId);
-});
+function onLabelsUpdated() {
+  fetchVariants(props.product.id)
+}
 </script>
 
 <template>
-  <VBtn color="primary" class="mb-4" @click="addItem">
-      Добавить вариант
+  <VBtn color="primary" class="mb-4 me-4" @click="addItem">
+      Добавить размер
+  </VBtn>
+
+  <VBtn
+    color="primary"
+    class="mb-4"
+    :disabled="!props.product?.id"
+    @click="fetchVariants(props.product.id)"
+  >
+    Обновить информацию
   </VBtn>
 
   <VDataTable
     :headers="headers"
-    :items="userList"
+    :items="productSizeList"
     :items-per-page="5"
   >
     <template #item.actions="{ item }">
@@ -121,6 +226,9 @@ onMounted(() => {
         </IconBtn>
         <IconBtn @click="openPrintDialog(item)">
           <VIcon icon="tabler-printer" />
+        </IconBtn>
+        <IconBtn @click="showLabelDialog = true">
+          <VIcon icon="tabler-arrows-shuffle" />
         </IconBtn>
       </div>
     </template>
@@ -155,7 +263,7 @@ onMounted(() => {
               md="6"
             >
               <VTextField
-                v-model="editedItem.size"
+                v-model="editedItem.value"
                 label="Размер"
               />
             </VCol>
@@ -165,7 +273,6 @@ onMounted(() => {
 
       <VCardActions>
         <VSpacer />
-
         <VBtn
           color="error"
           variant="outlined"
@@ -177,7 +284,7 @@ onMounted(() => {
         <VBtn
           color="success"
           variant="elevated"
-          @click="save"
+          @click="saveVariant"
         >
           Сохранить
         </VBtn>
@@ -195,36 +302,43 @@ onMounted(() => {
             Подтверждение
         </VCardTitle>
         <VCardText>
-            Удалить размер {{editedItem.size}}?
+            Удалить размер {{editedItem.value}}?
         </VCardText>
         <VCardActions>
             <VSpacer />
             <VBtn
-                color="error"
-                variant="elevated"
-                @click="closeDelete"
-                >
-                Закрыть
+              color="error"
+              variant="elevated"
+              @click="closeDelete"
+            >
+              Закрыть
             </VBtn>
 
             <VBtn
-                color="success"
-                variant="elevated"
-                @click="deleteItemConfirm"
-                >
-                ОК
+              color="success"
+              variant="elevated"
+              @click="deleteItemConfirm"
+            >
+              ОК
             </VBtn>
         </VCardActions>
     </VCard>
   </VDialog>
   <PrintLabelDialog
     v-model:visible="isDialogVisible"
-    :name="currentItem?.id ?? ''"
+    :name="props.name ?? ''"
+    :sizeId="currentItem?.id ?? 0"
     :article="currentItem?.barcode ?? ''"
-    :composition="composition ?? ''"
-    :color="color ?? ''"
-    :size="currentItem?.size ?? ''"
-    :client="client ?? null"
-    :printableLabelCount="currentItem?.printableLabelCount ?? 0"
+    :composition="props.composition ?? ''"
+    :color="props.color ?? ''"
+    :size="currentItem?.value ?? ''"
+    :client="props.client ?? null"
+    :availableLabelsCount="currentItem?.availableLabelsCount ?? 0"
+    :labelId="props.labelId"
+    @labels-updated="onLabelsUpdated"
+  />
+    <UpdateChzLabel
+    v-model="showLabelDialog"
+    :productId="props.product?.id"
   />
 </template>

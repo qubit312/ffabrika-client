@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import AuthProvider from '@/views/pages/authentication/AuthProvider.vue'
 import { useGenerateImageVariant } from '@core/composable/useGenerateImageVariant'
 import authV2LoginIllustrationBorderedDark from '@images/pages/auth-v2-login-illustration-bordered-dark.png'
 import authV2LoginIllustrationBorderedLight from '@images/pages/auth-v2-login-illustration-bordered-light.png'
@@ -9,10 +8,11 @@ import authV2MaskDark from '@images/pages/misc-mask-dark.png'
 import authV2MaskLight from '@images/pages/misc-mask-light.png'
 import { VNodeRenderer } from '@layouts/components/VNodeRenderer'
 import { themeConfig } from '@themeConfig'
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 definePageMeta({
   layout: 'blank',
-
 })
 
 const form = ref({
@@ -22,6 +22,9 @@ const form = ref({
 })
 
 const isPasswordVisible = ref(false)
+const router = useRouter()
+const loading = ref(false)
+const errorMessage = ref('')
 
 const authThemeImg = useGenerateImageVariant(
   authV2LoginIllustrationLight,
@@ -31,6 +34,37 @@ const authThemeImg = useGenerateImageVariant(
   true)
 
 const authThemeMask = useGenerateImageVariant(authV2MaskLight, authV2MaskDark)
+
+async function onSubmit() {
+  loading.value = true
+  errorMessage.value = ''
+  try {
+    const res = await fetch('http://127.0.0.1:8000/api/auth/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        email: form.value.email,
+        password: form.value.password,
+        remember: form.value.remember
+      })
+    })
+    const payload = await res.json()
+    if (!res.ok || !payload.success) {
+      throw new Error(payload.message || 'Ошибка авторизации')
+    }
+    localStorage.setItem('access_token', payload.data.access_token)
+    await router.push('/')
+  } catch (err: any) {
+    errorMessage.value = "Неправильно введены учетные данные"
+    console.error(err.message || 'Ошибка сети')
+  } finally {
+    loading.value = false
+  }
+}
+
 </script>
 
 <template>
@@ -85,27 +119,26 @@ const authThemeMask = useGenerateImageVariant(authV2MaskLight, authV2MaskDark)
       >
         <VCardText>
           <h4 class="text-h4 mb-1">
-            Welcome to <span class="text-capitalize"> {{ themeConfig.app.title }} </span>! 👋🏻
+            С возвращением на <span class="text-capitalize"> {{ themeConfig.app.title }} </span>! 👋🏻
           </h4>
           <p class="mb-0">
-            Please sign-in to your account and start the adventure
+            Пожалуйста введите данные для входа. Подсказка: 
           </p>
         </VCardText>
+
         <VCardText>
           <VAlert
             color="primary"
             variant="tonal"
           >
             <p class="text-sm mb-2">
-              Admin Email: <strong>admin@demo.com</strong> / Pass: <strong>admin</strong>
-            </p>
-            <p class="text-sm mb-0">
-              Client Email: <strong>client@demo.com</strong> / Pass: <strong>client</strong>
+              Admin Email: <strong>admin@test.com</strong> / Пароль: <strong>admin</strong>
             </p>
           </VAlert>
         </VCardText>
+
         <VCardText>
-          <VForm @submit.prevent="() => { }">
+          <VForm @submit.prevent="onSubmit">
             <VRow>
               <!-- email -->
               <VCol cols="12">
@@ -114,7 +147,7 @@ const authThemeMask = useGenerateImageVariant(authV2MaskLight, authV2MaskDark)
                   autofocus
                   label="Email"
                   type="email"
-                  placeholder="johndoe@email.com"
+                  placeholder="example@email.com"
                 />
               </VCol>
 
@@ -122,63 +155,25 @@ const authThemeMask = useGenerateImageVariant(authV2MaskLight, authV2MaskDark)
               <VCol cols="12">
                 <AppTextField
                   v-model="form.password"
-                  label="Password"
+                  label="Пароль"
                   placeholder="············"
                   :type="isPasswordVisible ? 'text' : 'password'"
                   :append-inner-icon="isPasswordVisible ? 'tabler-eye-off' : 'tabler-eye'"
                   @click:append-inner="isPasswordVisible = !isPasswordVisible"
                 />
 
-                <div class="d-flex align-center flex-wrap justify-space-between mt-2 mb-4">
-                  <VCheckbox
-                    v-model="form.remember"
-                    label="Remember me"
-                  />
-                  <a
-                    class="text-primary ms-2 mb-1"
-                    href="#"
-                  >
-                    Forgot Password?
-                  </a>
+                <div class="mt-2 mb-4">
                 </div>
+
+                <VAlert v-if="errorMessage" color="error" variant="tonal" class="mb-6">{{ errorMessage }}</VAlert>
 
                 <VBtn
                   block
                   type="submit"
+                  :loading="loading"
                 >
-                  Login
+                  Логин
                 </VBtn>
-              </VCol>
-
-              <!-- create account -->
-              <VCol
-                cols="12"
-                class="text-center"
-              >
-                <span>New on our platform?</span>
-
-                <a
-                  class="text-primary ms-2"
-                  href="#"
-                >
-                  Create an account
-                </a>
-              </VCol>
-              <VCol
-                cols="12"
-                class="d-flex align-center"
-              >
-                <VDivider />
-                <span class="mx-4">or</span>
-                <VDivider />
-              </VCol>
-
-              <!-- auth providers -->
-              <VCol
-                cols="12"
-                class="text-center"
-              >
-                <AuthProvider />
               </VCol>
             </VRow>
           </VForm>

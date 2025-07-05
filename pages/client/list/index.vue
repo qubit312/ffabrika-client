@@ -1,0 +1,228 @@
+<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue';
+
+interface Client {
+  id: number
+  name: string
+  type: 'INDIVIDUAL' | 'LEGAL_ENTITY'
+  phone: string
+  email: string
+  telegram: string
+}
+
+const typeCaption: Record<Client['type'], string> = {
+  INDIVIDUAL:    'Физическое лицо',
+  LEGAL_ENTITY:  'Юридическое лицо',
+}
+
+const headers = [
+  { title: 'Название', key: 'name', sortable: false },
+  { title: 'Тип', key: 'type', sortable: false },
+  { title: 'Телефон', key: 'phone', sortable: false },
+  { title: 'Почта', key: 'email', sortable: false },
+  { title: 'Телеграм', key: 'telegram', sortable: false },
+  { title: '', key: 'actions', sortable: false },
+]
+
+const clients = ref<Client[]>([])
+const totalClients = computed<number>(() => clients.value.length)
+const token = localStorage.getItem('access_token') || ''
+
+const searchQuery     = ref<string>('')
+const isSearchFocused = ref<boolean>(false)
+
+const itemsPerPage = ref<number>(10)
+const page = ref<number>(1)
+const sortBy = ref<string | undefined>()
+const orderBy = ref<'asc' | 'desc' | undefined>()
+
+const updateOptions = (options: any) => {
+  sortBy.value = options.sortBy[0]?.key
+  orderBy.value = options.sortBy[0]?.order
+}
+
+const fetchClients = async () => {
+  const { data, error } = await useApi<Client[]>('/api/clients', {
+    method: 'GET',
+    headers: token
+      ? { Authorization: `Bearer ${token}` }
+      : {},
+  })
+  if (error.value) {
+    console.error('Ошибка при загрузке клиентов:', error.value)
+    return
+  }
+  clients.value = data.value
+}
+
+const deleteClient = async (id: number) => {
+  try {
+    const { error } = await useApi(`/api/clients/${id}`, {
+      method: 'DELETE',
+      headers: token
+      ? { Authorization: `Bearer ${token}` }
+      : {},
+     })
+    if (error.value) throw error.value
+    await fetchClients()
+  } catch (e) {
+    console.error('Ошибка удаления клиента:', e)
+  }
+}
+
+onMounted(fetchClients)
+</script>
+
+<template>
+  <div>
+    <!-- marking -->
+    <VCard
+      title="Клиенты"
+      class="mb-6"
+    >
+      <VDivider />
+
+      <div class="d-flex flex-wrap gap-4 ma-6">
+        <div class="d-flex align-center">
+          <AppTextField
+            v-model="searchQuery"
+            placeholder="Введите название"
+            style="inline-size: 200px;"
+            class="me-3"
+            @focus="isSearchFocused = true"
+            @blur="isSearchFocused = false"
+            clearable
+          />
+          <div v-if="isSearchFocused" class="development-note">
+            Функция поиска ещё в разработке
+          </div>
+        </div>
+
+        <VSpacer />
+        <div class="d-flex gap-4 flex-wrap align-center">
+          <AppSelect
+            v-model="itemsPerPage"
+            :items="[5, 10, 20, 25, 50]"
+          />
+          <!-- 👉 Export button -->
+          <!-- <VBtn
+            variant="tonal"
+            color="secondary"
+            prepend-icon="tabler-upload"
+          >
+            Экспорт
+          </VBtn> -->
+
+          <VBtn
+            color="primary"
+            prepend-icon="tabler-plus"
+            @click="$router.push({ name: 'client-details-id', params: { id: 0 } })"
+          >
+            Добавить клиента
+          </VBtn>
+        </div>
+      </div>
+
+      <VDivider class="mt-4" />
+
+      <VDataTableServer
+        v-model:items-per-page="itemsPerPage"
+        v-model:page="page"
+        :headers="headers"
+        show-select
+        :items="clients"
+        :items-length="totalClients"
+        class="text-no-wrap"
+        @update:options="updateOptions"
+      >
+        <!-- name  -->
+        <template #item.name="{ item }">
+          <div
+            class="d-flex align-center gap-x-4"
+            style="cursor: pointer;"
+          >
+            <VAvatar
+              v-if="item.image"
+              size="38"
+              variant="tonal"
+              rounded
+              :image="item.image"
+            />
+            <div class="d-flex flex-column">
+              <RouterLink :to="{ name: 'client-details-id', params: { id: item.id } }">
+                {{ item.name }}
+              </RouterLink>
+            </div>
+          </div>
+        </template>
+
+        <!-- type -->
+        <template #item.type="{ item }">
+          <span class="text-body-1 text-high-emphasis">{{ typeCaption[item.type] }}</span>
+        </template>
+
+        <!-- phone -->
+        <template #item.phone="{ item }">
+          <span class="text-body-1 text-high-emphasis">{{ item.phone }}</span>
+        </template>
+
+        <!-- email -->
+        <template #item.email="{ item }">
+          <span class="text-body-1 text-high-emphasis">{{ item.email }}</span>
+        </template>
+
+        <!-- telegram -->
+        <template #item.telegram="{ item }">
+          <span class="text-body-1 text-high-emphasis">{{ item.telegram }}</span>
+        </template>
+
+        <!-- Actions -->
+        <template #item.actions="{ item }">
+          <IconBtn>
+            <RouterLink :to="{ name: 'client-details-id', params: { id: item.id } }">
+              <VIcon icon="tabler-edit" />
+            </RouterLink>
+          </IconBtn>
+
+          <IconBtn>
+            <VIcon icon="tabler-dots-vertical" />
+            <VMenu activator="parent">
+              <VList>
+                <VListItem
+                  value="delete"
+                  prepend-icon="tabler-trash"
+                  @click="deleteClient(item.id)"
+                >
+                  Удалить
+                </VListItem>
+                <!-- <VListItem
+                  value="duplicate"
+                  prepend-icon="tabler-copy"
+                >
+                  Дублировать
+                </VListItem> -->
+              </VList>
+            </VMenu>
+          </IconBtn>
+        </template>
+
+        <!-- pagination -->
+        <template #bottom>
+          <TablePagination
+            v-model:page="page"
+            :items-per-page="itemsPerPage"
+            :total-items="totalClients"
+          />
+        </template>
+      </VDataTableServer>
+    </VCard>
+  </div>
+</template>
+
+<style scoped>
+  .development-note {
+    margin-top: 4px;
+    font-size: 0.9rem;
+    color: grey;
+  }
+</style>

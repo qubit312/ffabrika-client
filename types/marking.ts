@@ -1,17 +1,29 @@
+import type { Client } from './client'
+import type { Product } from './product'
+
 export type ShortEntityParams = {
-  id: number
-  name: string
+  id: number | null
+  name: string | null
 }
 
-export type MarkingParams = {
+export interface Marking {
   id: number
-  name: string
+  product_id: number | null
+  client_id: number | null
   article: string
+  name: string
   composition: string
-  client: ShortEntityParams
-  category: string
   color: string
-  size: string
-  barcode: string
-  needsChestnyZnakLabel: boolean
+  has_chestny_znak: boolean
+  category: string
+  created_by: number | null
+  updated_by: number | null
+  created_at: string
+  updated_at: string
+  deleted_at: string | null
+
+  product?: Product
+  client?: Client
+  creator?: any
+  editor?: any
 }

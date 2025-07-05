@@ -1,19 +1,25 @@
 import { fileURLToPath } from 'node:url'
+import { defineNuxtConfig } from 'nuxt/config'
 import vuetify from 'vite-plugin-vuetify'
 import svgLoader from 'vite-svg-loader'
-
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   app: {
     head: {
       titleTemplate: '%s - NuxtJS Admin Template',
-      title: 'Vuexy',
+      title: 'Ffabrika',
 
       link: [{
         rel: 'icon',
         type: 'image/x-icon',
         href: '/favicon.ico',
       }],
+    },
+  },
+
+  runtimeConfig: {
+    public: {
+      apiBaseUrl: process.env.API_BASE_URL || 'http://127.0.0.1:8000',
     },
   },
 
