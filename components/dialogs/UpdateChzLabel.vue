@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import type { ShortEntityParams } from '../../types/marking';
-const token      = localStorage.getItem('access_token') || ''
-const apiHeaders = token ? { Authorization: `Bearer ${token}` } : {}
+import { replaceProductSize } from '../../services/chz';
+import { getProducts } from '../../services/products';
+import { getProductSizes } from '../../services/productSizes';
+import type { ShortEntityParams } from '../../types/label';
 
 interface Props {
   modelValue: boolean
@@ -22,17 +23,8 @@ interface ProductSize {
   available_labels_count: number
 }
 
-interface ReplaceSizeResponse {
-  message: string;
-  updated_count: number;
-}
-
-interface PaginatedResponse<T> {
-  data: T[]
-}
-
 const savedProducts = ref<ShortEntityParams[]>([])
-const labelCount        = ref<number>(1)
+const labelCount              = ref<number>(1)
 const selectedSourceProductId = ref<number|null>(null)
 const selectedSourceSizeId    = ref<number|null>(null)
 const selectedTargetProductId = ref<number|null>(null)
@@ -61,13 +53,7 @@ const sourceSizes = ref<ProductSize[]>([])
 const targetSizes = ref<ProductSize[]>([])
 
 async function fetchProducts() {
-  const { data, error } = await useApi<ShortEntityParams[]>(
-    '/api/products',
-    {
-      method:  'GET',
-      headers: apiHeaders,
-    }
-  )
+  const { data, error } = await getProducts()
   if (error.value) {
     console.error('Ошибка при загрузке товаров:', error.value)
     return
@@ -75,16 +61,8 @@ async function fetchProducts() {
   savedProducts.value = data.value || []
 }
 
-
 async function fetchSizes(productId: number, target: 'source' | 'target') {
-  const { data, error } = await useApi<PaginatedResponse<ProductSize>>(
-    '/api/product-sizes',
-    {
-      method: 'GET',
-      params: { product_id: productId },
-      headers: apiHeaders
-    }
-  )
+  const { data, error } = await getProductSizes(productId)
   if (error.value) {
     console.error('Ошибка загрузки размеров:', error.value)
     return
@@ -92,11 +70,11 @@ async function fetchSizes(productId: number, target: 'source' | 'target') {
   const arr = data.value.data
   if (target === 'source') {
     sourceSizes.value = arr
-    console.log(sourceSizes.value);
   } else {
     targetSizes.value = arr
   }
 }
+
 
 async function onReplaceSize() {
   if (!selectedSourceSizeId.value || !selectedTargetSizeId.value || labelCount.value < 1) {
@@ -107,25 +85,16 @@ async function onReplaceSize() {
   const dto = {
     old_size_id: Number(selectedSourceSizeId.value),
     new_size_id: Number(selectedTargetSizeId.value),
-    quantity:   Number(labelCount.value),
+    quantity: Number(labelCount.value),
   }
 
-  const { data, error } = await useApi<ReplaceSizeResponse>(
-    '/api/chestny-znak-labels/replace-size', {
-      method:  'POST',
-      body:    dto,
-      headers: {
-        'Content-Type': 'application/json',
-        ...apiHeaders,
-      }
-    }
-  )
-  console.log(data.value)
+  const { data, error } = await replaceProductSize(dto)
   if (error.value) {
     console.error(error.value)
     return
   }
   dialog.value = false
+  console.log(data.value)
 }
 
 onMounted(fetchProducts)
@@ -133,12 +102,12 @@ onMounted(fetchProducts)
 <template>
   <VDialog v-model="dialog" max-width="600">
     <VCard>
-      <VCardTitle>Перенос наклеек</VCardTitle>
+      <VCardTitle>Перенос этикеток</VCardTitle>
       <VCardText>
         <VRow dense align="start">
           <!-- Откуда -->
           <VCol cols="5" class="d-flex flex-column">
-            <div class="font-weight-medium mb-2">Откуда берём наклейки</div>
+            <div class="font-weight-medium mb-2">Откуда берём этикетки</div>
             <AppSelect
               v-model="selectedSourceProductId"
               :items="savedProducts"
@@ -190,7 +159,7 @@ onMounted(fetchProducts)
             <AppTextField
               v-model="labelCount"
               type="number"
-              label="Количество наклеек"
+              label="Количество этикеток"
               min="1"
               outlined
               class="mt-4"

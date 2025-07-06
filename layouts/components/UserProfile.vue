@@ -1,5 +1,25 @@
 <script setup lang="ts">
-import avatar1 from '@images/avatars/avatar-1.png'
+import avatar1 from '@images/avatars/avatar-1.png';
+import { onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
+
+const router = useRouter()
+
+const handleLogout = () => {
+  localStorage.clear()
+  router.push('/login')
+}
+
+const userName = ref('Гость')
+const userRole = ref('Без роли')
+
+onMounted(() => {
+  const name = localStorage.getItem('user_name')
+  const role = localStorage.getItem('role_visible_name')
+
+  if (name) userName.value = name
+  if (role) userRole.value = role
+})
 </script>
 
 <template>
@@ -48,15 +68,15 @@ import avatar1 from '@images/avatars/avatar-1.png'
             </template>
 
             <VListItemTitle class="font-weight-semibold">
-              John Doe
+              {{ userName }}
             </VListItemTitle>
-            <VListItemSubtitle>Admin</VListItemSubtitle>
+            <VListItemSubtitle>{{ userRole }}</VListItemSubtitle>
           </VListItem>
 
           <VDivider class="my-2" />
 
           <!-- 👉 Logout -->
-          <VListItem to="/login">
+          <VListItem @click="handleLogout">
             <template #prepend>
               <VIcon
                 class="me-2"

@@ -3,12 +3,12 @@ import type { UseFetchOptions } from 'nuxt/app'
 
 export const useApi: typeof useFetch = <T>(url: MaybeRefOrGetter<string>, options: UseFetchOptions<T> = {}) => {
   const config = useRuntimeConfig()
-  const accessToken = useCookie('accessToken')
-
+  const accessToken = localStorage.getItem('access_token') || ''
+  
   const defaults: UseFetchOptions<T> = {
     baseURL: config.public.apiBaseUrl,
     key: toValue(url),
-    headers: accessToken.value ? { Authorization: `Bearer ${accessToken.value}` } : {},
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
   }
 
   // for nice deep defaults, please use unjs/defu

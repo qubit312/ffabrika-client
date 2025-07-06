@@ -12,7 +12,13 @@ export interface SizeItem {
   quantity:  number
   barcode:   string
 }
-
+export interface ProductSizeWithLabels {
+  id: number
+  product_id: number
+  value: string
+  barcode: string
+  available_labels_count: number
+}
 
 export interface CreateProductSizeDto {
   product_id: number

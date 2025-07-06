@@ -1,73 +1,39 @@
 import { useApi } from '../composables/useApi'
-import type { CreateProductDto, Product, UpdateProductDto } from '../types/product'
+import type { CreateWbProductDto, UpdateWbProductDto, WbProduct } from '../types/product'
 
-const token = localStorage.getItem('access_token') || ''
-const bearerToken = token ? `Bearer ${token}` : ''
-const headers = token ? { Authorization: bearerToken } : {}
-
-export function createProduct(dto: CreateProductDto) {
-  return useApi<{ data: Product }>('/api/products', {
+export function createProduct(dto: CreateWbProductDto) {
+  return useApi<{ data: WbProduct }>('/api/wb-products', {
     method: 'POST',
-    body: dto,
-    headers
+    body: dto
   })
 }
 
-export function updateProduct(id: number, dto: UpdateProductDto) {
-  return useApi<{ data: Product }>(`/api/products/${id}`, {
+export function updateProduct( dto: UpdateWbProductDto, id: number) {
+  return useApi<{ data: WbProduct }>(`/api/wb-products/${id}`, {
     method: 'PUT',
-    body: dto,
-    headers
+    body: dto
   })
 }
 
-export function getProducts(clientId?: number) {
-  const path = clientId
-    ? `/api/products?client_id=${encodeURIComponent(clientId)}`
-    : '/api/products'
-  return useApi<{ data: Product[] }>(path, {
+export function getProducts(clientId?: number, name?: string) {
+  const params = new URLSearchParams()
+
+  if (clientId) params.append('client_id', String(clientId))
+  if (name) params.append('name', name)
+
+  return useApi<{ data: WbProduct[] }>(`/api/wb-products?${params.toString()}`, {
     method: 'GET',
-    headers
   })
 }
 
-export function deleteProductById(id: number) {
-  return useApi<void>(`/api/products/${id}`, {
-    method: 'DELETE',
-    headers
+export function getProduct(id: number) {
+  return useApi<WbProduct>(`/api/wb-products/${id}`, {
+    method: 'GET'
   })
 }
 
-// async function fetchProducts() {
-//   let url = '/api/products'
-//   if (primaryId != null && primaryId > 0) {
-//     url += `?client_id=${encodeURIComponent(primaryId)}`
-//   }
-//   console.log(url)
-//   const { data, error } = await useApi<Product[]>(url, {
-//     method: 'GET',
-//     headers: apiHeaders,
-//   })
-//   if (error.value) {
-//     console.error('Ошибка при загрузке товаров:', error.value)
-//     return
-//   }
-//   savedProducts.value = data.value || []
-// }
-
-// const deleteProduct = async (id: number) => {
-//   try {
-//     const { error } = await useApi(`/api/products/${id}`, {
-//       method: 'DELETE',
-//       headers: apiHeaders,
-//     })
-//     if (error.value) throw error.value
-//     const idx = savedProducts.value.findIndex(item => item.id === id)
-//     if (idx !== -1) {
-//       savedProducts.value.splice(idx, 1)
-//     }
-//   }
-//   catch (err: any) {
-//     console.error('Ошибка при удалении метки:', err)
-//   }
-// }
+export function deleteProduct(id: number) {
+  return useApi<void>(`/api/wb-products/${id}`, {
+    method: 'DELETE'
+  })
+}

@@ -20,7 +20,7 @@ const form = ref({
   password: '',
   remember: false,
 })
-
+const config = useRuntimeConfig()
 const isPasswordVisible = ref(false)
 const router = useRouter()
 const loading = ref(false)
@@ -39,23 +39,27 @@ async function onSubmit() {
   loading.value = true
   errorMessage.value = ''
   try {
-    const res = await fetch('http://127.0.0.1:8000/api/auth/login', {
+    const { data, error } = useApi('/api/auth/login', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
       body: JSON.stringify({
         email: form.value.email,
         password: form.value.password,
         remember: form.value.remember
       })
     })
-    const payload = await res.json()
-    if (!res.ok || !payload.success) {
+
+    const payload = data.value
+    if (!payload || !payload.success) {
+      console.error(error.value.data.message || 'Ошибка сети')
       throw new Error(payload.message || 'Ошибка авторизации')
     }
     localStorage.setItem('access_token', payload.data.access_token)
+    localStorage.setItem('user_name', payload.data.name)
+    const role = payload.data.role
+    if (role) {
+      localStorage.setItem('role_visible_name', role.visible_name)
+    }
+    
     await router.push('/')
   } catch (err: any) {
     errorMessage.value = "Неправильно введены учетные данные"

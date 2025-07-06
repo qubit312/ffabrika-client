@@ -1,49 +1,36 @@
 <script setup lang="ts">
-import type { MarkingParams } from '@types/marking';
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { getCategoryLabel } from '../../../constants/productCategories';
+import CreateProductDialog from '../../../components/dialogs/CreateProductDialog.vue';
 import { getLabels, removeLabel } from '../../../services/labels';
-
-const router = useRouter()
-const markingsData = ref<{ markings: MarkingParams[]; total: number }>({ markings: [], total: 0 })
+import type { Label } from '../../../types/label';
 
 const headers = [
   { title: 'Наименование', key: 'name', sortable: false },
-  { title: 'Категория', key: 'category', sortable: false },
-  { title: 'Клиент', key: 'client', sortable: false },
-  { title: 'Цвет', key: 'color', sortable: false },
   { title: '', key: 'actions', sortable: false },
 ]
 
+const router = useRouter()
+const markingsData = ref<{ markings: Label[]; total: number }>({ markings: [], total: 0 })
 const searchQuery     = ref<string>('')
 const isSearchFocused = ref<boolean>(false)
-
+const showCreateDialog = ref(false)
 const itemsPerPage = ref<number>(10)
 const page = ref<number>(1)
 const sortBy = ref<string | undefined>()
 const orderBy = ref<'asc' | 'desc' | undefined>()
+const markings = computed<Label[]>(() => markingsData.value.markings)
+const totalMarkings = computed<number>(() => markingsData.value.total)
 
 const updateOptions = (options: any) => {
   sortBy.value = options.sortBy[0]?.key
   orderBy.value = options.sortBy[0]?.order
 }
 
-const resolveCategory = (category: string) => {
-  switch (category) {
-    case 'Accessories': return { color: 'error', icon: 'tabler-device-watch' }
-    case 'Home Decor': return { color: 'info', icon: 'tabler-home' }
-    case 'Electronics': return { color: 'primary', icon: 'tabler-device-imac' }
-    case 'Shoes': return { color: 'success', icon: 'tabler-shoe' }
-    case 'Office': return { color: 'warning', icon: 'tabler-briefcase' }
-    case 'Games': return { color: 'primary', icon: 'tabler-device-gamepad-2' }
-  }
-}
-
 const fetchMarkings = async () => {
   const { data, error } = await getLabels()
   if (error.value) {
-    console.error('Ошибка при загрузке меток', error.value)
+    console.error('Ошибка при загрузке этикеток', error.value)
     return
   }
 
@@ -61,12 +48,9 @@ const deleteLabel = async (id: number) => {
     console.log(res)
     await fetchMarkings()
   } catch (err: any) {
-    console.error('Ошибка при удалении метки:', err)
+    console.error('Ошибка при удалении этикетки:', err)
   }
 }
-
-const markings = computed<MarkingParams[]>(() => markingsData.value.markings)
-const totalMarkings = computed<number>(() => markingsData.value.total)
 
 onMounted(() => {
   fetchMarkings()
@@ -76,7 +60,7 @@ onMounted(() => {
 <template>
   <div>
     <VCard
-      title="Наклейки"
+      title="Этикетки"
       class="mb-6"
     >
       <VDivider />
@@ -105,10 +89,18 @@ onMounted(() => {
           />
           <VBtn
             color="primary"
-            prepend-icon="tabler-plus"
+            prepend-icon="tabler-box"
             @click="router.push({ name: 'marking-details-id', params: { id: 0 } })"
           >
-            Добавить наклейку
+            По существующему товару
+          </VBtn>
+
+          <VBtn
+            color="primary"
+            prepend-icon="tabler-plus"
+            @click="showCreateDialog = true"
+          >
+            Новый товар
           </VBtn>
         </div>
       </div>
@@ -130,13 +122,6 @@ onMounted(() => {
             class="d-flex align-center gap-x-4"
             style="cursor: pointer;"
           >
-            <VAvatar
-              v-if="item.image"
-              size="38"
-              variant="tonal"
-              rounded
-              :image="item.image"
-            />
             <div class="d-flex flex-column">
               <RouterLink :to="{ name: 'marking-details-id', params: { id: item.id } }">
                 {{ item.name }}
@@ -146,7 +131,7 @@ onMounted(() => {
         </template>
 
         <!-- category -->
-        <template #item.category="{ item }">
+        <!-- <template #item.category="{ item }">
           <VAvatar
             size="30"
             variant="tonal"
@@ -159,21 +144,7 @@ onMounted(() => {
             />
           </VAvatar>
           <span class="text-body-1 text-high-emphasis">{{ getCategoryLabel(item.category) }}</span>
-        </template>
-
-        <!-- client -->
-        <template #item.client="{ item }">
-          <div class="d-flex flex-column">
-              <span class="text-body-1 font-weight-medium text-high-emphasis">{{ item.client.name }}</span>
-          </div>
-        </template>
-
-        <!-- color -->
-        <template #item.status="{ item }">
-          <div class="d-flex flex-column">
-              <span class="text-body-1 font-weight-medium text-high-emphasis">{{ item.status }}</span>
-          </div>
-        </template>
+        </template> -->
 
         <!-- Actions -->
         <template #item.actions="{ item }">
@@ -209,6 +180,11 @@ onMounted(() => {
       </VDataTableServer>
     </VCard>
   </div>
+  
+  <CreateProductDialog
+    v-model="showCreateDialog"
+    @created="fetchMarkings"
+  />
 </template>
 
 <style scoped>

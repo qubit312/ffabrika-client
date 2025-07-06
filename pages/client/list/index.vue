@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import { deleteClient, getClients } from '../../../services/clients';
 
 interface Client {
   id: number
@@ -26,7 +27,6 @@ const headers = [
 
 const clients = ref<Client[]>([])
 const totalClients = computed<number>(() => clients.value.length)
-const token = localStorage.getItem('access_token') || ''
 
 const searchQuery     = ref<string>('')
 const isSearchFocused = ref<boolean>(false)
@@ -42,27 +42,18 @@ const updateOptions = (options: any) => {
 }
 
 const fetchClients = async () => {
-  const { data, error } = await useApi<Client[]>('/api/clients', {
-    method: 'GET',
-    headers: token
-      ? { Authorization: `Bearer ${token}` }
-      : {},
-  })
+  const { data, error } = await getClients()
   if (error.value) {
     console.error('Ошибка при загрузке клиентов:', error.value)
     return
   }
-  clients.value = data.value
+
+  clients.value = data.value || []
 }
 
-const deleteClient = async (id: number) => {
+const handleDelete = async (id: number) => {
   try {
-    const { error } = await useApi(`/api/clients/${id}`, {
-      method: 'DELETE',
-      headers: token
-      ? { Authorization: `Bearer ${token}` }
-      : {},
-     })
+    const { error } = await deleteClient(id)
     if (error.value) throw error.value
     await fetchClients()
   } catch (e) {
@@ -141,13 +132,6 @@ onMounted(fetchClients)
             class="d-flex align-center gap-x-4"
             style="cursor: pointer;"
           >
-            <VAvatar
-              v-if="item.image"
-              size="38"
-              variant="tonal"
-              rounded
-              :image="item.image"
-            />
             <div class="d-flex flex-column">
               <RouterLink :to="{ name: 'client-details-id', params: { id: item.id } }">
                 {{ item.name }}
@@ -191,7 +175,7 @@ onMounted(fetchClients)
                 <VListItem
                   value="delete"
                   prepend-icon="tabler-trash"
-                  @click="deleteClient(item.id)"
+                  @click="handleDelete(item.id)"
                 >
                   Удалить
                 </VListItem>

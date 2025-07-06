@@ -1,44 +1,25 @@
 <script setup lang="ts">
-import { useApi } from '@/composables/useApi';
-import { computed, onMounted, ref } from 'vue';
+import { useDebounce } from '@vueuse/core';
+import { computed, onMounted, ref, watch } from 'vue';
+import { getClients } from '../../../services/clients';
+import { deleteProduct, getProducts } from '../../../services/products';
+import type { Client } from '../../../types/client';
+import type { WbProduct } from '../../../types/product';
 
-export interface Product {
-  id: number;
-  order_id: number;
-  client_id: number;
-  parent_id: number | null;
-  name: string;
-  qty: number;
-  color: string;
-  size: string[];
-  complect: number;
-  delivered: number;
-  created_at: string;
-  updated_at: string;
-  deleted_at: string | null;
-  children: Product[];
-  services: Service[];
-}
-
-export interface Service {
-  id: number;
-  product_id: number;
-}
-
-const entityData = ref<Product[]>([])
-const token = localStorage.getItem('access_token') || ''
+const entityData = ref<WbProduct[]>([])
 
 const headers = [
   { title: 'Название', key: 'name', sortable: false },
-  // { title: 'Категория', key: 'category' },
-  // { title: 'Клиент', key: 'client' },
+  { title: 'Артикул', key: 'article', sortable: false },
   { title: 'Цвет', key: 'color', sortable: false },
-  { title: 'Количество', key: 'qty', sortable: false },
   { title: '', key: 'actions', sortable: false },
 ]
 
 const searchQuery     = ref<string>('')
 const isSearchFocused = ref<boolean>(false)
+const debouncedQuery = useDebounce(searchQuery, 400) 
+const clients = ref<Client[]>([])
+const selectedClientId = ref<number | undefined>()
 
 const itemsPerPage = ref<number>(10)
 const page = ref<number>(1)
@@ -50,61 +31,48 @@ const updateOptions = (options: any) => {
   orderBy.value = options.sortBy[0]?.order
 }
 
-const fetchData = async () => {
-  const { data, error } = await useApi<Product[]>('/api/products', {
-    method: 'GET',
-    headers: token
-      ? { Authorization: `Bearer ${token}` }
-      : {},
-  })
+watch(debouncedQuery, () => {
+  fetchProducts()
+})
+
+const fetchClients = async () => {
+  const { data, error } = await getClients()
+  
   if (error.value) {
     console.error('Ошибка при загрузке клиентов:', error.value)
+    return
+  }
+
+  clients.value = data.value || []
+}
+
+const fetchProducts = async () => {
+  const { data, error } = await getProducts(selectedClientId.value, searchQuery.value)
+  if (error.value) {
+    console.error('Ошибка при загрузке товаров:', error.value)
     return
   }
   entityData.value = data.value
   console.log(entityData.value)
 }
 
-const deleteProduct = async (id: number) => {
+const handleDelete = async (id: number) => {
   try {
-    const { error } = await useApi(`/api/products/${id}`, {
-      method: 'DELETE',
-      headers: token
-        ? { Authorization: `Bearer ${token}` }
-        : {},
-    })
+    const { error } = await deleteProduct(id)
     if (error.value) throw error.value
-    await fetchData()
-  }
-  catch (err: any) {
-    console.error('Ошибка при удалении метки:', err)
+    await fetchProducts()
+  } catch (err: any) {
+    console.error('Ошибка при удалении товара:', err)
   }
 }
 
-const entities = computed<Product[]>(() => entityData.value)
+const entities = computed<WbProduct[]>(() => entityData.value)
 const totalEntities = computed<number>(() => entities.value.length)
 
 onMounted(() => {
-  fetchData()
+  fetchProducts()
+  fetchClients()
 })
-
-const categoryLabels: Record<string, string> = {
-  COMMON:                            'Общие',
-  COSMETICS_AND_HOUSEHOLD_CHEMICALS: 'Косметика и бытовая химия',
-  CLOTHES:                           'Одежда',
-  FOOTWEAR:                          'Обувь',
-  BOOKS:                             'Книги',
-  TEXTILE_AND_ACCESSORIES:           'Текстиль и аксессуары',
-  LEATHER:                           'Кожа',
-  DISHES:                            'Посуда',
-  GLASSES:                           'Стекло',
-  PRODUCTS_FOR_ADULTS:               'Товары для взрослых',
-  SOIL:                              'Почва',
-  JEWELRY:                           'Ювелирные изделия',
-  FOOD_AND_PET_SUPPLIES:             'Корма и товары для животных',
-}
-
-const getCategoryLabel = (code: string) => categoryLabels[code] || code
 
 </script>
 
@@ -124,13 +92,19 @@ const getCategoryLabel = (code: string) => categoryLabels[code] || code
             placeholder="Введите название"
             style="inline-size: 200px;"
             class="me-3"
-            @focus="isSearchFocused = true"
-            @blur="isSearchFocused = false"
             clearable
           />
-          <div v-if="isSearchFocused" class="development-note">
-            Функция поиска ещё в разработке
-          </div>
+          <VSelect
+            v-model="selectedClientId"
+            :items="clients"
+            item-title="name"
+            item-value="id"
+            label="Клиент"
+            clearable
+            style="inline-size: 200px;"
+            class="me-3"
+            @update:modelValue="fetchProducts"
+          />
         </div>
 
         <VSpacer />
@@ -167,13 +141,13 @@ const getCategoryLabel = (code: string) => categoryLabels[code] || code
             class="d-flex align-center gap-x-4"
             style="cursor: pointer;"
           >
-            <VAvatar
+            <!-- <VAvatar
               v-if="item.image"
               size="38"
               variant="tonal"
               rounded
               :image="item.image"
-            />
+            /> -->
             <div class="d-flex flex-column">
               <RouterLink :to="{ name: 'product-details-id', params: { id: item.id } }">
                 {{ item.name }}
@@ -181,11 +155,6 @@ const getCategoryLabel = (code: string) => categoryLabels[code] || code
             </div>
           </div>
         </template>
-
-        <!-- category -->
-        <!-- <template #item.category="{ item }">
-          <span class="text-body-1 text-high-emphasis">{{ getCategoryLabel(item.category) }}</span>
-        </template> -->
 
         <!-- client -->
         <!-- <template #item.client="{ item }">
@@ -216,16 +185,10 @@ const getCategoryLabel = (code: string) => categoryLabels[code] || code
                 <VListItem
                   value="delete"
                   prepend-icon="tabler-trash"
-                  @click="deleteProduct(item.id)"
+                  @click="handleDelete(item.id)"
                 >
                   Удалить
                 </VListItem>
-                <!-- <VListItem
-                  value="duplicate"
-                  prepend-icon="tabler-copy"
-                >
-                  Дублировать
-                </VListItem> -->
               </VList>
             </VMenu>
           </IconBtn>

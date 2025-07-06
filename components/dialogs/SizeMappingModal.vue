@@ -1,21 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { useApi } from '../../composables/useApi'
-
-const bearerToken = localStorage.getItem('access_token') || ''
-const token = bearerToken ? `Bearer ${bearerToken}` : ''
-
-interface ProductSize {
-  id: number
-  product_id: number
-  value: string
-  barcode: string
-  printable_label_count: number
-}
-
-interface PaginatedResponse<T> {
-  data: T[]
-}
+import { importChestnyZnakLabels } from '../../services/chz'
+import { getProductSizes } from '../../services/productSizes'
 
 interface Props {
   modelValue: boolean
@@ -37,46 +23,20 @@ const localMap = ref<Record<number, string>>({})
 const sizeOptions = ref<{ label: string; value: string }[]>([])
 const loading = ref(false)
 
-async function fetchSizes() {
-  loading.value = true
-  try {
-    const { data, error } = await useApi<PaginatedResponse<ProductSize>>(
-      '/api/product-sizes',
-      {
-        method: 'GET',
-        params: { product_id: props.productId },
-        headers: {
-          'Authorization': token
-        },
-      }
-    )
-    if (error.value) {
-      console.error('Ошибка загрузки размеров:', error.value)
-      sizeOptions.value = []
-    } else {
-      sizeOptions.value = data.value.data.map(ps => ({
-        value: String(ps.id),
-        label: ps.value
-      }))
-    }
-  } catch (e) {
-    console.error('Непредвиденная ошибка при загрузке размеров:', e)
-    sizeOptions.value = []
-  } finally {
-    loading.value = false
-  }
-}
-
 const snackbar = reactive({
   show: false,
   text: '',
   color: 'success' as 'success' | 'error'
 })
 
-function showNotification(message: string, color: 'success' | 'error' = 'success') {
-  snackbar.text = message
-  snackbar.color = color
+function showSnackbar(message: string, isSuccess: boolean) {
   snackbar.show = true
+  snackbar.text = message
+  if (isSuccess) {
+    snackbar.color = 'success'
+  } else {
+    snackbar.color = 'error'
+  }
 }
 
 watch(
@@ -96,6 +56,29 @@ function close() {
   isOpen.value = false
 }
 
+async function fetchSizes() {
+  loading.value = true
+  try {
+    const { data, error } = await getProductSizes(props.productId)
+
+    if (error.value) {
+      console.error('Ошибка загрузки размеров:', error.value)
+      sizeOptions.value = []
+      return
+    }
+
+    sizeOptions.value = data.value.data.map(ps => ({
+      value: String(ps.id),
+      label: ps.value,
+    }))
+  } catch (e) {
+    console.error('Непредвиденная ошибка при загрузке размеров:', e)
+    sizeOptions.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
 async function onSave() {
   if (!isFormValid.value) return
 
@@ -107,53 +90,38 @@ async function onSave() {
 
   loading.value = true
   try {
-    const { data, error } = await useApi<PaginatedResponse<ProductSize>>(
-      '/api/chestny-znak-labels/import',
-      {
-        method: 'POST',
-        headers: {
-            'Accept': 'application/json',
-            'Authorization': token
-        },
-        body: formData
-      }
-    )
+    const { data, error } = await importChestnyZnakLabels(formData)
+
     if (error.value) {
       throw new Error(error.value)
     }
+
     const createdCount = data.value.created?.length ?? 0
-    
     const errorsObj = data.value.errors as Record<string, { code: string[] }>
     const errorFiles = errorsObj ? Object.keys(errorsObj) : []
 
     if (errorFiles.length > 0) {
-      showNotification(
+      showSnackbar(
         `Импорт завершён: добавлено ${createdCount}, ошибки в ${errorFiles.length} файлах`,
-        'error'
+        false
       )
-
       errorFiles.forEach(fileName => {
-        console.log(errorsObj);
-        
-        console.log(`Ошибка в файле ${fileName}, число ошибок: ${Object.keys(errorsObj[fileName]).length}`)
+        const errorCount = Object.keys(errorsObj[fileName]).length
+        console.log(`Ошибка в файле ${fileName}, число ошибок: ${errorCount}`)
       })
-      emit('labels-updated')
     } else {
-      showNotification(
-        `Импорт успешно: добавлено ${createdCount} ЧЗ`,
-        'success'
-      )
-      emit('labels-updated')
+      showSnackbar(`Добавлено ${createdCount} ЧЗ`, true)
       close()
     }
+
+    emit('labels-updated')
   } catch (err: any) {
-    showNotification(`Произошла ошибка при импорте`, 'error')
     console.error('Ошибка при импорте:', err)
+    showSnackbar(`Произошла ошибка при импорте`, false)
   } finally {
     loading.value = false
   }
 }
-
 </script>
 
 <template>

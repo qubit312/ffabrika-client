@@ -1,29 +1,28 @@
-import type { Client } from './client'
-import type { Product } from './product'
+import type { WbProduct } from './product'
 
 export type ShortEntityParams = {
   id: number | null
   name: string | null
 }
 
-export interface Marking {
+export interface Label {
   id: number
   product_id: number | null
-  client_id: number | null
-  article: string
   name: string
-  composition: string
-  color: string
   has_chestny_znak: boolean
-  category: string
   created_by: number | null
   updated_by: number | null
   created_at: string
   updated_at: string
   deleted_at: string | null
 
-  product?: Product
-  client?: Client
+  product?: WbProduct
   creator?: any
   editor?: any
+}
+
+export interface CreateLabelDto {
+  product_id: number
+  name: string
+  has_chestny_znak: boolean
 }

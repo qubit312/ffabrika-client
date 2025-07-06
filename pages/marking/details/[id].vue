@@ -1,15 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import LabelVariantDetails from '../../../components/LabelVariantDetails.vue'
 import DefectiveLabelModal from '../../../components/dialogs/DefectiveLabelModal.vue'
 import SizeMappingModal from '../../../components/dialogs/SizeMappingModal.vue'
 import type { CategoryCode } from '../../../constants/productCategories'
-import { categoryOptions } from '../../../constants/productCategories'
-import { getClients } from '../../../services/clients'
 import { createLabel, getLabel, updateLabel } from '../../../services/labels'
 import { getProducts } from '../../../services/products'
-import type { Marking, ShortEntityParams } from '../../../types/marking'
+import type { Label, ShortEntityParams } from '../../../types/label'
 
 const route = useRoute()
 const router = useRouter()
@@ -46,12 +43,9 @@ function onDrop(files: File[] | null) {
 onChange(selected => onDrop(selected))
 useDropZone(dropZoneRef, onDrop)
 
-const markingData = ref<Marking | null>(null)
+const markingData = ref<Label | null>(null)
 const name = ref<string>('')
-const article = ref<string>('')
-const composition = ref<string>('')
 const has_chestny_znak = ref<boolean>(false)
-const color = ref<string>('')
 
 const loadedLabelCount      = ref<number>(0)
 const newLabelCount         = ref<number | null>(null)
@@ -60,25 +54,9 @@ const isLowLoadedLabelCount = computed(() => loadedLabelCount.value < 10)
 const showDefectiveModal    = ref(false)
 const selectedCategory = ref<CategoryCode | null>(null)
 
-const selectedClient = ref<ShortEntityParams | null>(null)
-const clients = ref<ShortEntityParams[]>([])
-const filteredClients = ref<ShortEntityParams[]>([])
-
 const selectedProduct = ref<ShortEntityParams | null>(null)
 const products = ref<ShortEntityParams[]>([])
 const filteredProducts = ref<ShortEntityParams[]>([])
-
-const searchClients = (q: string) => {
-  const query = (typeof q === 'string' ? q : '').trim().toLowerCase()
-
-  if (!query) {
-    filteredClients.value = clients.value
-  } else {
-    filteredClients.value = clients.value.filter(c =>
-      c.name?.toLowerCase().includes(query)
-    )
-  }
-}
 
 const searchProducts = (q: string) => {
   const query = (typeof q === 'string' ? q : '').trim().toLowerCase()
@@ -86,47 +64,16 @@ const searchProducts = (q: string) => {
     filteredProducts.value = products.value
   } else {
     filteredProducts.value = products.value.filter(p =>
-      p.name?.toLowerCase().includes(query)
+      (p.name ?? '').toLowerCase().includes(query)
     )
   }
 }
-
-watch(selectedProduct, (prod) => {
-  if (!prod) {
-    return
-  }
-
-  if (!name.value) {
-    name.value = prod.name ?? ''
-  }
-
-  if (!selectedClient.value && (prod as any).client_id) {
-    const clientId = (prod as any).client_id
-    const client = clients.value.find(c => c.id === clientId)
-    if (client) {
-      selectedClient.value = {
-        id: client.id,
-        name: client.name,
-      }
-    }
-  }
-})
 
 function applyNewCount() {
   if (newLabelCount.value != null && newLabelCount.value >= 0) {
     loadedLabelCount.value    = newLabelCount.value
     showLoadLabelDialog.value = false
   }
-}
-
-const fetchClients = async () => {
-  const { data, error } = await getClients()
-  if (error.value) {
-    console.error('Ошибка при загрузке клиентов:', error.value)
-    return
-  }
-  clients.value = data.value || []
-  filteredClients.value = clients.value
 }
 
 const fetchProducts = async () => {
@@ -162,31 +109,22 @@ const fetchLabel = async (id: number) => {
   }
 }
 
-function patchFormWithData(data: Marking) {
+function patchFormWithData(data: Label) {
   name.value             = data.name
-  article.value          = data.article
-  composition.value      = data.composition
   has_chestny_znak.value = data.has_chestny_znak
-  color.value            = data.color
-  selectedCategory.value = data.category
 
-  selectedClient.value   = data.client
-    ? { id: data.client.id, name: data.client.name }
-    : null
-  selectedProduct.value  = data.product
-    ? { id: data.product.id, name: data.product.name }
-    : null
+  if (data.product) {
+    const match = products.value.find(p => p.id === data.product!.id)
+    selectedProduct.value = match ?? { id: data.product.id, name: data.product.name }
+  } else {
+    selectedProduct.value = null
+  }
 }
 
 async function onSubmit() {
   const payload = {
     name:             name.value,
-    article:          article.value,
-    composition:      composition.value,
-    color:            color.value,
     has_chestny_znak: has_chestny_znak.value,
-    category:         selectedCategory.value,
-    client_id:        selectedClient.value?.id ?? null,
     product_id:       selectedProduct.value?.id ?? null,
   }
 
@@ -203,7 +141,7 @@ async function onSubmit() {
       labelId = data.value.id
     }
 
-    showSnackbar(mode.value === 'edit' ? 'Метка успешно обновлена!' : 'Метка успешно создана!', false)
+    showSnackbar(mode.value === 'edit' ? 'Этикетка успешно обновлена!' : 'Этикетка успешно создана!', false)
     if (mode.value === 'create' && labelId) {
       await router.push({
         name:   'marking-details-id',
@@ -227,12 +165,11 @@ function showSnackbar(message: string, isError: boolean) {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  await fetchProducts()
   if (entityId > 0) {
-    fetchLabel(entityId)
+    await fetchLabel(entityId)
   }
-  fetchClients()
-  fetchProducts()
 })
 
 const childRef = ref<InstanceType<typeof SizeMappingModal> | null>(null)
@@ -261,7 +198,7 @@ function openSizeMappingModal() {
         <h4 class="text-h4 font-weight-medium">
           {{
             mode === 'create'
-              ? 'Вы создаете новую наклейку'
+              ? 'Вы создаете новую этикетку'
               : name
           }}
         </h4>
@@ -270,30 +207,19 @@ function openSizeMappingModal() {
           {{ 
             mode === 'create'
               ? ''
-              : 'Наклейки используемые для маркировки товаров'
+              : 'Этикетки используемые для маркировки товаров'
           }}
         </div>
       </div>
 
       <div class="d-flex gap-4 align-center flex-wrap">
-        <VBtn
-          variant="tonal"
-          color="secondary"
-          @click="router.back()"
-        >
-          Закрыть
-        </VBtn>
-        <VBtn
-          color="primary"
-          @click="onSubmit"
-        >
-          Сохранить
-        </VBtn>
+        <VBtn variant="tonal" color="secondary" @click="router.back()">Закрыть</VBtn>
+        <VBtn color="primary" @click="onSubmit">Сохранить </VBtn>
         <VBtn
           color="primary"
           @click="openDefective()"
         >
-          Бракованная наклейка
+          Бракованная этикетка
         </VBtn>
       </div>
     </div>
@@ -320,38 +246,46 @@ function openSizeMappingModal() {
               <VCol cols="12" md="6">
                 <AppTextField
                   label="Название"
-                  placeholder="Введите название товара на наклейке"
+                  placeholder="Введите название товара на этикетке"
                   v-model="name"
                 />
               </VCol>
               <VCol cols="12" md="6">
-                <AppTextField
-                  label="Артикул товара"
-                  placeholder="FXSK123U"
-                  v-model="article"
-                />
-              </VCol>
-              <VCol cols="12" md="6">
-                <AppTextField
-                  label="Состав"
-                  placeholder="Хлопок 95%"
-                  v-model="composition"
-                />
-              </VCol>
-              <VCol
-                cols="12"
-                md="6"
-              >
                 <VCheckbox
                   v-model="has_chestny_znak"
                   label="Есть честный знак"
                 />
               </VCol>
-              <VCol cols="12" md="6">
+              
+            </VRow>
+          </VCardText>
+        </VCard>
+
+        <VCard
+          title="Размеры"
+          class="mb-6"
+        >
+          <VCardText>
+            <LabelVariantDetails ref="childRef"
+              :product="selectedProduct"
+              :name="name"
+              :labelId="entityId"
+            />
+          </VCardText>
+        </VCard>
+      </VCol>
+
+      <VCol
+        md="4"
+        cols="12"
+      >
+        <VCard class="mb-6" title="Честный знак">
+          <VCardText>
+            <VCol cols="12">
                 <div class="d-flex align-center">
                   <!-- Текст и значение -->
                   <span>
-                    Кол-во наклеек в принтере:
+                    Кол-во этикеток в принтере:
                     <strong>{{ loadedLabelCount }}</strong>
                   </span>
 
@@ -365,7 +299,7 @@ function openSizeMappingModal() {
                         class="ms-2 text-error"
                       />
                     </template>
-                    <span>Мало наклеек в принтере</span>
+                    <span>Мало этикеток в принтере</span>
                   </VTooltip>
 
                   <!-- Кнопка обновления -->
@@ -379,65 +313,6 @@ function openSizeMappingModal() {
                   </VBtn>
                 </div>
               </VCol>
-            </VRow>
-          </VCardText>
-        </VCard>
-
-        <VCard
-          title="Размеры"
-          class="mb-6"
-        >
-          <VCardText>
-            <LabelVariantDetails ref="childRef"
-              :product="selectedProduct"
-              :name="name"
-              :article="article"
-              :composition="composition"
-              :color="color"
-              :client="selectedClient"
-              :labelId="entityId"
-            />
-          </VCardText>
-        </VCard>
-      </VCol>
-
-      <VCol
-        md="4"
-        cols="12"
-      >
-        <VCard
-          class="mb-6"
-        >
-          <VCardText>
-            <AppAutocomplete
-              v-model="selectedClient"
-              :items="filteredClients"
-              item-title="name"
-              item-value="id"
-              searchable
-              clearable
-              return-object
-              label="Клиент"
-              placeholder="Выберите клиента"
-              @update:search="searchClients"
-              class="mb-6"
-            />
-
-            <AppSelect
-              v-model="selectedCategory"
-              :items="categoryOptions"
-              item-title="label"
-              item-value="value"
-              label="Категория"
-              placeholder="Выберите категорию"
-              clearable
-              class="mb-6"
-            />
-
-            <AppTextField
-              label="Цвет"
-              v-model="color"
-            />
           </VCardText>
         </VCard>
 

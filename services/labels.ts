@@ -1,44 +1,35 @@
 import { useApi } from '../composables/useApi'
-import type { Marking } from '../types/marking'
-import type { MarkingsResponse } from '../types/markingsResponse'
-
-const token = localStorage.getItem('access_token') || ''
-const bearerToken = token ? `Bearer ${token}` : ''
-const headers = token ? { Authorization: bearerToken } : {}
+import type { Label } from '../types/label'
+import type { LabelsResponse } from '../types/markingsResponse'
 
 export async function getLabel(id: number) {
-  return await useApi<Marking>(`/api/labels/${id}`, { 
-    method: 'GET',
-    headers
+  return await useApi<Label>(`/api/labels/${id}`, { 
+    method: 'GET'
   })
 }
 
 export async function getLabels () {
-  return await useApi<MarkingsResponse>(`/api/labels`, {
-    method: 'GET',
-    headers,
+  return await useApi<LabelsResponse>(`/api/labels`, {
+    method: 'GET'
   })
 }
 
 export async function createLabel(payload: any) {
-  return await useApi<Marking>('/api/labels', {
+  return await useApi<Label>('/api/labels', {
     method: 'POST',
-    body: payload,
-    headers
+    body: payload
   })
 }
 
 export async function updateLabel(id: number, payload: any) {
-  return await useApi<Marking>(`/api/labels/${id}`, { 
+  return await useApi<Label>(`/api/labels/${id}`, { 
     method: 'PUT', 
-    body: payload, 
-    headers 
+    body: payload
   })
 }
 
 export async function removeLabel(id: number) {
   return await useApi<void>(`/api/labels/${id}`, {
-    method: 'DELETE',
-    headers,
+    method: 'DELETE'
   })
 }

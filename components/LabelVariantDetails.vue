@@ -1,153 +1,100 @@
 <script setup lang="ts">
-import PrintLabelDialog from '@/components/dialogs/PrintLabelDialog.vue';
 import type { ShortEntityParams } from '@db/apps/marking/types';
-import { defineExpose, defineProps, ref, watch } from 'vue';
+import { defineExpose, defineProps, onMounted, ref, watch } from 'vue';
+import { createProductSize, deleteProductSize, getProductSizes, updateProductSize } from '../services/productSizes';
+import type { ProductSizeWithLabels } from '../types/productSize';
 
 interface Props {
   product: ShortEntityParams | null
   name: string
-  article: string
-  composition: string
-  color: string
-  client: ShortEntityParams | null
   labelId: number
 }
-
-interface ProductSize {
-  id: number
-  product_id: number
-  value: string
-  barcode: string
-  availableLabelsCount: number
-}
-
-interface ApiResponse<T> {
-  success: boolean
-  data: T
-}
-
-interface PaginatedResponse<T> {
-  data: T[]
-}
-
-const props = defineProps<Props>()
-
-const productSizeList = ref<ProductSize[]>([])
-const editDialog = ref(false)
-const deleteDialog = ref(false)
-const currentItem = ref<ProductSize | null>(null)
-const editedIndex = ref<number | null>(null)
-const editedItem = ref<ProductSize>({ id: 0, value: '', barcode: '', availableLabelsCount: 0, product_id: 0 })
-const token = localStorage.getItem('access_token') || ''
-const apiHeaders = token ? { Authorization: `Bearer ${token}` } : {}
-const showLabelDialog = ref(false)
 
 const headers = [
   { title: 'Баркод', key: 'barcode', sortable: false },
   { title: 'Размер', key: 'value', sortable: false },
-  { title: 'Кол-во Честных знаков', key: 'availableLabelsCount', sortable: false },
-  { title: '', key: 'actions', sortable: false },
+  { title: 'Кол-во Честных знаков', key: 'available_labels_count', sortable: false },
+  { key: 'actions', sortable: false },
 ];
 
-const mapPS = (ps: ProductSize): ProductSize => ({
+const props = defineProps<Props>()
+const productSizeList = ref<ProductSizeWithLabels[]>([])
+const editDialog = ref(false)
+const deleteDialog = ref(false)
+const currentItem = ref<ProductSizeWithLabels | null>(null)
+const editedIndex = ref<number | null>(null)
+const editedItem = ref<ProductSizeWithLabels>({ id: 0, value: '', barcode: '', available_labels_count: 0, product_id: 0 })
+const showLabelDialog = ref(false)
+const isDialogVisible = ref(false);
+
+const mapPS = (ps: ProductSizeWithLabels): ProductSizeWithLabels => ({
   id: ps.id,
   product_id: ps.product_id,
   value: ps.value,
   barcode: ps.barcode,
-  availableLabelsCount: ps.available_labels_count,
+  available_labels_count: ps.available_labels_count,
 })
-
-const fetchVariants = async (productId) => {
-  const { data, error } = await useApi<PaginatedResponse<ProductSize>>(
-    '/api/product-sizes',
-    {
-      method: 'GET', 
-      params: { product_id: productId },
-      headers: apiHeaders
-    }
-  )
-  if (error.value) {
-    console.error('Ошибка загрузки размеров:', error.value)
-    return
-  }
-  productSizeList.value = data.value.data.map(mapPS)
-}
 
 watch(
   () => props.product,
   (newProduct: ShortEntityParams) => {
     if (newProduct?.id != null) {
-      fetchVariants(newProduct.id)
+      fetchSizes(newProduct.id)
     }
   },
-  { immediate: true }
 )
 
-const isDialogVisible = ref(false);
+const fetchSizes = async (productId: number) => {
+  const { data, error } = await getProductSizes(productId)
+  if (error.value) {
+    console.error('Ошибка загрузки размеров:', error.value)
+    return
+  }
 
-const editItem = (item: ProductSize) => {
-  editedIndex.value = productSizeList.value.indexOf(item);
-  editedItem.value = { ...item };
-  editDialog.value = true;
-};
+  productSizeList.value = data.value.data.map(mapPS)
+  console.log(productSizeList.value)
+  console.log(data.value.data)
+}
 
 const saveVariant = async () => {
   try {
+    if (!props.product?.id) {
+      console.error('saveVariant: product не определён')
+      return
+    }
+
+    const payload = {
+      product_id: props.product.id,
+      value: editedItem.value.value,
+      barcode: editedItem.value.barcode,
+    }
+
     if (editedIndex.value !== null && editedIndex.value > -1) {
-      const { data: resp, error } = await useApi<ApiResponse<ProductSize>>(
-        `/api/product-sizes/${editedItem.value.id}`,
-        {
-          method: 'PUT',
-          body: {
-            product_id: props.product.id,
-            value:      editedItem.value.value,
-            barcode:    editedItem.value.barcode,
-          },
-          headers: apiHeaders
-        }
-      )
+      const { data: resp, error } = await updateProductSize(editedItem.value.id, payload)
       if (error.value || !resp.value.success) {
         throw new Error('Не удалось обновить вариант')
       }
-      const updated = resp.value.data
-      productSizeList.value[editedIndex.value] = mapPS(updated)
+      productSizeList.value[editedIndex.value] = mapPS(resp.value.data)
     } else {
-      const { data: resp, error } = await useApi<ApiResponse<ProductSize>>(
-        '/api/product-sizes',
-        {
-          method: 'POST',
-          body: {
-            product_id: props.product.id,
-            value:      editedItem.value.value,
-            barcode:    editedItem.value.barcode,
-          },
-          headers: apiHeaders
-        }
-      )
+      const { data: resp, error } = await createProductSize(payload)
       if (error.value) {
         throw new Error('Не удалось создать вариант. Ошибка: ' + resp.value)
       }
-      const created = resp.value
-      productSizeList.value.push(mapPS(created))
+      productSizeList.value.push(mapPS(resp.value))
     }
   } catch (e: any) {
     console.error('Ошибка сохранения:', e)
   } finally {
-    editDialog.value   = false
-    editedIndex.value  = null
+    editDialog.value = false
+    editedIndex.value = null
   }
 }
 
-const deleteVariant = async () => {
+const deleteSize = async () => {
   try {
-    const { error } = await useApi(
-      `/api/product-sizes/${editedItem.value.id}`,
-      { 
-        method: 'DELETE',
-        headers: apiHeaders
-      }
-    )
+    const { error } = await deleteProductSize(editedItem.value.id)
     if (error.value) throw error.value
+
     if (editedIndex.value !== null && editedIndex.value > -1) {
       productSizeList.value.splice(editedIndex.value, 1)
     }
@@ -158,15 +105,20 @@ const deleteVariant = async () => {
     editedIndex.value = null
   }
 }
-
-const openPrintDialog = (item: ProductSize) => {
+const openPrintDialog = (item: ProductSizeWithLabels) => {
   currentItem.value = item
   isDialogVisible.value = true
 }
 
+const editItem = (item: ProductSizeWithLabels) => {
+  editedIndex.value = productSizeList.value.indexOf(item);
+  editedItem.value = { ...item };
+  editDialog.value = true;
+};
+
 const addItem = () => {
   editedIndex.value = null
-  editedItem.value = { id: 0, value: '', barcode: '', availableLabelsCount: 0, product_id: 0 }
+  editedItem.value = { id: 0, value: '', barcode: '', available_labels_count: 0, product_id: 0 }
   editDialog.value = true
 }
 
@@ -175,7 +127,7 @@ const closeEdit = () => {
   editedIndex.value = null
 }
 
-const deleteItem = (item: ProductSize) => {
+const deleteItem = (item: ProductSizeWithLabels) => {
   editedIndex.value = productSizeList.value.indexOf(item)
   editedItem.value = { ...item }
   deleteDialog.value = true
@@ -187,14 +139,30 @@ const closeDelete = () => {
 }
 
 const deleteItemConfirm = async () => {
-  await deleteVariant()
+  await deleteSize()
 }
 
 defineExpose({ onLabelsUpdated })
 
 function onLabelsUpdated() {
-  fetchVariants(props.product.id)
+  if (props.product?.id != null) {
+    fetchSizes(props.product.id)
+  } else {
+    console.warn('onLabelsUpdated: product не определён')
+  }
 }
+
+const handleRefresh = () => {
+  if (props.product?.id != null) {
+    fetchSizes(props.product.id)
+  }
+}
+
+onMounted(() => {
+  if (props.product?.id != null) {
+    fetchSizes(props.product.id)
+  }
+})
 </script>
 
 <template>
@@ -206,7 +174,7 @@ function onLabelsUpdated() {
     color="primary"
     class="mb-4"
     :disabled="!props.product?.id"
-    @click="fetchVariants(props.product.id)"
+    @click="handleRefresh"
   >
     Обновить информацию
   </VBtn>
@@ -274,7 +242,7 @@ function onLabelsUpdated() {
       <VCardActions>
         <VSpacer />
         <VBtn
-          color="error"
+          color="secondary"
           variant="outlined"
           @click="closeEdit"
         >
@@ -282,7 +250,7 @@ function onLabelsUpdated() {
         </VBtn>
 
         <VBtn
-          color="success"
+          color="primary"
           variant="elevated"
           @click="saveVariant"
         >
@@ -307,7 +275,7 @@ function onLabelsUpdated() {
         <VCardActions>
             <VSpacer />
             <VBtn
-              color="error"
+              color="secondary"
               variant="elevated"
               @click="closeDelete"
             >
@@ -315,7 +283,7 @@ function onLabelsUpdated() {
             </VBtn>
 
             <VBtn
-              color="success"
+              color="primary"
               variant="elevated"
               @click="deleteItemConfirm"
             >
@@ -325,20 +293,19 @@ function onLabelsUpdated() {
     </VCard>
   </VDialog>
   <PrintLabelDialog
+    v-if="currentItem"
     v-model:visible="isDialogVisible"
     :name="props.name ?? ''"
-    :sizeId="currentItem?.id ?? 0"
-    :article="currentItem?.barcode ?? ''"
-    :composition="props.composition ?? ''"
-    :color="props.color ?? ''"
-    :size="currentItem?.value ?? ''"
-    :client="props.client ?? null"
-    :availableLabelsCount="currentItem?.availableLabelsCount ?? 0"
+    :sizeId="currentItem.id"
+    :article="currentItem.barcode"
+    :size="currentItem.value"
+    :availableLabelsCount="currentItem.available_labels_count"
     :labelId="props.labelId"
     @labels-updated="onLabelsUpdated"
   />
-    <UpdateChzLabel
+  <UpdateChzLabel
+    v-if="props.product && props.product.id"
     v-model="showLabelDialog"
-    :productId="props.product?.id"
+    :productId="props.product.id"
   />
 </template>

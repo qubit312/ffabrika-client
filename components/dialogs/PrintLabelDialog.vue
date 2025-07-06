@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import barcodeEAN13 from '@/assets/images/barcode/barcode-ean13.png'
+import datamatrix from '@/assets/images/barcode/datamatrix.png'
 import CzLogo from '@/assets/images/logos/cz-logo.png'
 import type { ShortEntityParams } from '@db/apps/marking/types'
 import { computed, defineEmits, defineProps, ref } from 'vue'
 
+const config = useRuntimeConfig()
 interface Props {
   sizeId: number
   labelId: number
@@ -17,7 +20,6 @@ interface Props {
   availableLabelsCount: number
 }
 const props = defineProps<Props>()
-const token = localStorage.getItem('access_token') || ''
 
 const emit = defineEmits<{
   (e: 'update:visible', v: boolean): void
@@ -35,7 +37,7 @@ const labelCount = ref<number>()
 const loadedLabelInPrinterCount = ref<number>(5)
 const availableLabelsCount = computed(() => props.availableLabelsCount)
 const loading = ref(false)
-const labelError = computed(() => labelCount.value === null || labelCount.value <= 0)
+const labelError = computed(() => !labelCount.value || labelCount.value <= 0)
 
 const isLowloadedLabelInPrinterCount= computed(() => 
   loadedLabelInPrinterCount.value < 10
@@ -48,18 +50,27 @@ function close() {
   emit('update:visible', false)
 }
 
+function showSnackbar(message: string, isSuccess: boolean) {
+  snackbar.value = true
+  snackMessage.value = message
+  if (isSuccess) {
+    snackColor.value = 'success'
+  } else {
+    snackColor.value = 'error'
+  }
+}
+
 async function downloadFile() {
   if (labelError.value || isLowAvailableLabelsCount.value) {
-    snackColor.value   = 'error'
-    snackMessage.value = labelError.value
+    let errorMessage = labelError.value
       ? 'Введите число больше 0'
-      : `Недостаточно наклеек для печати`
-    snackbar.value = true
+      : `Недостаточно этикеток для печати`
+    showSnackbar(errorMessage, false)
     return
   }
 
   loading.value = true
-  if (labelCount.value == null || labelCount.value == '') {
+  if (labelCount.value == null || labelCount.value == 0) {
     console.error('labelCount is null or empty')
     return
   }
@@ -80,9 +91,10 @@ async function downloadFile() {
     payload.includeSHK = includeSHK.value;
     payload.duplicateDM = duplicateDM.value;
   }
-  console.log(payload)
+
+  const token = localStorage.getItem('access_token') || ''
   try {
-    const response = await fetch(`http://127.0.0.1:8000/api/chestny-znak-labels/download-pdf`, {
+    const response = await fetch(config.public.apiBaseUrl || 'https://api.ffabrika.ru' + `/api/chestny-znak-labels/download-pdf`, {
       method: 'POST',
       headers: {
         'Accept': 'application/pdf',
@@ -150,7 +162,7 @@ const selectedTemplate = ref<'1'|'2'|'3'>('1')
             sm="4"
           >
             <VLabel class="mb-1 text-body-2 text-high-emphasis" style="line-height: 15px;">
-              Количество наклеек в принтере
+              Количество этикеток в принтере
             </VLabel>
             <div class="d-flex align-center mb-1">
               <VTooltip bottom>
@@ -162,7 +174,7 @@ const selectedTemplate = ref<'1'|'2'|'3'>('1')
                     class="mr-1 text-error"
                   />
                 </template>
-                <span>Мало наклеек в принтер</span>
+                <span>Мало этикеток в принтер</span>
               </VTooltip>
 
                 <span
@@ -233,10 +245,11 @@ const selectedTemplate = ref<'1'|'2'|'3'>('1')
                 >
                     <div class="label-content" style="margin-top: 10px">
                     <div class="label left" style="width: 50%">
-                        <img
+                      <img
                         style="height: 21mm; width: 21mm;"
                         alt="Штрихкод"
-                        src="https://barcode.tec-it.com/barcode.ashx?data=01046605684903452152NnIRDZfTGMD%1D91EE11%1D92oeGgLmUSMbPtHc2xVZxqkcrYSXz6%2B2ADQ0H4ZUANOqw%3D&code=GS1DataMatrix&translate-esc=on&dmsize=Default" />
+                        :src="datamatrix"
+                      />
                     </div>
                     <div class="label right">
                         <div style="text-align: center;">
@@ -295,9 +308,10 @@ const selectedTemplate = ref<'1'|'2'|'3'>('1')
                     
                     <div class="label-barcode-block">
                     <img
-                        style="height: 12mm;"
-                        alt="Штрихкод"
-                        src="https://barcode.tec-it.com/barcode.ashx?data=123124123123&code=EAN13" />
+                      style="height: 14mm;"
+                      alt="Штрихкод"
+                      :src="barcodeEAN13"
+                    />
                     </div>
                 </div>
             </template>

@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { categoryOptions } from '../../../constants/productCategories'
 import { createClient, getClient, updateClient } from '../../../services/clients'
-import { createProduct, deleteProductById, getProducts, updateProduct } from '../../../services/products'
+import { createProduct, deleteProduct, getProducts, updateProduct } from '../../../services/products'
 import { createProductSize, updateProductSize } from '../../../services/productSizes'
 import type { Client, CreateClientDto } from '../../../types/client'
-import type { CreateProductDto, Product } from '../../../types/product'
+import type { CreateWbProductDto, WbProduct } from '../../../types/product'
 import type { CreateProductSizeDto, SizeItem } from '../../../types/productSize'
 
 const typeOptions = [
@@ -17,7 +18,6 @@ const route = useRoute()
 const router = useRouter()
 const idParam = route.params.id as string | undefined
 const primaryId = idParam ? Number(idParam) : 0
-
 const mode = ref<'create' | 'edit'>('create')
 const isLoading = ref(false)
 
@@ -28,7 +28,7 @@ const snackColor = ref<'success' | 'error'>('success')
 const sizeItems = ref<SizeItem[]>([
   { value: '', quantity: 0, barcode: '' }
 ])
-interface ProductUI extends Product {
+interface ProductUI extends WbProduct {
   sizes: SizeItem[]
 }
 
@@ -61,7 +61,9 @@ const form = ref<Client>({
 const productForm = reactive({
   name: '',
   color: '',
-  qty: 0,
+  article: '',
+  composition: '',
+  category: '',
   size: [] as string[],
 })
 
@@ -111,7 +113,9 @@ function removeSize(idx: number) {
 function resetForm() {
   productForm.name = ''
   productForm.color = ''
-  productForm.qty = 0
+  productForm.article = ''
+  productForm.composition = ''
+  productForm.category = ''
   productForm.size = [] 
   editingIndex.value = null
   sizeItems.value = [
@@ -121,16 +125,16 @@ function resetForm() {
 
 async function saveProduct() {
   isLoading.value = true
-  const payload: CreateProductDto = {
+  const payload: CreateWbProductDto = {
     client_id: primaryId,
-    order_id:  1,
     name:      productForm.name,
-    qty:       productForm.qty,
     color:     productForm.color,
-    size:      sizeItems.value.map(si => si.value),
+    article:     productForm.article,
+    composition:     productForm.composition,
+    category:     productForm.category,
   }
   const response = isEditing.value
-    ? await updateProduct(savedProducts.value[editingIndex.value!].id, payload)
+    ? await updateProduct(payload, savedProducts.value[editingIndex.value!].id)
     : await createProduct(payload)
 
   const { data, error } = response
@@ -202,14 +206,14 @@ async function fetchProducts() {
   if (error.value) {
     console.error('Ошибка при загрузке товаров:', error.value)
   } else {
-    const list: ProductUI[] = data.value.map(prod => ({
-    ...prod,
-    sizes: prod.size.map(s => ({
-      value: s,
-      quantity: 0,
-      barcode: '',
+    const list: ProductUI[] = (data.value ?? []).map(prod => ({
+      ...prod,
+      sizes: prod.size.map(s => ({
+        value: s,
+        quantity: 0,
+        barcode: '',
+      }))
     }))
-  }))
     savedProducts.value = list
   }
   isLoading.value = false
@@ -244,11 +248,11 @@ async function saveClient() {
   isLoading.value = false
 }
 
-async function deleteProduct(id: number) {
+async function handleDelete(id: number) {
   isLoading.value = true
 
   try {
-    const { error } = await deleteProductById(id)
+    const { error } = await deleteProduct(id)
     if (error.value) throw error.value
 
     const idx = savedProducts.value.findIndex(p => p.id === id)
@@ -369,7 +373,26 @@ onMounted(() => {
                 <VTextField v-model="productForm.color" label="Цвет" />
               </VCol>
               <VCol cols="4">
-                <VTextField v-model="productForm.qty" label="Количество" />
+                <VTextField v-model="productForm.composition" label="Состав" />
+              </VCol>
+              <VCol cols="4">
+                <VTextField v-model="productForm.article" label="Артикул" />
+              </VCol>
+              <VCol cols="4">
+                <VSelect
+                  v-model="productForm.category"
+                  :items="categoryOptions"
+                  label="Категория"
+                  item-title="label"
+                  item-value="value"
+                  class="mb-6" 
+                  :menu-props="{
+                    maxHeight: 200,
+                    location: 'bottom',
+                    offset: 2,
+                    persistent: true
+                  }"
+                />
               </VCol>
             </VRow>
 
@@ -422,7 +445,7 @@ onMounted(() => {
                     <VIcon>tabler-point</VIcon>
                   </VBtn>
                 </RouterLink> -->
-                <VBtn icon color="error" @click="deleteProduct(item.id)">
+                <VBtn icon color="error" @click="handleDelete(item.id)">
                   <VIcon>tabler-trash</VIcon>
                 </VBtn>
               </template>

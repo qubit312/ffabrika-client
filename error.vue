@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import type { NuxtError } from 'nuxt/app'
 import { useGenerateImageVariant } from '@core/composable/useGenerateImageVariant'
 import misc404 from '@images/pages/404.png'
 import miscMaskDark from '@images/pages/misc-mask-dark.png'
 import miscMaskLight from '@images/pages/misc-mask-light.png'
+import type { NuxtError } from 'nuxt/app'
 
 defineOptions({
   inheritAttrs: false,
@@ -40,7 +40,10 @@ const errToShow = computed(() => {
   }
 })
 
-const handleError = () => clearError({ redirect: '/' })
+// const handleError = () => clearError({ redirect: '/' })
+const handleError = () => {
+  console.log("Вы решили вернуться на главную")
+}
 </script>
 
 <template>
@@ -56,7 +59,7 @@ const handleError = () => clearError({ redirect: '/' })
       <div
         v-if="isDev"
         style="max-inline-size: 80dvw; overflow-x: scroll;"
-        v-html="error.stack"
+        v-html="props.error.stack"
       />
       <!-- eslint-enable -->
 
@@ -64,7 +67,7 @@ const handleError = () => clearError({ redirect: '/' })
         class="mb-11"
         @click="handleError"
       >
-        Back to Home
+        На главную
       </VBtn>
 
       <!-- 👉 Image -->

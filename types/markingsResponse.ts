@@ -1,4 +1,4 @@
-import type { Marking } from './marking'
+import type { Label } from './label'
 
 export interface PaginationLink {
   url:     string | null
@@ -22,4 +22,4 @@ export interface PaginatedResponse<T> {
   total:           number
 }
 
-export type MarkingsResponse = PaginatedResponse<Marking>
+export type LabelsResponse = PaginatedResponse<Label>

@@ -1,25 +1,24 @@
-export interface Product {
+export interface WbProduct {
   id: number
-  order_id: number
-  parent_id: number | null
-  name: string
-  qty: number
-  color: string
-  size: string[]
-  complect: number
-  delivered: boolean
+  created_by: number
   created_at: string
+  updated_by: number
   updated_at: string
-  deleted_at: string | null
-}
-
-export interface CreateProductDto {
-  client_id: number
-  order_id: number
   name: string
-  qty: number
   color: string
-  size: string[]
+  article: string
+  composition: string
+  category: string
+  client_id: number
 }
 
-export type UpdateProductDto = CreateProductDto;
+export interface CreateWbProductDto {
+  name: string
+  color: string
+  article: string
+  composition: string
+  category: string | null
+  client_id: number | null
+}
+
+export type UpdateWbProductDto = CreateWbProductDto;
