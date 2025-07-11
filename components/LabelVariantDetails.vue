@@ -52,8 +52,6 @@ const fetchSizes = async (productId: number) => {
   }
 
   productSizeList.value = data.value.data.map(mapPS)
-  console.log(productSizeList.value)
-  console.log(data.value.data)
 }
 
 const saveVariant = async () => {

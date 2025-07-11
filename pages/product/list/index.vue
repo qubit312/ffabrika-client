@@ -53,7 +53,6 @@ const fetchProducts = async () => {
     return
   }
   entityData.value = data.value
-  console.log(entityData.value)
 }
 
 const handleDelete = async (id: number) => {

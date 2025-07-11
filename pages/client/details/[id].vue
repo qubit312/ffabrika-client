@@ -93,9 +93,9 @@ const isEditing = computed(() => editingIndex.value !== null)
 
 const productHeaders = [
   { title: 'Название', key: 'name', sortable: false},
+  { title: 'Артикул', key: 'article', sortable: false },
   { title: 'Цвет', key: 'color', sortable: false},
-  { title: 'Количество', key: 'qty', sortable: false },
-  { title: 'Действия', key: 'actions', sortable: false },
+  { key: 'actions', sortable: false },
 ]
 
 function addSize() {
@@ -203,21 +203,23 @@ async function fetchClient(id: number) {
 async function fetchProducts() {
   isLoading.value = true
   const { data, error } = await getProducts(primaryId)
+
   if (error.value) {
     console.error('Ошибка при загрузке товаров:', error.value)
   } else {
-    const list: ProductUI[] = (data.value ?? []).map(prod => ({
-      ...prod,
-      sizes: prod.size.map(s => ({
-        value: s,
-        quantity: 0,
-        barcode: '',
-      }))
-    }))
+    const list: ProductUI[] = (data.value ?? []).map(prod => {
+      return {
+        ...prod,
+        sizes: []
+      }
+    })
+
     savedProducts.value = list
   }
+
   isLoading.value = false
 }
+
 
 async function saveClient() {
   isLoading.value = true
@@ -408,15 +410,21 @@ onMounted(() => {
                 </VCol>
                 <VCol cols="2" class="d-flex justify-center">
                   <VBtn class="me-4" icon color="primary" @click="addSize">
-                    +
+                    <VIcon
+                      size="20"
+                      icon="tabler-plus"
+                    />
                   </VBtn>
                   <VBtn
-                    icon
                     color="error"
                     @click="removeSize(i)"
-                    v-if="productForm.size.length > 1"
+                    icon
+                    v-if="sizeItems.length > 1"
                   >
-                    <VIcon>tabler-trash</VIcon>
+                    <VIcon
+                      size="20"
+                      icon="tabler-trash"
+                    />
                   </VBtn>
                 </VCol>
               </VRow>
@@ -446,7 +454,7 @@ onMounted(() => {
                   </VBtn>
                 </RouterLink> -->
                 <VBtn icon color="error" @click="handleDelete(item.id)">
-                  <VIcon>tabler-trash</VIcon>
+                  <VIcon size="20" icon="tabler-trash" />
                 </VBtn>
               </template>
             </VDataTable>

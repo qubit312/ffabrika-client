@@ -5,7 +5,7 @@ import DefectiveLabelModal from '../../../components/dialogs/DefectiveLabelModal
 import SizeMappingModal from '../../../components/dialogs/SizeMappingModal.vue'
 import type { CategoryCode } from '../../../constants/productCategories'
 import { createLabel, getLabel, updateLabel } from '../../../services/labels'
-import { getProducts } from '../../../services/products'
+import { getProduct, getProducts } from '../../../services/products'
 import type { Label, ShortEntityParams } from '../../../types/label'
 
 const route = useRoute()
@@ -109,17 +109,33 @@ const fetchLabel = async (id: number) => {
   }
 }
 
-function patchFormWithData(data: Label) {
+async function patchFormWithData(data: Label) {
   name.value             = data.name
   has_chestny_znak.value = data.has_chestny_znak
 
-  if (data.product) {
+  if (data.product?.id) {
     const match = products.value.find(p => p.id === data.product!.id)
     selectedProduct.value = match ?? { id: data.product.id, name: data.product.name }
+  } else if (data.product_id) {
+    try {
+      const { data: prodData, error } = await getProduct(data.product_id)
+      if (error.value) {
+        console.error('Не удалось получить продукт по ID', error.value)
+        selectedProduct.value = null
+      } else {
+        const prod = prodData.value
+        const match = products.value.find(p => p.id === prod.id)
+        selectedProduct.value = match ?? { id: prod.id, name: prod.name }
+      }
+    } catch (err) {
+      console.error('Ошибка при загрузке продукта:', err)
+      selectedProduct.value = null
+    }
   } else {
     selectedProduct.value = null
   }
 }
+
 
 async function onSubmit() {
   const payload = {
@@ -134,7 +150,7 @@ async function onSubmit() {
     if (mode.value === 'edit' && markingData.value) {
       const { data, error } = await updateLabel(entityId, payload)
       if (error.value) throw error.value
-      patchFormWithData(data.value)
+      patchFormWithData(data.value.data)
     } else {
       const { data, error } = await createLabel(payload)
       if (error.value) throw error.value

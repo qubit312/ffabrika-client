@@ -94,7 +94,6 @@ async function onReplaceSize() {
     return
   }
   dialog.value = false
-  console.log(data.value)
 }
 
 onMounted(fetchProducts)
