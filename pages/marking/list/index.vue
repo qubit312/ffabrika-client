@@ -10,6 +10,7 @@ const headers = [
   { title: '', key: 'actions', sortable: false },
 ]
 
+const isLoading = ref(false)
 const router = useRouter()
 const markingsData = ref<{ markings: Label[]; total: number }>({ markings: [], total: 0 })
 const searchQuery     = ref<string>('')
@@ -28,6 +29,7 @@ const updateOptions = (options: any) => {
 }
 
 const fetchMarkings = async () => {
+  isLoading.value = true
   const { data, error } = await getLabels()
   if (error.value) {
     console.error('Ошибка при загрузке этикеток', error.value)
@@ -40,9 +42,10 @@ const fetchMarkings = async () => {
       total:    data.value.total,
     }
   }
+  isLoading.value = false
 }
 
-const deleteLabel = async (id: number) => {
+const handleDelete = async (id: number) => {
   try {
     const res = await removeLabel(id)
     console.log(res)
@@ -114,8 +117,18 @@ onMounted(() => {
         :items="markings"
         :items-length="totalMarkings"
         class="text-no-wrap"
+        :loading="isLoading"
         @update:options="updateOptions"
       >
+        <template #no-data>
+          <!-- ничего не выводим -->
+        </template>
+
+        <template #loading>
+          <div class="text-center pa-6">
+            <VProgressCircular indeterminate color="primary" />
+          </div>
+        </template>
         <!-- name  -->
         <template #item.name="{ item }">
           <div
@@ -153,20 +166,9 @@ onMounted(() => {
               <VIcon icon="tabler-edit" />
             </RouterLink>
           </IconBtn>
-
+          
           <IconBtn>
-            <VIcon icon="tabler-dots-vertical" />
-            <VMenu activator="parent">
-              <VList>
-                <VListItem
-                  value="delete"
-                  prepend-icon="tabler-trash"
-                  @click="deleteLabel(item.id)"
-                >
-                  Удалить
-                </VListItem>
-              </VList>
-            </VMenu>
+            <VIcon class="ms-4" icon="tabler-trash" value="delete" @click="handleDelete(item.id)"/>
           </IconBtn>
         </template>
 

@@ -24,15 +24,16 @@ const color = ref<string>('')
 const snackbar = ref(false)
 const snackMessage = ref('')
 const snackColor = ref<'success' | 'error'>('success')
-
-const isLoading = ref(false)
+const loading = ref(true)
 
 async function fetchClients() {
+  loading.value = true
   const { data, error } = await useApi<{ data: { id: number; name: string }[]; total: number }>('/api/clients', {
     method: 'GET'
   })
   if (error.value) {
     console.error('Ошибка при загрузке клиентов:', error.value)
+    loading.value = false
     return
   }
   if (data.value) {
@@ -44,13 +45,16 @@ async function fetchClients() {
     clientOptions.value = []
     console.warn('data.value is null')
   }
+  loading.value = false
 }
 
 async function fetchProduct(id: number) {
+  loading.value = true
   const { data, error } = await getProduct(id)
 
   if (error.value) {
     console.error('Ошибка при загрузке товара:', error.value)
+    loading.value = false
     return
   }
 
@@ -62,14 +66,15 @@ async function fetchProduct(id: number) {
   composition.value = p.composition
   selectedCategory.value = p.category
   mode.value = 'edit'
+  loading.value = false
 }
 
 async function onSubmit() {
-  isLoading.value = true
+  loading.value = true
 
   if (!clientId.value || !selectedCategory.value) {
     showSnackbar('Выберите клиента и категорию', false)
-    isLoading.value = false
+    loading.value = false
     return
   }
 
@@ -93,7 +98,7 @@ async function onSubmit() {
   if (error?.value) {
     console.error('Ошибка при сохранении товара:', error.value)
     showSnackbar('Сохранение не удалось', false)
-    isLoading.value = false
+    loading.value = false
     return
   }
 
@@ -102,7 +107,7 @@ async function onSubmit() {
     await router.push({ name: 'product-details-id', params: { id: data.value.id } })
   }
 
-  isLoading.value = false
+  loading.value = false
 }
 
 onMounted(async () => {
@@ -130,7 +135,7 @@ function showSnackbar(message: string, isSuccess: boolean) {
         <h4 class="text-h4 font-weight-medium">
           {{ mode === 'create' ? 'Вы создаете новый товар' : name }}
         </h4>
-        <div class="text-body-1">{{ mode === 'create' ? '' : 'Подробная информация о товаре' }}</div>
+        <div class="text-body-1">Подробная информация о товаре</div>
       </div>
 
       <div class="d-flex gap-4 align-center flex-wrap">
@@ -206,6 +211,7 @@ function showSnackbar(message: string, isSuccess: boolean) {
       {{ snackMessage }}
     </VSnackbar>
   </div>
+  <CustomLoading :loading="loading"/>
 </template>
 
 <style lang="scss" scoped>

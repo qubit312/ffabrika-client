@@ -1,17 +1,18 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from 'vue';
+import { useLabelEvents } from '../../composables/useLabelBus';
 import { markLabelsAsDefective } from '../../services/chz';
 
 interface Props { modelValue: boolean }
 const props = defineProps<Props>()
 const emit = defineEmits<{
   (e: 'update:modelValue', v: boolean): void
-  (e: 'defective-submitted'): void
 }>()
 
 const isOpen   = ref(props.modelValue)
 watch(() => props.modelValue, v => isOpen.value = v)
 watch(isOpen, v => emit('update:modelValue', v))
+const { onLabelsUpdated } = useLabelEvents()
 
 const labelIds = ref<(string|number)[]>([])
 const reason   = ref('')
@@ -65,7 +66,7 @@ async function submitDefective() {
 
     labelIds.value = []
     reason.value = ''
-    emit('defective-submitted')
+    onLabelsUpdated()
     isOpen.value = false
   } catch (err: any) {
     showSnackbar(err.message || 'Внутренняя ошибка', false)

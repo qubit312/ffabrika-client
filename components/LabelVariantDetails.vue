@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import type { ShortEntityParams } from '@db/apps/marking/types';
-import { defineExpose, defineProps, onMounted, ref, watch } from 'vue';
+import { defineExpose, defineProps, onMounted, onUnmounted, ref, watch } from 'vue';
+import { useLabelEvents } from '../composables/useLabelBus';
 import { createProductSize, deleteProductSize, getProductSizes, updateProductSize } from '../services/productSizes';
+import type { ShortEntityParams } from '../types/label';
 import type { ProductSizeWithLabels } from '../types/productSize';
 
 interface Props {
-  product: ShortEntityParams | null
+  product: ShortEntityParams
   name: string
   labelId: number
 }
@@ -17,6 +18,7 @@ const headers = [
   { key: 'actions', sortable: false },
 ];
 
+const { registerLabelUpdateListener, unregisterLabelUpdateListener } = useLabelEvents()
 const props = defineProps<Props>()
 const productSizeList = ref<ProductSizeWithLabels[]>([])
 const editDialog = ref(false)
@@ -160,7 +162,13 @@ onMounted(() => {
   if (props.product?.id != null) {
     fetchSizes(props.product.id)
   }
+  registerLabelUpdateListener(onLabelsUpdated)
 })
+
+onUnmounted(() => {
+  unregisterLabelUpdateListener(onLabelsUpdated)
+})
+
 </script>
 
 <template>
@@ -299,7 +307,6 @@ onMounted(() => {
     :size="currentItem.value"
     :availableLabelsCount="currentItem.available_labels_count"
     :labelId="props.labelId"
-    @labels-updated="onLabelsUpdated"
   />
   <UpdateChzLabel
     v-if="props.product && props.product.id"

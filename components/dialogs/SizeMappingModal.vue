@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+import { useLabelEvents } from '../../composables/useLabelBus'
 import { importChestnyZnakLabels } from '../../services/chz'
 import { getProductSizes } from '../../services/productSizes'
+
 
 interface Props {
   modelValue: boolean
@@ -12,13 +14,12 @@ interface Props {
 const props = defineProps<Props>()
 const emit = defineEmits<{
   (e: 'update:modelValue', v: boolean): void
-  (e: 'labels-updated'): void
 }>()
 
 const isOpen = ref(props.modelValue)
 watch(() => props.modelValue, v => (isOpen.value = v))
 watch(isOpen, v => emit('update:modelValue', v))
-
+const { onLabelsUpdated } = useLabelEvents()
 const localMap = ref<Record<number, string>>({})
 const sizeOptions = ref<{ label: string; value: string }[]>([])
 const loading = ref(false)
@@ -114,7 +115,7 @@ async function onSave() {
       close()
     }
 
-    emit('labels-updated')
+    onLabelsUpdated()
   } catch (err: any) {
     console.error('Ошибка при импорте:', err)
     showSnackbar(`Произошла ошибка при импорте`, false)

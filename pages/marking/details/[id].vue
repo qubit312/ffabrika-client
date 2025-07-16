@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import CustomLoading from '../../../components/CustomLoading.vue'
 import DefectiveLabelModal from '../../../components/dialogs/DefectiveLabelModal.vue'
 import SizeMappingModal from '../../../components/dialogs/SizeMappingModal.vue'
 import type { CategoryCode } from '../../../constants/productCategories'
@@ -87,6 +88,7 @@ const fetchProducts = async () => {
 }
 
 const fetchLabel = async (id: number) => {
+  loading.value = true
   if (id <= 0) {
     mode.value = 'create'
     return
@@ -107,6 +109,7 @@ const fetchLabel = async (id: number) => {
   } catch (e) {
     console.error('Непредвиденная ошибка:', e)
   }
+  loading.value = false
 }
 
 async function patchFormWithData(data: Label) {
@@ -138,6 +141,7 @@ async function patchFormWithData(data: Label) {
 
 
 async function onSubmit() {
+  loading.value = true
   const payload = {
     name:             name.value,
     has_chestny_znak: has_chestny_znak.value,
@@ -169,6 +173,7 @@ async function onSubmit() {
     console.error(err)
     showSnackbar('Ошибка при сохранении: ' + (err.message || err), true)
   }
+  loading.value = false
 }
 
 function showSnackbar(message: string, isError: boolean) {
@@ -188,11 +193,6 @@ onMounted(async () => {
   }
 })
 
-const childRef = ref<InstanceType<typeof SizeMappingModal> | null>(null)
-function onImportCHZLabel() {
-  // childRef.value?.onLabelsUpdated()
-}
-
 function openDefective() {
   showDefectiveModal.value = true
 }
@@ -205,6 +205,7 @@ function openSizeMappingModal() {
   showSizeModal.value = true
 }
 
+const loading = ref(true)
 </script>
 
 <template>
@@ -219,13 +220,7 @@ function openSizeMappingModal() {
           }}
         </h4>
 
-        <div class="text-body-1">
-          {{ 
-            mode === 'create'
-              ? ''
-              : 'Этикетки используемые для маркировки товаров'
-          }}
-        </div>
+        <div class="text-body-1">Этикетки используемые для маркировки товаров</div>
       </div>
 
       <div class="d-flex gap-4 align-center flex-wrap">
@@ -282,7 +277,7 @@ function openSizeMappingModal() {
           class="mb-6"
         >
           <VCardText>
-            <LabelVariantDetails ref="childRef"
+            <LabelVariantDetails
               :product="selectedProduct"
               :name="name"
               :labelId="entityId"
@@ -392,13 +387,13 @@ function openSizeMappingModal() {
     v-model="showSizeModal"
     :productId="markingData ? markingData.product_id : 0"
     :files="csvFiles"
-    @labels-updated="onImportCHZLabel"
   />
 
   <DefectiveLabelModal
     v-model="showDefectiveModal"
-    @defective-submitted="openDefective"
   />
+
+  <CustomLoading :loading="loading"/>
 </template>
 
 <style lang="scss" scoped>

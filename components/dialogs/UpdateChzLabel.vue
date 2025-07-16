@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
+import { useLabelEvents } from '../../composables/useLabelBus';
 import { replaceProductSize } from '../../services/chz';
 import { getProducts } from '../../services/products';
 import { getProductSizes } from '../../services/productSizes';
@@ -14,6 +15,7 @@ const emit  = defineEmits<{
   (e: 'update:modelValue', value: boolean): void
 }>()
 const dialog = ref(props.modelValue)
+const { onLabelsUpdated } = useLabelEvents()
 
 interface ProductSize {
   id: number
@@ -23,7 +25,8 @@ interface ProductSize {
   available_labels_count: number
 }
 
-const savedProducts = ref<ShortEntityParams[]>([])
+const sourceProducts = ref<ShortEntityParams[]>([])
+const targetProducts = ref<ShortEntityParams[]>([])
 const labelCount              = ref<number>(1)
 const selectedSourceProductId = ref<number|null>(null)
 const selectedSourceSizeId    = ref<number|null>(null)
@@ -33,11 +36,34 @@ const selectedTargetSizeId    = ref<number|null>(null)
 watch(() => props.modelValue, v => (dialog.value = v))
 watch(dialog, v => emit('update:modelValue', v))
 
-watch(selectedSourceProductId, id => {
+watch(selectedSourceProductId, async (id) => {
   selectedSourceSizeId.value = null
   sourceSizes.value = []
-  if (id != null) fetchSizes(id, 'source')
+
+  if (id != null) {
+    await fetchSizes(id, 'source')
+
+    const product = sourceProducts.value.find(p => p.id === id)
+    const clientId = product?.client_id
+
+    if (clientId) {
+      await fetchTargetProducts(clientId)
+    } else {
+      targetProducts.value = []
+    }
+  }
 })
+
+async function fetchTargetProducts(clientId: number) {
+  const { data, error } = await getProducts(clientId)
+  if (error.value) {
+    console.error('Ошибка при загрузке целевых товаров:', error.value)
+    return
+  }
+
+  targetProducts.value = data.value || []
+}
+
 watch(selectedTargetProductId, id => {
   selectedTargetSizeId.value = null
   targetSizes.value = []
@@ -58,7 +84,7 @@ async function fetchProducts() {
     console.error('Ошибка при загрузке товаров:', error.value)
     return
   }
-  savedProducts.value = data.value || []
+  sourceProducts.value = data.value || []
 }
 
 async function fetchSizes(productId: number, target: 'source' | 'target') {
@@ -78,7 +104,12 @@ async function fetchSizes(productId: number, target: 'source' | 'target') {
 
 async function onReplaceSize() {
   if (!selectedSourceSizeId.value || !selectedTargetSizeId.value || labelCount.value < 1) {
-    console.log('Пожалуйста, выберите оба размера и укажите количество ≥ 1')
+    console.error('Пожалуйста, выберите оба размера и укажите количество ≥ 1')
+    return
+  }
+
+  if (selectedSourceSizeId.value === selectedTargetSizeId.value) {
+    console.error('Размеры откуда и куда не должны совпадать')
     return
   }
 
@@ -93,6 +124,7 @@ async function onReplaceSize() {
     console.error(error.value)
     return
   }
+  onLabelsUpdated()
   dialog.value = false
 }
 
@@ -109,7 +141,7 @@ onMounted(fetchProducts)
             <div class="font-weight-medium mb-2">Откуда берём этикетки</div>
             <AppSelect
               v-model="selectedSourceProductId"
-              :items="savedProducts"
+              :items="sourceProducts"
               item-title="name"
               item-value="id"
               label="Товар"
@@ -140,7 +172,7 @@ onMounted(fetchProducts)
             <div class="font-weight-medium mb-2">Куда переносим</div>
             <AppSelect
               v-model="selectedTargetProductId"
-              :items="savedProducts"
+              :items="targetProducts"
               item-title="name"
               item-value="id"
               label="Товар"

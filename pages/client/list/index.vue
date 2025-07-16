@@ -15,7 +15,7 @@ const typeCaption: Record<Client['type'], string> = {
   INDIVIDUAL:    'Физическое лицо',
   LEGAL_ENTITY:  'Юридическое лицо',
 }
-
+const isLoading = ref(false)
 const headers = [
   { title: 'Название', key: 'name', sortable: false },
   { title: 'Тип', key: 'type', sortable: false },
@@ -42,6 +42,7 @@ const updateOptions = (options: any) => {
 }
 
 const fetchClients = async () => {
+  isLoading.value = true
   const { data, error } = await getClients()
   if (error.value) {
     console.error('Ошибка при загрузке клиентов:', error.value)
@@ -49,6 +50,7 @@ const fetchClients = async () => {
   }
 
   clients.value = data.value || []
+  isLoading.value = false
 }
 
 const handleDelete = async (id: number) => {
@@ -123,9 +125,19 @@ onMounted(fetchClients)
         show-select
         :items="clients"
         :items-length="totalClients"
+        :loading="isLoading"
         class="text-no-wrap"
         @update:options="updateOptions"
       >
+        <template #no-data>
+          <!-- ничего не выводим -->
+        </template>
+
+        <template #loading>
+          <div class="text-center pa-6">
+            <VProgressCircular indeterminate color="primary" />
+          </div>
+        </template>
         <!-- name  -->
         <template #item.name="{ item }">
           <div
@@ -169,24 +181,7 @@ onMounted(fetchClients)
           </IconBtn>
 
           <IconBtn>
-            <VIcon icon="tabler-dots-vertical" />
-            <VMenu activator="parent">
-              <VList>
-                <VListItem
-                  value="delete"
-                  prepend-icon="tabler-trash"
-                  @click="handleDelete(item.id)"
-                >
-                  Удалить
-                </VListItem>
-                <!-- <VListItem
-                  value="duplicate"
-                  prepend-icon="tabler-copy"
-                >
-                  Дублировать
-                </VListItem> -->
-              </VList>
-            </VMenu>
+            <VIcon class="ms-4" icon="tabler-trash" value="delete" @click="handleDelete(item.id)"/>
           </IconBtn>
         </template>
 

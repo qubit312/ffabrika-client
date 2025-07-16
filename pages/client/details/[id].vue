@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, toRaw, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import CustomLoading from '../../../components/CustomLoading.vue'
 import { categoryOptions } from '../../../constants/productCategories'
 import { createClient, getClient, updateClient } from '../../../services/clients'
-import { createProduct, deleteProduct, getProducts, updateProduct } from '../../../services/products'
+import { createProduct, deleteProduct, getProducts } from '../../../services/products'
 import { createProductSize, updateProductSize } from '../../../services/productSizes'
 import type { Client, CreateClientDto } from '../../../types/client'
 import type { CreateWbProductDto, WbProduct } from '../../../types/product'
@@ -18,8 +19,10 @@ const route = useRoute()
 const router = useRouter()
 const idParam = route.params.id as string | undefined
 const primaryId = idParam ? Number(idParam) : 0
-const mode = ref<'create' | 'edit'>('create')
-const isLoading = ref(false)
+const mode = ref<'create' | 'edit' | 'view' >('create')
+const loading = ref(false)
+const isFormInitialized = ref(false)
+const originalForm = ref<Client | null>(null)
 
 const snackbar = ref(false)
 const snackMessage = ref('')
@@ -33,8 +36,7 @@ interface ProductUI extends WbProduct {
 }
 
 const savedProducts = ref<ProductUI[]>([])
-const editingIndex = ref<number | null>(null)
-const form = ref<Client>({
+const form = reactive<Client>({
   id: 0,
   name: '',
   type: '',
@@ -57,6 +59,42 @@ const form = ref<Client>({
   updated_at: '',
   deleted_at: null,
 })
+
+function mapServerResponseToForm(serverData: any): void {
+  form.id = serverData.id || 0;
+  form.name = serverData.name || '';
+  form.type = serverData.type || '';
+  form.phone = serverData.phone || '';
+  form.email = serverData.email || '';
+  form.telegram = serverData.telegram || '';
+  
+  form.details = {
+    notes: serverData.details?.notes || '',
+    preferred_contact: serverData.details?.preferred_contact || ''
+  };
+  
+  form.tin = serverData.tin || '';
+  form.psrn = serverData.psrn || '';
+  form.account = serverData.account || '';
+  form.bank = serverData.bank || '';
+  form.correspondent_account = serverData.correspondent_account || '';
+  form.bic = serverData.bic || '';
+  form.legal_address = serverData.legal_address || '';
+  form.vat = serverData.vat || '';
+  form.created_at = serverData.created_at || '';
+  form.updated_at = serverData.updated_at || '';
+  form.deleted_at = serverData.deleted_at || null;
+
+  originalForm.value = structuredClone(toRaw(form))
+}
+
+watch(form, (newVal, oldVal) => {
+  if (mode.value === 'view' && isFormInitialized.value && primaryId > 0) {
+    if (JSON.stringify(newVal) !== JSON.stringify(originalForm.value)) {
+      mode.value = 'edit'
+    }
+  }
+}, { deep: true })
 
 const productForm = reactive({
   name: '',
@@ -89,42 +127,8 @@ function buildSubmitPayload(form: Client): CreateClientDto {
   }
 }
 
-const isEditing = computed(() => editingIndex.value !== null)
-
-const productHeaders = [
-  { title: 'Название', key: 'name', sortable: false},
-  { title: 'Артикул', key: 'article', sortable: false },
-  { title: 'Цвет', key: 'color', sortable: false},
-  { key: 'actions', sortable: false },
-]
-
-function addSize() {
-  sizeItems.value.push({
-    value: '',
-    quantity: 0,
-    barcode: ''
-  })
-}
-
-function removeSize(idx: number) {
-  sizeItems.value.splice(idx, 1)
-}
-
-function resetForm() {
-  productForm.name = ''
-  productForm.color = ''
-  productForm.article = ''
-  productForm.composition = ''
-  productForm.category = ''
-  productForm.size = [] 
-  editingIndex.value = null
-  sizeItems.value = [
-    { value: '', quantity: 0, barcode: '' }
-  ]
-}
-
 async function saveProduct() {
-  isLoading.value = true
+  loading.value = true
   const payload: CreateWbProductDto = {
     client_id: primaryId,
     name:      productForm.name,
@@ -133,9 +137,7 @@ async function saveProduct() {
     composition:     productForm.composition,
     category:     productForm.category,
   }
-  const response = isEditing.value
-    ? await updateProduct(payload, savedProducts.value[editingIndex.value!].id)
-    : await createProduct(payload)
+  const response = await createProduct(payload)
 
   const { data, error } = response
 
@@ -144,24 +146,20 @@ async function saveProduct() {
     snackMessage.value = 'Не удалось сохранить товар'
   } else {
     snackColor.value = 'success'
-    snackMessage.value = isEditing.value ? 'Товар обновлён' : 'Товар создан'
+    snackMessage.value = 'Товар создан'
 
     const prod = data.value
-    if (isEditing.value) {
-      savedProducts.value.splice(editingIndex.value!, 1, prod)
-    } else {
-      savedProducts.value.push(prod)
-    }
+    savedProducts.value.push(prod)
 
     for (const si of sizeItems.value) {
       await saveSize(si, prod.id)
     }
 
-    resetForm()
+    resetProductForm()
   }
 
   snackbar.value = true
-  isLoading.value = false
+  loading.value = false
 }
 
 async function saveSize(item: SizeItem, productId: number) {
@@ -189,19 +187,20 @@ async function saveSize(item: SizeItem, productId: number) {
 }
 
 async function fetchClient(id: number) {
-  isLoading.value = true
+  loading.value = true
   const { data, error } = await getClient(id)
   if (error.value) {
     console.error('Ошибка при загрузке клиента:', error.value)
   } else {
-    form.value = data.value.data
-    mode.value = 'edit'
+    mode.value = 'view';
+    mapServerResponseToForm(data.value.data)
+    isFormInitialized.value = true
   }
-  isLoading.value = false
+  loading.value = false
 }
 
 async function fetchProducts() {
-  isLoading.value = true
+  loading.value = true
   const { data, error } = await getProducts(primaryId)
 
   if (error.value) {
@@ -217,13 +216,12 @@ async function fetchProducts() {
     savedProducts.value = list
   }
 
-  isLoading.value = false
+  loading.value = false
 }
 
-
 async function saveClient() {
-  isLoading.value = true
-  const dto = buildSubmitPayload(form.value) as CreateClientDto
+  loading.value = true
+  const dto = buildSubmitPayload(form) as CreateClientDto
 
   const response = mode.value === 'edit'
     ? await updateClient(primaryId, dto)
@@ -240,6 +238,11 @@ async function saveClient() {
       ? 'Клиент обновлён'
       : 'Клиент создан'
 
+    if (mode.value === 'edit') {
+      originalForm.value = structuredClone(toRaw(form))
+      mode.value = 'view'
+    }
+
     if (mode.value === 'create') {
       const newId = data.value.data.id
       router.push({ name: 'client-details-id', params: { id: newId } })
@@ -247,11 +250,11 @@ async function saveClient() {
   }
 
   snackbar.value = true
-  isLoading.value = false
+  loading.value = false
 }
 
 async function handleDelete(id: number) {
-  isLoading.value = true
+  loading.value = true
 
   try {
     const { error } = await deleteProduct(id)
@@ -270,7 +273,7 @@ async function handleDelete(id: number) {
   }
   finally {
     snackbar.value   = true
-    isLoading.value  = false
+    loading.value  = false
   }
 }
 
@@ -280,6 +283,44 @@ onMounted(() => {
     fetchProducts()
   }
 })
+
+const productHeaders = [
+  { title: 'Название', key: 'name', sortable: false},
+  { title: 'Артикул', key: 'article', sortable: false },
+  { title: 'Цвет', key: 'color', sortable: false},
+  { key: 'actions', sortable: false },
+]
+
+function addSize() {
+  sizeItems.value.push({
+    value: '',
+    quantity: 0,
+    barcode: ''
+  })
+}
+
+function removeSize(idx: number) {
+  sizeItems.value.splice(idx, 1)
+}
+
+function resetProductForm() {
+  productForm.name = ''
+  productForm.color = ''
+  productForm.article = ''
+  productForm.composition = ''
+  productForm.category = ''
+  productForm.size = [] 
+  sizeItems.value = [
+    { value: '', quantity: 0, barcode: '' }
+  ]
+}
+
+function cancelEdit() {
+  if (originalForm.value) {
+    Object.assign(form, structuredClone(toRaw(originalForm.value)))
+    mode.value = 'view'
+  }
+}
 </script>
 
 <template>
@@ -289,14 +330,17 @@ onMounted(() => {
         <h4 class="text-h4 font-weight-medium">
           {{ mode === 'create' ? 'Вы создаете нового клиента' : form.name }}
         </h4>
-        <div class="text-body-1">{{ mode === 'create' ? '' : 'Детальная информация о клиенте' }}</div>
+        <div class="text-body-1">Детальная информация о клиенте</div>
       </div>
       <div class="d-flex gap-4 align-center flex-wrap">
-        <VBtn variant="tonal" color="secondary" @click="router.back()">
+        <VBtn color="primary" @click="router.back()">
           Закрыть
         </VBtn>
-        <VBtn color="primary" :loading="isLoading" @click="saveClient">
+        <VBtn v-if="mode != 'view'" color="primary" @click="saveClient">
           Сохранить
+        </VBtn>
+        <VBtn v-if="mode === 'edit'" variant="outlined" color="primary" @click="cancelEdit">
+          Отменить
         </VBtn>
       </div>
     </div>
@@ -433,9 +477,9 @@ onMounted(() => {
             <!-- Кнопки сохранения -->
             <VRow class="justify-end mt-4 mb-4">
               <VBtn class="me-4" color="success" @click="saveProduct">
-                {{ isEditing ? 'Обновить' : 'Сохранить' }}
+                Сохранить
               </VBtn>
-              <VBtn @click="resetForm">Сбросить</VBtn>
+              <VBtn @click="resetProductForm">Сбросить</VBtn>
             </VRow>
 
             <VDataTable :headers="productHeaders" :items="savedProducts">
@@ -467,4 +511,5 @@ onMounted(() => {
       {{ snackMessage }}
     </VSnackbar>
   </div>
+  <CustomLoading :loading="loading"/>
 </template>

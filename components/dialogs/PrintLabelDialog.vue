@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import barcodeEAN13 from '@/assets/images/barcode/barcode-ean13.png'
-import datamatrix from '@/assets/images/barcode/datamatrix.png'
-import CzLogo from '@/assets/images/logos/cz-logo.png'
-import type { ShortEntityParams } from '@db/apps/marking/types'
-import { computed, defineEmits, defineProps, ref } from 'vue'
+import barcodeEAN13 from '@/assets/images/barcode/barcode-ean13.png';
+import datamatrix from '@/assets/images/barcode/datamatrix.png';
+import CzLogo from '@/assets/images/logos/cz-logo.png';
+import { computed, defineEmits, defineProps, ref } from 'vue';
+import { useLabelEvents } from '../../composables/useLabelBus';
+import type { ShortEntityParams } from '../../types/label';
 
 const config = useRuntimeConfig()
 interface Props {
@@ -20,10 +21,9 @@ interface Props {
   availableLabelsCount: number
 }
 const props = defineProps<Props>()
-
+const { onLabelsUpdated } = useLabelEvents()
 const emit = defineEmits<{
   (e: 'update:visible', v: boolean): void
-  (e: 'labels-updated'): void
 }>()
 
 const snackbar     = ref(false)
@@ -94,7 +94,7 @@ async function downloadFile() {
 
   const token = localStorage.getItem('access_token') || ''
   try {
-    const response = await fetch(config.public.apiBaseUrl || 'https://api.ffabrika.ru' + `/api/chestny-znak-labels/download-pdf`, {
+    const response = await fetch('http://127.0.0.1:8000' + `/api/chestny-znak-labels/download-pdf`, {
       method: 'POST',
       headers: {
         'Accept': 'application/pdf',
@@ -126,8 +126,8 @@ async function downloadFile() {
   } catch (err: any) {
     console.error('Ошибка при скачивании PDF:', err)
   } finally {
+    onLabelsUpdated()
     loading.value = false
-    emit('labels-updated')
     close()
   }
 }

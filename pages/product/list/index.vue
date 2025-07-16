@@ -15,6 +15,7 @@ const headers = [
   { title: '', key: 'actions', sortable: false },
 ]
 
+const isLoading = ref(false)
 const searchQuery     = ref<string>('')
 const isSearchFocused = ref<boolean>(false)
 const debouncedQuery = useDebounce(searchQuery, 400) 
@@ -47,12 +48,14 @@ const fetchClients = async () => {
 }
 
 const fetchProducts = async () => {
+  isLoading.value = true
   const { data, error } = await getProducts(selectedClientId.value, searchQuery.value)
   if (error.value) {
     console.error('Ошибка при загрузке товаров:', error.value)
     return
   }
   entityData.value = data.value
+  isLoading.value = false
 }
 
 const handleDelete = async (id: number) => {
@@ -132,21 +135,24 @@ onMounted(() => {
         :items="entities"
         :items-length="totalEntities"
         class="text-no-wrap"
+        :loading="isLoading"
         @update:options="updateOptions"
       >
+        <template #no-data>
+          <!-- ничего не выводим -->
+        </template>
+
+        <template #loading>
+          <div class="text-center pa-6">
+            <VProgressCircular indeterminate color="primary" />
+          </div>
+        </template>
         <!-- name  -->
         <template #item.name="{ item }">
           <div
             class="d-flex align-center gap-x-4"
             style="cursor: pointer;"
           >
-            <!-- <VAvatar
-              v-if="item.image"
-              size="38"
-              variant="tonal"
-              rounded
-              :image="item.image"
-            /> -->
             <div class="d-flex flex-column">
               <RouterLink :to="{ name: 'product-details-id', params: { id: item.id } }">
                 {{ item.name }}
@@ -155,17 +161,10 @@ onMounted(() => {
           </div>
         </template>
 
-        <!-- client -->
-        <!-- <template #item.client="{ item }">
-          <div class="d-flex flex-column">
-              <span class="text-body-1 font-weight-medium text-high-emphasis">{{ item.client.name }}</span>
-          </div>
-        </template> -->
-
         <!-- color -->
         <template #item.color="{ item }">
           <div class="d-flex flex-column">
-              <span class="text-body-1 font-weight-medium text-high-emphasis">{{ item.color }}</span>
+              <span>{{ item.color }}</span>
           </div>
         </template>
 
@@ -178,18 +177,7 @@ onMounted(() => {
           </IconBtn>
 
           <IconBtn>
-            <VIcon icon="tabler-dots-vertical" />
-            <VMenu activator="parent">
-              <VList>
-                <VListItem
-                  value="delete"
-                  prepend-icon="tabler-trash"
-                  @click="handleDelete(item.id)"
-                >
-                  Удалить
-                </VListItem>
-              </VList>
-            </VMenu>
+            <VIcon class="ms-4" icon="tabler-trash" value="delete" @click="handleDelete(item.id)"/>
           </IconBtn>
         </template>
 
@@ -207,9 +195,4 @@ onMounted(() => {
 </template>
 
 <style scoped>
-  .development-note {
-    margin-top: 4px;
-    font-size: 0.9rem;
-    color: grey;
-  }
 </style>
