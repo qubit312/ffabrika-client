@@ -94,7 +94,10 @@ async function downloadFile() {
 
   const token = localStorage.getItem('access_token') || ''
   try {
-    const response = await fetch('http://127.0.0.1:8000' + `/api/chestny-znak-labels/download-pdf`, {
+    const config = useRuntimeConfig()
+    const baseURL = config.public.apiBaseUrl;
+
+    const response = await fetch(baseURL + `/api/chestny-znak-labels/download-pdf`, {
       method: 'POST',
       headers: {
         'Accept': 'application/pdf',
