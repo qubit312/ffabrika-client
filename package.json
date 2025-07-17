@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "preview": "nuxt preview",
     "dev": "nuxt dev",
     "build": "node --max-old-space-size=4096 node_modules/nuxt/bin/nuxt.mjs build",
     "lint": "eslint . -c .eslintrc.cjs --fix --ext .ts,.js,.cjs,.vue,.tsx,.jsx",

@@ -7,6 +7,8 @@ const router = useRouter()
 
 const handleLogout = () => {
   localStorage.clear()
+  const token = useCookie('access_token')
+  token.value = null
   router.push('/login')
 }
 

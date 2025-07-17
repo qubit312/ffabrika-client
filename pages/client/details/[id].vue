@@ -332,15 +332,15 @@ function cancelEdit() {
         </h4>
         <div class="text-body-1">Детальная информация о клиенте</div>
       </div>
-      <div class="d-flex gap-4 align-center flex-wrap">
-        <VBtn color="primary" @click="router.back()">
+      <div class="d-flex gap-4 align-center flex-wrap"> 
+        <VBtn v-if="mode === 'edit'" variant="outlined" color="primary" @click="cancelEdit">
+          Отменить
+        </VBtn>
+        <VBtn v-if="mode !== 'edit'" variant="outlined" color="primary" @click="router.back()">
           Закрыть
         </VBtn>
         <VBtn v-if="mode != 'view'" color="primary" @click="saveClient">
           Сохранить
-        </VBtn>
-        <VBtn v-if="mode === 'edit'" variant="outlined" color="primary" @click="cancelEdit">
-          Отменить
         </VBtn>
       </div>
     </div>

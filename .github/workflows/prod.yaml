@@ -32,5 +32,6 @@ jobs:
       - name: Reload with PM2
         run: |
           cd /home/fastuser/ffabrika-client
-          pm2 reload ffabrika-client \
-            || pm2 start npx --name ffabrika-client -- nuxi dev . --host 0.0.0.0 --port 3000
+          pm2 reload ffabrika-client || pm2 start .output/server/index.mjs \
+            --name ffabrika-client \
+            --interpreter=node

@@ -13,6 +13,7 @@ import { useRouter } from 'vue-router'
 
 definePageMeta({
   layout: 'blank',
+  public: true,
 })
 
 const form = ref({
@@ -54,6 +55,9 @@ async function onSubmit() {
       throw new Error(payload.message || 'Ошибка авторизации')
     }
     localStorage.setItem('access_token', payload.data.access_token)
+    const cookie = useCookie('access_token', { maxAge: 60 * 60 * 24 })
+    cookie.value = payload.data.access_token
+    
     localStorage.setItem('user_name', payload.data.name)
     const role = payload.data.role
     if (role) {

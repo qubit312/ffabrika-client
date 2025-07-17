@@ -91,6 +91,7 @@ const fetchLabel = async (id: number) => {
   loading.value = true
   if (id <= 0) {
     mode.value = 'create'
+    loading.value = false
     return
   }
 
@@ -98,6 +99,7 @@ const fetchLabel = async (id: number) => {
     const { data, error } = await getLabel(id)
     if (error.value) {
       console.error('Ошибка при получении метки:', error.value)
+      loading.value = false
       return
     }
 
@@ -106,10 +108,11 @@ const fetchLabel = async (id: number) => {
       patchFormWithData(markingData.value)
       mode.value = 'edit'
     }
+    loading.value = false
   } catch (e) {
     console.error('Непредвиденная ошибка:', e)
+    loading.value = false
   }
-  loading.value = false
 }
 
 async function patchFormWithData(data: Label) {
