@@ -33,12 +33,27 @@ const isSearchFocused = ref<boolean>(false)
 
 const itemsPerPage = ref<number>(10)
 const page = ref<number>(1)
-const sortBy = ref<string | undefined>()
-const orderBy = ref<'asc' | 'desc' | undefined>()
 
-const updateOptions = (options: any) => {
-  sortBy.value = options.sortBy[0]?.key
-  orderBy.value = options.sortBy[0]?.order
+const deleteDialog = ref(false)
+const selectedDeleteId = ref<number | null>(null)
+const selectedDeleteDisplayValue = ref<string>('')
+
+const confirmationText = computed(() =>
+  selectedDeleteId.value !== null
+    ? `Удалить товар ${selectedDeleteDisplayValue.value}?`
+    : ''
+)
+
+const openDeleteDialog = (id: number, name: string) => {
+  selectedDeleteId.value = id
+  selectedDeleteDisplayValue.value = name
+  deleteDialog.value = true
+}
+
+const deleteItemConfirm = async () => {
+  if (selectedDeleteId.value === null) return
+  await handleDelete(selectedDeleteId.value)
+  selectedDeleteId.value = null
 }
 
 const fetchClients = async () => {
@@ -97,15 +112,6 @@ onMounted(fetchClients)
             v-model="itemsPerPage"
             :items="[5, 10, 20, 25, 50]"
           />
-          <!-- 👉 Export button -->
-          <!-- <VBtn
-            variant="tonal"
-            color="secondary"
-            prepend-icon="tabler-upload"
-          >
-            Экспорт
-          </VBtn> -->
-
           <VBtn
             color="primary"
             prepend-icon="tabler-plus"
@@ -127,7 +133,6 @@ onMounted(fetchClients)
         :items-length="totalClients"
         :loading="isLoading"
         class="text-no-wrap"
-        @update:options="updateOptions"
       >
         <template #no-data>
           <!-- ничего не выводим -->
@@ -174,14 +179,14 @@ onMounted(fetchClients)
 
         <!-- Actions -->
         <template #item.actions="{ item }">
-          <IconBtn>
-            <RouterLink :to="{ name: 'client-details-id', params: { id: item.id } }">
+          <RouterLink :to="{ name: 'client-details-id', params: { id: item.id } }">
+            <IconBtn>
               <VIcon icon="tabler-edit" />
-            </RouterLink>
-          </IconBtn>
+            </IconBtn>
+          </RouterLink>
 
-          <IconBtn>
-            <VIcon class="ms-4" icon="tabler-trash" value="delete" @click="handleDelete(item.id)"/>
+          <IconBtn class="ms-4" @click="openDeleteDialog(item.id, item.name)">
+            <VIcon icon="tabler-trash" value="delete" />
           </IconBtn>
         </template>
 
@@ -196,6 +201,12 @@ onMounted(fetchClients)
       </VDataTableServer>
     </VCard>
   </div>
+
+  <ConfirmDeleteDialog
+    v-model="deleteDialog"
+    :confirmation-text="confirmationText"
+    @confirm="deleteItemConfirm"
+  />
 </template>
 
 <style scoped>

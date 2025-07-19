@@ -1,25 +1,84 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import testImage from '@images/pages/testImage.png'
+import { onMounted, reactive, ref, toRaw, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '../../../composables/useApi'
-import type { CategoryCode } from '../../../constants/productCategories'
 import { categoryOptions } from '../../../constants/productCategories'
 import { createProduct, getProduct, updateProduct } from '../../../services/products'
-import type { CreateWbProductDto } from '../../../types/product'
+import { getProductSizes } from '../../../services/productSizes'
+import type { CreateWbProductDto, WbProduct } from '../../../types/product'
+import type { ProductSizeWithLabels } from '../../../types/productSize'
 
 const route = useRoute()
 const router = useRouter()
 const idParam = route.params.id as string
 const primaryId = Number(idParam)
-const mode = ref<'create' | 'edit'>('create')
+const mode = ref<'create' | 'edit' | 'view' >('create')
+const isFormInitialized = ref(false)
+const productSizeList = ref<ProductSizeWithLabels[]>([])
+const mapPS = (ps: ProductSizeWithLabels): ProductSizeWithLabels => ({
+  id: ps.id,
+  product_id: ps.product_id,
+  value: ps.value,
+  barcode: ps.barcode,
+  available_labels_count: ps.available_labels_count,
+})
+
+const originalForm = ref<WbProduct | null>(null)
+// const sizeItems = ref<SizeItem[]>([
+//   { value: '', quantity: 0, barcode: '' }
+// ])
+const form = reactive<WbProduct>({
+  id: 0,
+  created_by: null,
+  updated_by: null,
+  name: '',
+  color: '',
+  article: '',
+  composition: '',
+  category: '',
+  client_id: null,
+  created_at: '',
+  updated_at: '',
+  has_chestny_znak: false
+})
+
+const fetchSizes = async (productId: number) => {
+  const { data, error } = await getProductSizes(productId)
+  if (error.value) {
+    console.error('Ошибка загрузки размеров:', error.value)
+    return
+  }
+
+  productSizeList.value = data.value.data.map(mapPS)
+}
+
+function mapServerResponseToForm(serverData: any): void {
+  form.id = serverData.id || 0;
+  form.name = serverData.name || '';
+  form.color = serverData.color || '';
+  form.article = serverData.article || '';
+  form.composition = serverData.composition || '';
+  form.category = serverData.category || '';
+    
+  form.client_id = serverData.client_id;
+  form.created_by = serverData.created_by || '';
+  form.updated_by = serverData.updated_by || '';
+  form.created_at = serverData.created_at || '';
+  form.updated_at = serverData.updated_at || '';
+  form.has_chestny_znak = serverData.has_chestny_znak;
+  originalForm.value = structuredClone(toRaw(form))
+}
+
+watch(form, (newVal, oldVal) => {
+  if (mode.value === 'view' && isFormInitialized.value && primaryId > 0) {
+    if (JSON.stringify(newVal) !== JSON.stringify(originalForm.value)) {
+      mode.value = 'edit'
+    }
+  }
+}, { deep: true })
 
 const clientOptions = ref<{ label: string; value: number }[]>([])
-const composition = ref<string>('')
-const article = ref<string>('')
-const selectedCategory = ref<CategoryCode>()
-const clientId = ref<number>()
-const name = ref<string>('')
-const color = ref<string>('')
 
 const snackbar = ref(false)
 const snackMessage = ref('')
@@ -58,33 +117,30 @@ async function fetchProduct(id: number) {
     return
   }
 
-  const p = data.value
-  clientId.value = p.client_id
-  name.value = p.name
-  color.value = p.color
-  article.value = p.article
-  composition.value = p.composition
-  selectedCategory.value = p.category
-  mode.value = 'edit'
+  mode.value = 'view';
+  mapServerResponseToForm(data.value)
+  isFormInitialized.value = true
+  await fetchSizes(data.value.id)
   loading.value = false
 }
 
 async function onSubmit() {
   loading.value = true
 
-  if (!clientId.value || !selectedCategory.value) {
+  if (!form.client_id || !form.category) {
     showSnackbar('Выберите клиента и категорию', false)
     loading.value = false
     return
   }
 
   const payload: CreateWbProductDto = {
-    client_id: clientId.value,
-    name: name.value,
-    color: color.value,
-    article: article.value,
-    category: selectedCategory.value,
-    composition: composition.value,
+    client_id: form.client_id,
+    name: form.name,
+    color: form.color,
+    article: form.article,
+    category: form.category,
+    composition: form.composition,
+    has_chestny_znak: form.has_chestny_znak
   }
 
   let data, error
@@ -126,6 +182,20 @@ function showSnackbar(message: string, isSuccess: boolean) {
     snackColor.value = 'error'
   }
 }
+
+function cancelEdit() {
+  if (originalForm.value) {
+    Object.assign(form, structuredClone(toRaw(originalForm.value)))
+    mode.value = 'view'
+  }
+}
+
+const sizeHeaders = [
+  { title: 'Баркод', key: 'barcode', sortable: false },
+  { title: 'Размер', key: 'value', sortable: false },
+  { title: 'Кол-во Честных знаков', key: 'available_labels_count', sortable: false },
+  { key: 'actions', sortable: false }
+];
 </script>
 
 <template>
@@ -133,28 +203,43 @@ function showSnackbar(message: string, isSuccess: boolean) {
     <div class="d-flex flex-wrap justify-start justify-sm-space-between gap-y-4 gap-x-6 mb-6">
       <div class="d-flex flex-column justify-center">
         <h4 class="text-h4 font-weight-medium">
-          {{ mode === 'create' ? 'Вы создаете новый товар' : name }}
+          {{ mode === 'create' ? 'Вы создаете новый товар' : form.name }}
         </h4>
         <div class="text-body-1">Подробная информация о товаре</div>
       </div>
 
-      <div class="d-flex gap-4 align-center flex-wrap">
-        <VBtn variant="tonal" color="secondary" @click="router.back()">Закрыть</VBtn>
-        <VBtn color="primary" @click="onSubmit">Сохранить</VBtn>
+      <div class="d-flex gap-4 align-center flex-wrap"> 
+        <VBtn v-if="mode === 'edit'" variant="outlined" color="primary" @click="cancelEdit">
+          Отменить
+        </VBtn>
+        <VBtn v-if="mode !== 'edit'" variant="outlined" color="primary" @click="router.back()">
+          Закрыть
+        </VBtn>
+        <VBtn v-if="mode != 'view'" color="primary" @click="onSubmit">
+          Сохранить
+        </VBtn>
       </div>
     </div>
 
     <VRow>
-      <VCol md="8">
+      <VCol md="3">
+        <VCard>
+          <VImg
+            :src="testImage"
+            cover
+          />
+        </VCard>
+      </VCol>
+      <VCol md="9">
         <VCard class="mb-6" title="Подробности">
           <VCardText>
             <VRow>
               <VCol cols="12" md="6">
-                <AppTextField v-model="name" label="Название" outlined />
+                <AppTextField v-model="form.name" label="Название" outlined />
               </VCol>
               <VCol cols="12" md="6">
                 <AppSelect
-                  v-model="clientId"
+                  v-model="form.client_id"
                   :items="clientOptions"
                   item-title="label"
                   item-value="value"
@@ -165,38 +250,48 @@ function showSnackbar(message: string, isSuccess: boolean) {
                 />
               </VCol>
               <VCol cols="12" md="6">
-                <AppTextField v-model="color" label="Цвет" outlined />
+                <AppTextField v-model="form.color" label="Цвет" outlined />
               </VCol>
 
               <VCol cols="12" md="6">
                 <AppTextField
                   label="Состав"
                   placeholder="Хлопок 95%"
-                  v-model="composition"
+                  v-model="form.composition"
                 />
               </VCol>
 
-              <VCol cols="12" md="6">
+              <VCol cols="6">
                 <AppTextField
                   label="Артикул товара"
                   placeholder="FXSK123U"
-                  v-model="article"
+                  v-model="form.article"
                 />
               </VCol>
-
-              <VCol cols="12" md="6">
+              <VCol cols="6">
                 <AppSelect
-                  v-model="selectedCategory"
+                  v-model="form.category"
                   :items="categoryOptions"
                   item-title="label"
                   item-value="value"
                   label="Категория"
                   placeholder="Выберите категорию"
                   clearable
-                  class="mb-6"
+                />
+              </VCol>
+              <VCol cols="6">
+                <VSwitch
+                  v-model="form.has_chestny_znak"
+                  label="Нужна маркировка ЧЗ"
                 />
               </VCol>
             </VRow>
+          </VCardText>
+        </VCard>
+        <VCard class="mb-6">
+          <VCardText>
+            <!-- <ProductSizesEditor v-model="sizeItems" /> -->
+            <ProductSizeTable :productId="primaryId" />
           </VCardText>
         </VCard>
       </VCol>

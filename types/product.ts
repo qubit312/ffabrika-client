@@ -1,15 +1,16 @@
 export interface WbProduct {
   id: number
-  created_by: number
+  created_by: number | null
   created_at: string
-  updated_by: number
+  updated_by: number | null
   updated_at: string
   name: string
   color: string
   article: string
   composition: string
+  has_chestny_znak: boolean
   category: string
-  client_id: number
+  client_id: number | null
 }
 
 export interface CreateWbProductDto {
@@ -17,6 +18,7 @@ export interface CreateWbProductDto {
   color: string
   article: string
   composition: string
+  has_chestny_znak: boolean
   category: string | null
   client_id: number | null
 }

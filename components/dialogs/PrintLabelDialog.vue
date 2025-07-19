@@ -6,7 +6,6 @@ import { computed, defineEmits, defineProps, ref } from 'vue';
 import { useLabelEvents } from '../../composables/useLabelBus';
 import type { ShortEntityParams } from '../../types/label';
 
-const config = useRuntimeConfig()
 interface Props {
   sizeId: number
   labelId: number
@@ -32,8 +31,9 @@ const snackColor   = ref<'success'|'error'>('success')
 
 const includeSHK  = ref(false)
 const duplicateDM = ref(false)
+const duplicateSHK = ref(false)
 
-const labelCount = ref<number>()
+const labelCount = ref<number>(1)
 const loadedLabelInPrinterCount = ref<number>(5)
 const availableLabelsCount = computed(() => props.availableLabelsCount)
 const loading = ref(false)
@@ -43,7 +43,7 @@ const isLowloadedLabelInPrinterCount= computed(() =>
   loadedLabelInPrinterCount.value < 10
 )
 const isLowAvailableLabelsCount = computed(() => 
-  availableLabelsCount.value < 10
+  availableLabelsCount.value <= 0
 )
 
 function close() {
@@ -141,231 +141,215 @@ const selectedTemplate = ref<'1'|'2'|'3'>('1')
 <template>
   <VDialog
     v-model="props.visible"
-    max-width="900"
+    max-width="850"
   >
     <DialogCloseBtn @click="close" />
-
     <VCard title="Форма печати">
       <VCardText>
         <VRow>
-          <VCol
-            cols="12"
-            sm="4"
-          >
-            <AppTextField
-              label="Количество"
-              type="number"
-              v-model="labelCount"
-              :error="labelError"
-              :error-messages="labelError ? 'Введите число больше 0' : ''"
-            />
-          </VCol>
-          <VCol
-            cols="12"
-            sm="4"
-          >
-            <VLabel class="mb-1 text-body-2 text-high-emphasis" style="line-height: 15px;">
-              Количество этикеток в принтере
-            </VLabel>
-            <div class="d-flex align-center mb-1">
-              <VTooltip bottom>
-                <template #activator="{ props }"> 
-                  <VIcon
-                    v-if="isLowloadedLabelInPrinterCount"
-                    v-bind="props"
-                    icon="tabler-alert-circle"
-                    class="mr-1 text-error"
-                  />
-                </template>
-                <span>Мало этикеток в принтер</span>
-              </VTooltip>
-
-                <span
-                    class="pa-2 text-body-1"
-                    :class="{
-                    'text-high-emphasis': !isLowloadedLabelInPrinterCount,
-                    'text-error': isLowloadedLabelInPrinterCount
-                    }"
-                >
-                    {{ loadedLabelInPrinterCount }}
-                </span>
-            </div>
-          </VCol>
-          <VCol
-            cols="12"
-            sm="4"
-          >
-            <VLabel class="mb-1 text-body-2 text-high-emphasis" style="line-height: 15px;">
-              Доступно честных знаков
-            </VLabel>
-            <div class="d-flex align-center mb-1">
-              <VTooltip bottom>
-                <template #activator="{ props }"> 
-                  <VIcon
-                    v-if="isLowAvailableLabelsCount"
-                    v-bind="props"
-                    icon="tabler-alert-circle"
-                    class="mr-1 text-error"
-                  />
-                </template>
-                <span>Осталось мало Честных Знаков для печати</span>
-              </VTooltip>
-
-                <span
-                    class="pa-2 text-body-1"
-                    :class="{
-                    'text-high-emphasis': !isLowAvailableLabelsCount,
-                    'text-error': isLowAvailableLabelsCount
-                    }"
-                >
-                    {{ availableLabelsCount }}
-                </span>
-            </div>
-          </VCol>
-        </VRow>
-        <VRow class="mt-4" v-if="selectedTemplate === '1'">
-          <VCol cols="12" sm="4">
-            <VCheckbox
-              v-model="duplicateDM"
-              label="Дублировать ЧЗ"
-            />
-          </VCol>
-          <VCol cols="12" sm="4">
-            <VCheckbox
-              v-model="includeSHK"
-              label="Печать ШК EAN-13"
-            />
-          </VCol>
-        </VRow>
-        <VRadioGroup v-model="selectedTemplate" class="mt-8">
-          <div class="d-flex flex-column flex-md-row gap-y-4 gap-sm-x-4">
-            <VRadio value="1" class="radio-card">
-            <template #label>
-              <div>
-                <div
-                  class="label-box"
-                  :class="{ 'label-box--selected': selectedTemplate === '1' }"
-                >
-                    <div class="label-content" style="margin-top: 10px">
-                    <div class="label left" style="width: 50%">
-                      <img
-                        style="height: 21mm; width: 21mm;"
-                        alt="Штрихкод"
-                        :src="datamatrix"
-                      />
-                    </div>
-                    <div class="label right">
-                        <div style="text-align: center;">
+          <VCol cols="5">
+            <VRadioGroup v-model="selectedTemplate" class="mt-8">
+              <VRadio value="1" class="radio-card mb-4">
+                <template #label>
+                  <div>
+                    <div
+                      class="label-box"
+                      :class="{ 'label-box--selected': selectedTemplate === '1' }"
+                    >
+                    <span style="font-size: 9px;">13</span>
+                        <div class="label-content" style="margin-top: 5px">
+                        <div class="label left" style="width: 50%">
                           <img
-                            style="height: 5mm;"
+                            style="height: 21mm; width: 21mm;"
                             alt="Штрихкод"
-                            :src="CzLogo" />
+                            :src="datamatrix"
+                          />
+                        </div>
+                        <div class="label right">
+                            <div style="text-align: center;">
+                              <img
+                                style="height: 5mm;"
+                                alt="Штрихкод"
+                                :src="CzLogo" />
+                            </div>
+
+                            <div class="spacer">
+                            <div style="text-align: left;">
+                              <p style="margin-block-end: 0">{{props.name}}</p>
+                              <p style="margin-block-end: 0">Цвет: {{ props.color }}</p>
+                              <p style="margin-block-end: 0">Размер: {{props.size}}</p>
+                            </div>
+                            </div>
+                        </div>
+                        </div>
+                        <div style="text-align: right; margin-bottom: 5px">
+                          <span style="font-size: 14px; font-weight: bold">10</span>
                         </div>
 
-                        <div class="spacer">
-                        <div style="text-align: center;">
-                            {{props.name}}, цвет {{ props.color }}, размер {{props.size}}
+                        <div>
+                        <span style="margin-right: 10px; font-size: 11px">01234567891011</span>
+                        <span style="font-size: 11px">2NnIRDZfTGMDA</span>
                         </div>
-                        </div>
                     </div>
-                    </div>
-                    <div style="text-align: right; margin-bottom: 5px">
-                      <span style="font-size: 14px; font-weight: bold; margin-right: 10px">13</span>
-                      <span style="font-size: 14px; font-weight: bold">5163012</span>
-                    </div>
+                  </div>
+                </template>
+              </VRadio>
 
-                    <div>
-                    <span style="margin-right: 10px; font-size: 11px">01234567891011</span>
-                    <span style="font-size: 11px">2NnIRDZfTGMDA</span>
-                    </div>
-                </div>
-              </div>
-            </template>
-          </VRadio>
+              <VRadio value="2" class="radio-card mb-4" >
+                <template #label>
+                  <div
+                    class="label-box"
+                    :class="{ 'label-box--selected': selectedTemplate === '2' }"
+                  >
+                      <div class="label-header">
+                      <span class="label-header-text">{{ props.name }}</span>
+                      </div>
+                      <div class="label-content">
+                      <div class="label" style="width: 70%">
+                          <div class="label-line">Артикул: {{ props.article }}</div>
+                          <div class="label-line">Цвет: {{ props.color }}</div>
+                      </div>
 
-          <VRadio value="2" class="radio-card" >
-            <template #label>
-                <div
-                  class="label-box"
-                  :class="{ 'label-box--selected': selectedTemplate === '2' }"
-                >
-                    <div class="label-header">
-                    <span class="label-header-text">{{ props.name }}</span>
-                    </div>
-                    <div class="label-content">
-                    <div class="label" style="width: 80%">
-                        <div class="label-line">Артикул: {{ props.article }}</div>
-                        <div class="label-line">Цвет: {{ props.color }}</div>
-                    </div>
-
-                    <div class="label" style="width: 20%">
-                        <div class="label-size">{{ props.size }}</div>
-                    </div>
-                    </div>
-                    <div class="label-content">
-                    <div class="label">
-                        <div class="label-line">{{ props.client?.name }}</div>
-                        <div class="label-line">Состав: {{ props.composition || '' }}</div>
-                    </div>                  
-                    </div>
-                    
-                    <div class="label-barcode-block">
-                    <img
-                      style="height: 14mm;"
-                      alt="Штрихкод"
-                      :src="barcodeEAN13"
-                    />
-                    </div>
-                </div>
-            </template>
-          </VRadio>
-
-          <!-- <VRadio value="3" class="radio-card">
-            <template #label>
-                <div
-                  class="label-box"
-                  :class="{ 'label-box--selected': selectedTemplate === '3' }"
-                >
-                    <div class="label-header">
-                    <span class="label-header-text">{{ props.name }}</span>
-                    </div>
-                    <div class="label-content">
-                    <div class="label left" style="width: 50%">
-                        <img
-                        style="height: 21mm; width: 21mm;"
+                      <div class="label" style="width: 30%">
+                          <div class="label-size">{{ props.size }}</div>
+                      </div>
+                      </div>
+                      <div class="label-content">
+                      <div class="label">
+                          <div class="label-line">{{ props.client?.name }}</div>
+                          <div class="label-line">Состав: {{ props.composition || '' }}</div>
+                      </div>                  
+                      </div>
+                      
+                      <div class="label-barcode-block">
+                      <img
+                        style="height: 14mm;"
                         alt="Штрихкод"
-                        src="https://barcode.tec-it.com/barcode.ashx?data=01046605684903452152NnIRDZfTGMD%1D91EE11%1D92oeGgLmUSMbPtHc2xVZxqkcrYSXz6%2B2ADQ0H4ZUANOqw%3D&code=GS1DataMatrix&translate-esc=on&dmsize=Default" />
-                    </div>
-                    <div class="label right">
-                        <div style="text-align: center;">
-                        ЧЕСТНЫЙ ЗНАК
-                        </div>
+                        :src="barcodeEAN13"
+                      />
+                      </div>
+                  </div>
+                </template>
+              </VRadio>
 
-                        <div class="spacer">
-                        <div style="text-align: center;">
-                            {{props.name}}, цвет {{ props.color }}, размер {{props.size}}
+              <!-- <VRadio value="3" class="radio-card">
+                <template #label>
+                    <div
+                      class="label-box"
+                      :class="{ 'label-box--selected': selectedTemplate === '3' }"
+                    >
+                        <div class="label-header">
+                        <span class="label-header-text">{{ props.name }}</span>
+                        </div>
+                        <div class="label-content">
+                        <div class="label left" style="width: 50%">
+                            <img
+                            style="height: 21mm; width: 21mm;"
+                            alt="Штрихкод"
+                            src="https://barcode.tec-it.com/barcode.ashx?data=01046605684903452152NnIRDZfTGMD%1D91EE11%1D92oeGgLmUSMbPtHc2xVZxqkcrYSXz6%2B2ADQ0H4ZUANOqw%3D&code=GS1DataMatrix&translate-esc=on&dmsize=Default" />
+                        </div>
+                        <div class="label right">
+                            <div style="text-align: center;">
+                            ЧЕСТНЫЙ ЗНАК
+                            </div>
+
+                            <div class="spacer">
+                            <div style="text-align: center;">
+                                {{props.name}}, цвет {{ props.color }}, размер {{props.size}}
+                            </div>
+                            </div>
                         </div>
                         </div>
+                        <div style="text-align: right;">
+                        <span style="font-size: 14px; font-weight: bold">1</span>
+                        </div>
+                        <div>
+                        <span style="margin-right: 10px; font-size: 10px">01234567891011</span>
+                        <span style="font-size: 10px">2NnIRDZfTGMDA</span>
+                        </div>
                     </div>
-                    </div>
-                    <div style="text-align: right;">
-                    <span style="font-size: 14px; font-weight: bold">1</span>
-                    </div>
-                    <div>
-                    <span style="margin-right: 10px; font-size: 10px">01234567891011</span>
-                    <span style="font-size: 10px">2NnIRDZfTGMDA</span>
-                    </div>
-                </div>
-            </template>
-          </VRadio> -->
-          </div>          
-        </VRadioGroup>
+                </template>
+              </VRadio> -->       
+            </VRadioGroup>
+          </VCol>
+
+          <VCol cols="7">
+            <VRow>
+              <VCol cols="6">
+                <VLabel class="mb-1 text-body-2 text-high-emphasis">Количество</VLabel>
+              </VCol>
+              <VCol cols="6">
+                <AppTextField
+                  type="number"
+                  v-model="labelCount"
+                  :error="labelError"
+                  :error-messages="labelError ? 'Введите число больше 0' : ''"
+                />
+              </VCol>
+            </VRow>
+            
+            <VRow>
+              <VCol cols="6">
+                <span class="mb-1 text-body-2 text-high-emphasis">Количество этикеток в принтере</span>
+              </VCol>
+              <VCol cols="6">
+                <AppTextField
+                  :model-value="loadedLabelInPrinterCount"
+                  readonly
+                  :error="isLowloadedLabelInPrinterCount"
+                  :error-messages="isLowloadedLabelInPrinterCount ? ['Мало этикеток в принтере'] : []"
+                />
+              </VCol>
+            </VRow>
+
+            <VRow>
+              <VCol cols="6">
+                <span class="mb-1 text-body-2 text-high-emphasis">Доступно честных знаков</span>
+              </VCol>
+              <VCol cols="6">
+                <AppTextField
+                  :model-value="availableLabelsCount"
+                  readonly
+                  :error="isLowAvailableLabelsCount"
+                  :error-messages="isLowAvailableLabelsCount ? ['Недостаточно ЧЗ'] : []"
+                />
+              </VCol>
+            </VRow>
+            
+            <VRow>
+              <VCol cols="6">
+                <VSwitch
+                  v-if="selectedTemplate === '1'"
+                  v-model="includeSHK"
+                  label="Печать ШК EAN-13"
+                />
+              </VCol>
+              <VCol cols="6">
+                <VSwitch
+                  v-if="selectedTemplate === '1'"
+                  v-model="duplicateDM"
+                  label="Дублировать ЧЗ"
+                />
+              </VCol>
+            </VRow>
+
+            <VCol class="ps-0" cols="12">
+              <VSwitch
+                v-if="includeSHK && selectedTemplate === '1'"
+                v-model="duplicateSHK"
+                label="Дублировать ШК"
+              />
+            </VCol>
+          </VCol>
+        </VRow>
       </VCardText>
 
       <VCardText class="d-flex justify-end flex-wrap gap-3">
         <VBtn variant="tonal" color="secondary" @click="close">Отменить</VBtn>
         <VBtn
           color="primary"
+          :loading="loading"
+          :disabled="loading"
           @click="downloadFile"
         >
           Скачать документ
@@ -454,7 +438,7 @@ const selectedTemplate = ref<'1'|'2'|'3'>('1')
   }
 
   .label-size {
-    font-size: 18px;
+    font-size: 14px;
     font-weight: bold;
   }
 

@@ -3,9 +3,9 @@ import { isEmpty, isEmptyArray, isNullOrUndefined } from './helpers'
 // 👉 Required Validator
 export const requiredValidator = (value: unknown) => {
   if (isNullOrUndefined(value) || isEmptyArray(value) || value === false)
-    return 'This field is required'
+    return 'Это поле обязательное'
 
-  return !!String(value).trim().length || 'This field is required'
+  return !!String(value).trim().length || 'Это поле обязательное'
 }
 
 // 👉 Email Validator

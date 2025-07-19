@@ -2,5 +2,5 @@ export const paginationMeta = <T extends { page: number; itemsPerPage: number }>
   const start = (options.page - 1) * options.itemsPerPage + 1
   const end = Math.min(options.page * options.itemsPerPage, total)
 
-  return total === 0 ? 'Показано 0 записей' : `Показано с ${start} по ${end} из ${total} записей`;
+  return total === 0 ? '' : `Показано с ${start} по ${end} из ${total}`;
 }

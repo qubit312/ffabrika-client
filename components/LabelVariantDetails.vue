@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { defineExpose, defineProps, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, defineExpose, defineProps, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useLabelEvents } from '../composables/useLabelBus';
 import { createProductSize, deleteProductSize, getProductSizes, updateProductSize } from '../services/productSizes';
 import type { ShortEntityParams } from '../types/label';
@@ -26,6 +26,11 @@ const deleteDialog = ref(false)
 const currentItem = ref<ProductSizeWithLabels | null>(null)
 const editedIndex = ref<number | null>(null)
 const editedItem = ref<ProductSizeWithLabels>({ id: 0, value: '', barcode: '', available_labels_count: 0, product_id: 0 })
+
+const deleteConfirmationQuestion = computed(() => {
+  let question  = `Удалить размер ${editedItem.value.value}?`
+  return question;
+})
 const showLabelDialog = ref(false)
 const isDialogVisible = ref(false);
 
@@ -172,46 +177,73 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <VBtn color="primary" class="mb-4 me-4" @click="addItem">
-      Добавить размер
-  </VBtn>
+  <div class="d-flex align-center mb-4">
+    <h2 class="text-h5 ma-0">Размеры</h2>
 
-  <VBtn
-    color="primary"
-    class="mb-4"
-    :disabled="!props.product?.id"
-    @click="handleRefresh"
-  >
-    Обновить информацию
-  </VBtn>
+    <VBtn
+      class="ms-2"
+      icon
+      size="small"
+      variant="text"
+      @click="addItem"
+    >
+      <VIcon icon="tabler-plus" />
+    </VBtn>
+  </div>
 
   <VDataTable
     :headers="headers"
     :items="productSizeList"
-    :items-per-page="5"
   >
+    <template #no-data></template>
+    <template #bottom></template>
     <template #item.actions="{ item }">
       <div class="d-flex gap-1">
-        <IconBtn @click="editItem(item)">
-          <VIcon icon="tabler-edit" />
-        </IconBtn>
-        <IconBtn @click="deleteItem(item)">
-          <VIcon icon="tabler-trash" />
-        </IconBtn>
-        <IconBtn @click="openPrintDialog(item)">
-          <VIcon icon="tabler-printer" />
-        </IconBtn>
-        <IconBtn @click="showLabelDialog = true">
-          <VIcon icon="tabler-arrows-shuffle" />
-        </IconBtn>
+        <VTooltip open-delay="600">
+          <template #activator="{ props }"> 
+            <IconBtn v-bind="props" @click="editItem(item)">
+              <VIcon icon="tabler-edit" />
+            </IconBtn>
+          </template>
+          <span>Редактировать</span>
+        </VTooltip>
+        <VTooltip open-delay="600">
+          <template #activator="{ props }">
+            <IconBtn
+              v-bind="props"
+              @click="openPrintDialog(item)"
+              color="primary"
+              variant="tonal"
+            >
+              <VIcon icon="tabler-printer" />
+            </IconBtn>
+          </template>
+          <span>Распечать этикетку</span>
+        </VTooltip>
+        <VTooltip open-delay="600">
+          <template #activator="{ props }"> 
+            <IconBtn v-bind="props" @click="showLabelDialog = true">
+              <VIcon icon="tabler-arrows-shuffle" />
+            </IconBtn>
+          </template>
+          <span>Перенести на другой товар</span>
+        </VTooltip>
+        <VTooltip open-delay="600">
+          <template #activator="{ props }"> 
+            <IconBtn v-bind="props" @click="deleteItem(item)">
+              <VIcon icon="tabler-trash" />
+            </IconBtn>
+          </template>
+          <span>Удалить</span>
+        </VTooltip>
       </div>
     </template>
   </VDataTable>
-
-  <VDialog
-    v-model="editDialog"
-    max-width="600px"
-  >
+  <VBtn color="primary" class="mb-4 me-4" @click="addItem">
+    Добавить размер
+  </VBtn>
+  
+  <VDialog v-model="editDialog" max-width="600px" >
     <VCard>
       <VCardTitle>
         <span class="headline">Редактирование</span>
@@ -220,22 +252,14 @@ onUnmounted(() => {
       <VCardText>
         <VContainer>
           <VRow>
-            <VCol
-              cols="12"
-              sm="6"
-              md="6"
-            >
+            <VCol cols="12" sm="6" md="6" >
               <VTextField
                 v-model="editedItem.barcode"
                 label="Баркод"
               />
             </VCol>
 
-            <VCol
-              cols="12"
-              sm="6"
-              md="6"
-            >
+            <VCol cols="12" sm="6" md="6" >
               <VTextField
                 v-model="editedItem.value"
                 label="Размер"
@@ -266,36 +290,32 @@ onUnmounted(() => {
     </VCard>
   </VDialog>
 
-  <!-- 👉 Delete Dialog  -->
   <VDialog
     v-model="deleteDialog"
     max-width="350px"
   >
     <VCard>
-        <VCardTitle>
-            Подтверждение
-        </VCardTitle>
-        <VCardText>
-            Удалить размер {{editedItem.value}}?
-        </VCardText>
-        <VCardActions>
-            <VSpacer />
-            <VBtn
-              color="secondary"
-              variant="elevated"
-              @click="closeDelete"
-            >
-              Закрыть
-            </VBtn>
+      <VCardText class="pt-6 pb-4 text-h6">
+        {{ deleteConfirmationQuestion }}
+      </VCardText>
+      <VCardActions>
+        <VSpacer />
+        <VBtn
+          color="secondary"
+          variant="elevated"
+          @click="closeDelete"
+        >
+          Отменить
+        </VBtn>
 
-            <VBtn
-              color="primary"
-              variant="elevated"
-              @click="deleteItemConfirm"
-            >
-              ОК
-            </VBtn>
-        </VCardActions>
+        <VBtn
+          color="primary"
+          variant="elevated"
+          @click="deleteItemConfirm"
+        >
+          ОК
+        </VBtn>
+      </VCardActions>
     </VCard>
   </VDialog>
   <PrintLabelDialog

@@ -4,7 +4,6 @@ import { useRoute, useRouter } from 'vue-router'
 import CustomLoading from '../../../components/CustomLoading.vue'
 import DefectiveLabelModal from '../../../components/dialogs/DefectiveLabelModal.vue'
 import SizeMappingModal from '../../../components/dialogs/SizeMappingModal.vue'
-import type { CategoryCode } from '../../../constants/productCategories'
 import { createLabel, getLabel, updateLabel } from '../../../services/labels'
 import { getProduct, getProducts } from '../../../services/products'
 import type { Label, ShortEntityParams } from '../../../types/label'
@@ -46,14 +45,12 @@ useDropZone(dropZoneRef, onDrop)
 
 const markingData = ref<Label | null>(null)
 const name = ref<string>('')
-const has_chestny_znak = ref<boolean>(false)
 
 const loadedLabelCount      = ref<number>(0)
 const newLabelCount         = ref<number | null>(null)
 const showLoadLabelDialog   = ref<boolean>(false)
 const isLowLoadedLabelCount = computed(() => loadedLabelCount.value < 10)
 const showDefectiveModal    = ref(false)
-const selectedCategory = ref<CategoryCode | null>(null)
 
 const selectedProduct = ref<ShortEntityParams | null>(null)
 const products = ref<ShortEntityParams[]>([])
@@ -116,8 +113,7 @@ const fetchLabel = async (id: number) => {
 }
 
 async function patchFormWithData(data: Label) {
-  name.value             = data.name
-  has_chestny_znak.value = data.has_chestny_znak
+  name.value = data.name
 
   if (data.product?.id) {
     const match = products.value.find(p => p.id === data.product!.id)
@@ -146,9 +142,8 @@ async function patchFormWithData(data: Label) {
 async function onSubmit() {
   loading.value = true
   const payload = {
-    name:             name.value,
-    has_chestny_znak: has_chestny_znak.value,
-    product_id:       selectedProduct.value?.id ?? null,
+    name: name.value,
+    product_id: selectedProduct.value?.id ?? null,
   }
 
   try {
@@ -208,7 +203,7 @@ function openSizeMappingModal() {
   showSizeModal.value = true
 }
 
-const loading = ref(true)
+const loading = ref(false)
 </script>
 
 <template>
@@ -229,12 +224,7 @@ const loading = ref(true)
       <div class="d-flex gap-4 align-center flex-wrap">
         <VBtn variant="tonal" color="secondary" @click="router.back()">Закрыть</VBtn>
         <VBtn color="primary" @click="onSubmit">Сохранить </VBtn>
-        <VBtn
-          color="primary"
-          @click="openDefective()"
-        >
-          Бракованная этикетка
-        </VBtn>
+        
       </div>
     </div>
 
@@ -243,7 +233,7 @@ const loading = ref(true)
         <VCard class="mb-6">
           <VCardText>
             <VRow>
-              <VCol cols="12" md="6">
+              <!-- <VCol cols="12" md="6">
                 <AppAutocomplete
                   v-model="selectedProduct"
                   :items="filteredProducts"
@@ -256,29 +246,26 @@ const loading = ref(true)
                   placeholder="Выберите товар"
                   @update:search="searchProducts"
                 />
-              </VCol>
+              </VCol> -->
               <VCol cols="12" md="6">
                 <AppTextField
-                  label="Название"
+                  label="Название для этикетки"
                   placeholder="Введите название товара на этикетке"
                   v-model="name"
                 />
               </VCol>
-              <VCol cols="12" md="6">
-                <VCheckbox
+              <!-- <VCol cols="12" md="6">
+                <VSwitch
+                  class="mt-6"
                   v-model="has_chestny_znak"
-                  label="Есть честный знак"
+                  label="Нужна маркировка ЧЗ"
                 />
-              </VCol>
-              
+              </VCol> -->
             </VRow>
           </VCardText>
         </VCard>
 
-        <VCard
-          title="Размеры"
-          class="mb-6"
-        >
+        <VCard class="mb-6">
           <VCardText>
             <LabelVariantDetails
               :product="selectedProduct"
@@ -293,7 +280,7 @@ const loading = ref(true)
         md="4"
         cols="12"
       >
-        <VCard class="mb-6" title="Честный знак">
+        <VCard class="mb-6" title="Принтер">
           <VCardText>
             <VCol cols="12">
                 <div class="d-flex align-center">
@@ -331,7 +318,27 @@ const loading = ref(true)
         </VCard>
 
         <!-- Честный знак -->
-        <VCard title="Честный знак" v-if="has_chestny_znak">
+        <VCard>
+          <VCardTitle class="ma-2">
+            <div class="d-flex justify-space-between align-center w-100">
+              <span>Честный знак</span>
+              
+              <VMenu>
+                <template #activator="{ props }">
+                  <IconBtn v-bind="props">
+                    <VIcon icon="tabler-dots-vertical" />
+                  </IconBtn>
+                </template>
+
+                <VList>
+                  <VListItem @click="openDefective">
+                    <VListItemTitle>Бракованная этикетка</VListItemTitle>
+                  </VListItem>
+                </VList>
+              </VMenu>
+            </div>
+          </VCardTitle>
+          
           <div class="d-flex flex-column">
             <VCardText>
               <VFileInput

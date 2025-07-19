@@ -22,6 +22,7 @@ const form = ref<CreateWbProductDto>({
   color: '',
   article: '',
   composition: '',
+  has_chestny_znak: false,
   category: null as string | null,
   client_id: null as number | null,
 })
@@ -35,7 +36,6 @@ const submit = async () => {
     const label = await createLabel({
       product_id: product.data.value.id,
       name: product.data.value.name,
-      has_chestny_znak: false,
     })
     const labelId = label?.data?.value?.id
     if (!labelId) throw new Error('Ошибка при создании этикетки')
@@ -52,7 +52,6 @@ const submit = async () => {
 const closeDialog = async () => {
   isOpen.value = false
 }
-
 
 const fetchClients = async () => {
   const { data, error } = await getClients()

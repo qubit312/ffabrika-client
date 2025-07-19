@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import CreateProductDialog from '../../../components/dialogs/CreateProductDialog.vue';
 import { getLabels, removeLabel } from '../../../services/labels';
 import type { Label } from '../../../types/label';
+import AddNewProductDrawer from '../../../views/pages/product/list/AddNewProductDrawer.vue';
 
 const headers = [
-  { title: 'Наименование', key: 'name', sortable: false },
+  { title: 'Название', key: 'name', sortable: false },
+  { title: 'Артикул', key: 'article', sortable: false },
+  { title: 'Цвет', key: 'color', sortable: false },
   { title: '', key: 'actions', sortable: false },
 ]
-
+const isDrawerOpen = ref(true)
 const isLoading = ref(false)
 const router = useRouter()
 const markingsData = ref<{ markings: Label[]; total: number }>({ markings: [], total: 0 })
@@ -18,14 +20,30 @@ const isSearchFocused = ref<boolean>(false)
 const showCreateDialog = ref(false)
 const itemsPerPage = ref<number>(10)
 const page = ref<number>(1)
-const sortBy = ref<string | undefined>()
-const orderBy = ref<'asc' | 'desc' | undefined>()
+
 const markings = computed<Label[]>(() => markingsData.value.markings)
 const totalMarkings = computed<number>(() => markingsData.value.total)
 
-const updateOptions = (options: any) => {
-  sortBy.value = options.sortBy[0]?.key
-  orderBy.value = options.sortBy[0]?.order
+const deleteDialog = ref(false)
+const selectedDeleteId = ref<number | null>(null)
+const selectedDeleteDisplayValue = ref<string>('')
+
+const confirmationText = computed(() =>
+  selectedDeleteId.value !== null
+    ? `Удалить товар ${selectedDeleteDisplayValue.value}?`
+    : ''
+)
+
+const openDeleteDialog = (id: number, name: string) => {
+  selectedDeleteId.value = id
+  selectedDeleteDisplayValue.value = name
+  deleteDialog.value = true
+}
+
+const deleteItemConfirm = async () => {
+  if (selectedDeleteId.value === null) return
+  await handleDelete(selectedDeleteId.value)
+  selectedDeleteId.value = null
 }
 
 const fetchMarkings = async () => {
@@ -42,6 +60,7 @@ const fetchMarkings = async () => {
       total:    data.value.total,
     }
   }
+  console.log(data.value.data)
   isLoading.value = false
 }
 
@@ -90,13 +109,13 @@ onMounted(() => {
             v-model="itemsPerPage"
             :items="[5, 10, 20, 25, 50]"
           />
-          <VBtn
+          <!-- <VBtn
             color="primary"
             prepend-icon="tabler-box"
             @click="router.push({ name: 'marking-details-id', params: { id: 0 } })"
           >
             По существующему товару
-          </VBtn>
+          </VBtn> -->
 
           <VBtn
             color="primary"
@@ -118,7 +137,6 @@ onMounted(() => {
         :items-length="totalMarkings"
         class="text-no-wrap"
         :loading="isLoading"
-        @update:options="updateOptions"
       >
         <template #no-data>
           <!-- ничего не выводим -->
@@ -142,33 +160,27 @@ onMounted(() => {
             </div>
           </div>
         </template>
+        
+        <!-- article -->
+        <template #item.article="{ item }">
+          {{ item.product?.article || '—' }}
+        </template>
 
-        <!-- category -->
-        <!-- <template #item.category="{ item }">
-          <VAvatar
-            size="30"
-            variant="tonal"
-            :color="resolveCategory(item.category)?.color"
-            class="me-4"
-          >
-            <VIcon
-              :icon="resolveCategory(item.category)?.icon"
-              size="18"
-            />
-          </VAvatar>
-          <span class="text-body-1 text-high-emphasis">{{ getCategoryLabel(item.category) }}</span>
-        </template> -->
+        <!-- color -->
+        <template #item.color="{ item }">
+          {{ item.product?.color || '—' }}
+        </template>
 
-        <!-- Actions -->
+        <!-- actions -->
         <template #item.actions="{ item }">
-          <IconBtn>
-            <RouterLink :to="{ name: 'marking-details-id', params: { id: item.id } }">
+          <RouterLink :to="{ name: 'marking-details-id', params: { id: item.id } }">
+            <IconBtn>
               <VIcon icon="tabler-edit" />
-            </RouterLink>
-          </IconBtn>
+            </IconBtn>
+          </RouterLink>
           
-          <IconBtn>
-            <VIcon class="ms-4" icon="tabler-trash" value="delete" @click="handleDelete(item.id)"/>
+          <IconBtn class="ms-4" @click="openDeleteDialog(item.id, item.name)">
+            <VIcon icon="tabler-trash" value="delete" />
           </IconBtn>
         </template>
 
@@ -183,9 +195,19 @@ onMounted(() => {
     </VCard>
   </div>
   
-  <CreateProductDialog
+  <!-- <CreateProductDialog
     v-model="showCreateDialog"
     @created="fetchMarkings"
+  /> -->
+  <AddNewProductDrawer
+    v-model:isDrawerOpen="showCreateDialog"
+    @created="fetchMarkings"
+  />
+  
+  <ConfirmDeleteDialog
+    v-model="deleteDialog"
+    :confirmation-text="confirmationText"
+    @confirm="deleteItemConfirm"
   />
 </template>
 

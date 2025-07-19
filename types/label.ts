@@ -9,7 +9,6 @@ export interface Label {
   id: number
   product_id: number | null
   name: string
-  has_chestny_znak: boolean
   created_by: number | null
   updated_by: number | null
   created_at: string
@@ -24,5 +23,4 @@ export interface Label {
 export interface CreateLabelDto {
   product_id: number
   name: string
-  has_chestny_znak: boolean
 }

@@ -20,6 +20,7 @@ const router = useRouter()
 const idParam = route.params.id as string | undefined
 const primaryId = idParam ? Number(idParam) : 0
 const mode = ref<'create' | 'edit' | 'view' >('create')
+
 const loading = ref(false)
 const isFormInitialized = ref(false)
 const originalForm = ref<Client | null>(null)
@@ -103,6 +104,7 @@ const productForm = reactive({
   composition: '',
   category: '',
   size: [] as string[],
+  hasChestnyZnak: false
 })
 
 function buildSubmitPayload(form: Client): CreateClientDto {
@@ -136,6 +138,7 @@ async function saveProduct() {
     article:     productForm.article,
     composition:     productForm.composition,
     category:     productForm.category,
+    has_chestny_znak: productForm.hasChestnyZnak,
   }
   const response = await createProduct(payload)
 
@@ -219,7 +222,7 @@ async function fetchProducts() {
   loading.value = false
 }
 
-async function saveClient() {
+async function onSubmit() {
   loading.value = true
   const dto = buildSubmitPayload(form) as CreateClientDto
 
@@ -291,24 +294,13 @@ const productHeaders = [
   { key: 'actions', sortable: false },
 ]
 
-function addSize() {
-  sizeItems.value.push({
-    value: '',
-    quantity: 0,
-    barcode: ''
-  })
-}
-
-function removeSize(idx: number) {
-  sizeItems.value.splice(idx, 1)
-}
-
 function resetProductForm() {
   productForm.name = ''
   productForm.color = ''
   productForm.article = ''
   productForm.composition = ''
   productForm.category = ''
+  productForm.hasChestnyZnak = false
   productForm.size = [] 
   sizeItems.value = [
     { value: '', quantity: 0, barcode: '' }
@@ -339,7 +331,7 @@ function cancelEdit() {
         <VBtn v-if="mode !== 'edit'" variant="outlined" color="primary" @click="router.back()">
           Закрыть
         </VBtn>
-        <VBtn v-if="mode != 'view'" color="primary" @click="saveClient">
+        <VBtn v-if="mode != 'view'" color="primary" @click="onSubmit">
           Сохранить
         </VBtn>
       </div>
@@ -440,39 +432,17 @@ function cancelEdit() {
                   }"
                 />
               </VCol>
+              <VCol cols="4">
+                <VSwitch
+                  v-model="productForm.hasChestnyZnak"
+                  label="Нужна маркировка ЧЗ"
+                />
+              </VCol>
             </VRow>
 
             <VDivider class="my-4" />
 
-            <div v-for="(item, i) in sizeItems" :key="i">
-              <VRow class="align-center">
-                <VCol cols="4">
-                  <VTextField v-model="item.barcode" label="Баркод" />
-                </VCol>
-                <VCol cols="3">
-                  <VTextField v-model="item.value" label="Размер" />
-                </VCol>
-                <VCol cols="2" class="d-flex justify-center">
-                  <VBtn class="me-4" icon color="primary" @click="addSize">
-                    <VIcon
-                      size="20"
-                      icon="tabler-plus"
-                    />
-                  </VBtn>
-                  <VBtn
-                    color="error"
-                    @click="removeSize(i)"
-                    icon
-                    v-if="sizeItems.length > 1"
-                  >
-                    <VIcon
-                      size="20"
-                      icon="tabler-trash"
-                    />
-                  </VBtn>
-                </VCol>
-              </VRow>
-            </div>
+            <ProductSizesEditor v-model="sizeItems" />
 
             <!-- Кнопки сохранения -->
             <VRow class="justify-end mt-4 mb-4">
@@ -483,6 +453,7 @@ function cancelEdit() {
             </VRow>
 
             <VDataTable :headers="productHeaders" :items="savedProducts">
+              <template #bottom></template>
               <template #[`item.sizes`]="{ item }">
                 <div v-for="(s, i) in item.sizes" :key="i">
                   {{ s.value }} ({{ s.quantity }}) - {{ s.barcode }}
