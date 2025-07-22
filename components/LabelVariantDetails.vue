@@ -2,11 +2,11 @@
 import { computed, defineExpose, defineProps, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useLabelEvents } from '../composables/useLabelBus';
 import { createProductSize, deleteProductSize, getProductSizes, updateProductSize } from '../services/productSizes';
-import type { ShortEntityParams } from '../types/label';
+import type { WbProduct } from '../types/product';
 import type { ProductSizeWithLabels } from '../types/productSize';
 
 interface Props {
-  product: ShortEntityParams
+  product: WbProduct
   name: string
   labelId: number
 }
@@ -47,7 +47,7 @@ const mapPS = (ps: ProductSizeWithLabels): ProductSizeWithLabels => ({
 
 watch(
   () => props.product,
-  (newProduct: ShortEntityParams) => {
+  (newProduct: WbProduct) => {
     if (newProduct?.id != null) {
       fetchSizes(newProduct.id)
     }
@@ -329,6 +329,6 @@ onUnmounted(() => {
   <UpdateChzLabel
     v-if="isLabelParent && props.product && props.product.id"
     v-model="showLabelDialog"
-    :productId="props.product.id"
+    :product="props.product"
   />
 </template>

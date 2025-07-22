@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import testImage from '@images/pages/testImage.png'
 import { onMounted, reactive, ref, toRaw, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '../../../composables/useApi'
@@ -189,6 +188,10 @@ function cancelEdit() {
     mode.value = 'view'
   }
 }
+
+function handlePlaceholderClick() {
+  console.log('Заглушка: клик по загрузке изображения');
+}
 </script>
 
 <template>
@@ -216,20 +219,22 @@ function cancelEdit() {
 
     <VRow>
       <VCol md="3">
-        <VCard>
-          <VImg
-            :src="testImage"
-            cover
-          />
+        <VCard
+          class="d-flex flex-column align-center justify-center"
+          style="height: 390px; border: 2px dashed #ccc; cursor: pointer;"
+          @click="handlePlaceholderClick"
+        >
+          <VIcon size="40" color="grey">tabler-files</VIcon>
+          <div class="text-h6 mt-2" style="color: grey;">
+            Место под фотографию
+          </div>
         </VCard>
       </VCol>
+
       <VCol md="9">
-        <VCard class="mb-6" title="Подробности">
+        <VCard class="mb-6">
           <VCardText>
             <VRow>
-              <VCol cols="12" md="6">
-                <AppTextField v-model="form.name" label="Название" outlined />
-              </VCol>
               <VCol cols="12" md="6">
                 <AppSelect
                   v-model="form.client_id"
@@ -240,25 +245,6 @@ function cancelEdit() {
                   placeholder="Выберите клиента"
                   clearable
                   outlined
-                />
-              </VCol>
-              <VCol cols="12" md="6">
-                <AppTextField v-model="form.color" label="Цвет" outlined />
-              </VCol>
-
-              <VCol cols="12" md="6">
-                <AppTextField
-                  label="Состав"
-                  placeholder="Хлопок 95%"
-                  v-model="form.composition"
-                />
-              </VCol>
-
-              <VCol cols="6">
-                <AppTextField
-                  label="Артикул товара"
-                  placeholder="FXSK123U"
-                  v-model="form.article"
                 />
               </VCol>
               <VCol cols="6">
@@ -272,6 +258,32 @@ function cancelEdit() {
                   clearable
                 />
               </VCol>
+            </VRow>
+          </VCardText>
+        </VCard>
+        <VCard class="mb-6">
+          <VCardText>
+            <VRow>
+              <VCol cols="12" md="6">
+                <AppTextField v-model="form.name" label="Название" outlined />
+              </VCol>
+              <VCol cols="6">
+                <AppTextField
+                  label="Артикул товара"
+                  placeholder="FXSK123U"
+                  v-model="form.article"
+                />
+              </VCol>
+              <VCol cols="12" md="6">
+                <AppTextField v-model="form.color" label="Цвет" outlined />
+              </VCol>
+              <VCol cols="12" md="6">
+                <AppTextField
+                  label="Состав"
+                  placeholder="Хлопок 95%"
+                  v-model="form.composition"
+                />
+              </VCol>
               <VCol cols="6">
                 <VSwitch
                   v-model="form.has_chestny_znak"
@@ -281,7 +293,7 @@ function cancelEdit() {
             </VRow>
           </VCardText>
         </VCard>
-        <VCard class="mb-6">
+        <VCard class="mb-6" v-if="form.id">
           <VCardText>
             <LabelVariantDetails
               v-if="form.id"
@@ -289,9 +301,6 @@ function cancelEdit() {
               :name="form.name"
               labelId="0"
             />
-
-            <!-- <ProductSizesEditor v-model="sizeItems" /> -->
-            <!-- <ProductSizeTable :productId="primaryId" /> -->
           </VCardText>
         </VCard>
       </VCol>

@@ -4,11 +4,11 @@ import { useLabelEvents } from '../../composables/useLabelBus';
 import { replaceProductSize } from '../../services/chz';
 import { getProducts } from '../../services/products';
 import { getProductSizes } from '../../services/productSizes';
-import type { ShortEntityParams } from '../../types/label';
+import type { WbProduct } from '../../types/product';
 
 interface Props {
   modelValue: boolean
-  productId: number
+  product: WbProduct
 }
 const props = defineProps<Props>()
 const emit  = defineEmits<{
@@ -25,10 +25,10 @@ interface ProductSize {
   available_labels_count: number
 }
 
-const sourceProducts = ref<ShortEntityParams[]>([])
-const targetProducts = ref<ShortEntityParams[]>([])
+const sourceProducts = ref<WbProduct[]>([])
+const targetProducts = ref<WbProduct[]>([])
 const labelCount              = ref<number>(1)
-const selectedSourceProductId = ref<number|null>(null)
+const selectedSourceProductId = ref<number>()
 const selectedSourceSizeId    = ref<number|null>(null)
 const selectedTargetProductId = ref<number|null>(null)
 const selectedTargetSizeId    = ref<number|null>(null)
@@ -55,7 +55,7 @@ watch(selectedSourceProductId, async (id) => {
 })
 
 async function fetchTargetProducts(clientId: number) {
-  const { data, error } = await getProducts(clientId)
+  const { data, error } = await getProducts(clientId, selectedSourceProductId.value)
   if (error.value) {
     console.error('Ошибка при загрузке целевых товаров:', error.value)
     return

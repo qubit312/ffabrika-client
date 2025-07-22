@@ -73,9 +73,24 @@ const handleDelete = async (id: number) => {
     const { error } = await deleteClient(id)
     if (error.value) throw error.value
     await fetchClients()
+    showSnackbarMessage('Клиент удален', 'success')
   } catch (e) {
     console.error('Ошибка удаления клиента:', e)
+    showSnackbarMessage('Произошла ошибка при удалении', 'error')
   }
+}
+
+const snackbar = ref({
+  visible: false,
+  color: 'success',
+  text: '',
+  timeout: 3000,
+})
+
+function showSnackbarMessage(message: string, color = 'success') {
+  snackbar.value.text = message
+  snackbar.value.color = color
+  snackbar.value.visible = true
 }
 
 onMounted(fetchClients)
@@ -205,6 +220,15 @@ onMounted(fetchClients)
     :confirmation-text="confirmationText"
     @confirm="deleteItemConfirm"
   />
+
+  <VSnackbar
+    v-model="snackbar.visible"
+    :color="snackbar.color"
+    :timeout="snackbar.timeout"
+    location="top right"
+  >
+    {{ snackbar.text }}
+  </VSnackbar>
 </template>
 
 <style scoped>

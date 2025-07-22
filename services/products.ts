@@ -15,10 +15,11 @@ export function updateProduct( dto: UpdateWbProductDto, id: number) {
   })
 }
 
-export function getProducts(clientId?: number, name?: string) {
+export function getProducts(clientId?: number, productId?: number, name?: string) {
   const params = new URLSearchParams()
 
   if (clientId) params.append('client_id', String(clientId))
+  if (productId) params.append('product_id', String(productId))
   if (name) params.append('name', name)
 
   return useApi<{ data: WbProduct[] }>(`/api/wb-products?${params.toString()}`, {

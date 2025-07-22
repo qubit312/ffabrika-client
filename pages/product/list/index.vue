@@ -63,7 +63,7 @@ const fetchClients = async () => {
 
 const fetchProducts = async () => {
   isLoading.value = true
-  const { data, error } = await getProducts(selectedClientId.value, searchQuery.value)
+  const { data, error } = await getProducts(selectedClientId.value, undefined, searchQuery.value)
   if (error.value) {
     console.error('Ошибка при загрузке товаров:', error.value)
     return
@@ -76,23 +76,50 @@ const handleDelete = async (id: number) => {
   try {
     const { error } = await deleteProduct(id)
     if (error.value) throw error.value
+
     await fetchProducts()
+    showSnackbarMessage('Товар удалён', 'success')
   } catch (err: any) {
     console.error('Ошибка при удалении товара:', err)
+    showSnackbarMessage('Произошла ошибка при удалении', 'error')
   }
+}
+
+const snackbar = ref({
+  visible: false,
+  color: 'success',
+  text: '',
+  timeout: 3000,
+})
+
+function showSnackbarMessage(message: string, color = 'success') {
+  snackbar.value.text = message
+  snackbar.value.color = color
+  snackbar.value.visible = true
 }
 
 const entities = computed<WbProduct[]>(() => entityData.value)
 const totalEntities = computed<number>(() => entities.value.length)
+const displayedClientId = computed({
+  get() {
+    const id = selectedClientId.value;
+    const exists = clients.value.some(c => c.id === id);
+    return exists ? id : undefined;
+  },
+  set(value) {
+    selectedClientId.value = value;
+  }
+});
 
 onMounted(async () => {
-  fetchProducts()
-  await fetchClients()
   const savedClientId = localStorage.getItem('selectedProductClientId');
   if (savedClientId) {
     selectedClientId.value = JSON.parse(savedClientId);
   }
-})
+
+  fetchProducts();
+  await fetchClients();
+});
 
 const handleClientChange = (newValue) => {
   localStorage.setItem('selectedProductClientId', JSON.stringify(newValue));
@@ -120,7 +147,7 @@ const handleClientChange = (newValue) => {
             clearable
           />
           <VSelect
-            v-model="selectedClientId"
+            v-model="displayedClientId"
             :items="clients"
             item-title="name"
             item-value="id"
@@ -218,4 +245,13 @@ const handleClientChange = (newValue) => {
     :confirmation-text="confirmationText"
     @confirm="deleteItemConfirm"
   />
+
+  <VSnackbar
+    v-model="snackbar.visible"
+    :color="snackbar.color"
+    :timeout="snackbar.timeout"
+    location="top right"
+  >
+    {{ snackbar.text }}
+  </VSnackbar>
 </template>

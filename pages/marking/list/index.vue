@@ -73,19 +73,31 @@ const handleDelete = async (id: number) => {
     const res = await removeLabel(id)
     console.log(res)
     await fetchLabels()
+    showSnackbarMessage('Этикетка удалена', 'success')
   } catch (err: any) {
     console.error('Ошибка при удалении этикетки:', err)
+    showSnackbarMessage('Произошла ошибка при удалении', 'error')
   }
 }
 
+const displayedClientId = computed({
+  get() {
+    const id = selectedClientId.value;
+    const exists = clients.value.some(c => c.id === id);
+    return exists ? id : undefined;
+  },
+  set(value) {
+    selectedClientId.value = value;
+  }
+});
+
 onMounted(async () => {
-  fetchLabels()
-  await fetchClients()
   const savedClientId = localStorage.getItem('selectedClientId');
   if (savedClientId) {
     selectedClientId.value = JSON.parse(savedClientId);
   }
-  
+  fetchLabels()
+  await fetchClients()
 })
 
 const handleClientChange = (newValue) => {
@@ -103,6 +115,19 @@ const fetchClients = async () => {
   }
 
   clients.value = data.value || []
+}
+
+const snackbar = ref({
+  visible: false,
+  color: 'success',
+  text: '',
+  timeout: 3000,
+})
+
+function showSnackbarMessage(message: string, color = 'success') {
+  snackbar.value.text = message
+  snackbar.value.color = color
+  snackbar.value.visible = true
 }
 </script>
 
@@ -125,7 +150,7 @@ const fetchClients = async () => {
             @update:modelValue="fetchLabels"
           />
           <VSelect
-            v-model="selectedClientId"
+            v-model="displayedClientId"
             :items="clients"
             item-title="name"
             item-value="id"
@@ -237,6 +262,15 @@ const fetchClients = async () => {
     :confirmation-text="confirmationText"
     @confirm="deleteItemConfirm"
   />
+
+  <VSnackbar
+    v-model="snackbar.visible"
+    :color="snackbar.color"
+    :timeout="snackbar.timeout"
+    location="top right"
+  >
+    {{ snackbar.text }}
+  </VSnackbar>
 </template>
 
 <style scoped>
