@@ -69,7 +69,7 @@ const searchProducts = (q: string) => {
 
 function applyNewCount() {
   if (newLabelCount.value != null && newLabelCount.value >= 0) {
-    loadedLabelCount.value    = newLabelCount.value
+    loadedLabelCount.value = newLabelCount.value
     showLoadLabelDialog.value = false
   }
 }
@@ -106,6 +106,7 @@ const fetchLabel = async (id: number) => {
       mode.value = 'edit'
     }
     loading.value = false
+    console.log(markingData.value)
   } catch (e) {
     console.error('Непредвиденная ошибка:', e)
     loading.value = false
@@ -233,27 +234,35 @@ const loading = ref(false)
         <VCard class="mb-6">
           <VCardText>
             <VRow>
-              <!-- <VCol cols="12" md="6">
-                <AppAutocomplete
-                  v-model="selectedProduct"
-                  :items="filteredProducts"
-                  item-title="name"
-                  item-value="id"
-                  searchable
-                  clearable
-                  return-object
-                  label="Товар"
-                  placeholder="Выберите товар"
-                  @update:search="searchProducts"
-                />
-              </VCol> -->
               <VCol cols="12" md="6">
-                <AppTextField
-                  label="Название для этикетки"
-                  placeholder="Введите название товара на этикетке"
-                  v-model="name"
-                />
+                <div class="d-flex align-center" style="gap: 8px">
+                  <AppAutocomplete
+                    v-model="selectedProduct"
+                    :items="filteredProducts"
+                    item-title="name"
+                    item-value="id"
+                    searchable
+                    readonly
+                    return-object
+                    label="Товар"
+                    placeholder="Выберите товар"
+                    @update:search="searchProducts"
+                    class="flex-grow-1"
+                  />
+                  <VBtn
+                    class="mt-6"
+                    v-if="selectedProduct"
+                    :to="{ name: 'product-details-id', params: { id: selectedProduct.id } }"
+                    icon
+                    variant="text"
+                    color="primary"
+                  >
+                    <VIcon>tabler-edit</VIcon>
+                    <VTooltip activator="parent" location="top">Перейти к товару</VTooltip>
+                  </VBtn>
+                </div>
               </VCol>
+              
               <!-- <VCol cols="12" md="6">
                 <VSwitch
                   class="mt-6"
@@ -262,13 +271,23 @@ const loading = ref(false)
                 />
               </VCol> -->
             </VRow>
+            <VRow>
+              <VCol cols="12" md="6">
+                <AppTextField
+                  label="Название для этикетки"
+                  placeholder="Введите название товара на этикетке"
+                  v-model="name"
+                />
+              </VCol>
+            </VRow>
           </VCardText>
         </VCard>
 
         <VCard class="mb-6">
           <VCardText>
             <LabelVariantDetails
-              :product="selectedProduct"
+              v-if="markingData?.product"
+              :product="markingData?.product"
               :name="name"
               :labelId="entityId"
             />

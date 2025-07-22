@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { getClients } from '../../../services/clients';
 import { getLabels, removeLabel } from '../../../services/labels';
+import type { Client } from '../../../types/client';
 import type { Label } from '../../../types/label';
 import AddNewProductDrawer from '../../../views/pages/product/list/AddNewProductDrawer.vue';
 
@@ -14,15 +16,17 @@ const headers = [
 const isDrawerOpen = ref(true)
 const isLoading = ref(false)
 const router = useRouter()
-const markingsData = ref<{ markings: Label[]; total: number }>({ markings: [], total: 0 })
+const clients = ref<Client[]>([])
+const selectedClientId = ref<number | undefined>()
+const labelsData = ref<{ labels: Label[]; total: number }>({ labels: [], total: 0 })
 const searchQuery     = ref<string>('')
 const isSearchFocused = ref<boolean>(false)
 const showCreateDialog = ref(false)
 const itemsPerPage = ref<number>(10)
 const page = ref<number>(1)
 
-const markings = computed<Label[]>(() => markingsData.value.markings)
-const totalMarkings = computed<number>(() => markingsData.value.total)
+const labels = computed<Label[]>(() => labelsData.value.labels)
+const totalLabels = computed<number>(() => labelsData.value.total)
 
 const deleteDialog = ref(false)
 const selectedDeleteId = ref<number | null>(null)
@@ -46,21 +50,21 @@ const deleteItemConfirm = async () => {
   selectedDeleteId.value = null
 }
 
-const fetchMarkings = async () => {
+const fetchLabels = async () => {
   isLoading.value = true
-  const { data, error } = await getLabels()
+  const { data, error } = await getLabels(selectedClientId.value, searchQuery.value?.trim())
   if (error.value) {
     console.error('Ошибка при загрузке этикеток', error.value)
     return
   }
 
   if (data.value) {
-    markingsData.value = {
-      markings: data.value.data,
+    labelsData.value = {
+      labels: data.value.data,
       total:    data.value.total,
     }
   }
-  console.log(data.value.data)
+
   isLoading.value = false
 }
 
@@ -68,15 +72,38 @@ const handleDelete = async (id: number) => {
   try {
     const res = await removeLabel(id)
     console.log(res)
-    await fetchMarkings()
+    await fetchLabels()
   } catch (err: any) {
     console.error('Ошибка при удалении этикетки:', err)
   }
 }
 
-onMounted(() => {
-  fetchMarkings()
+onMounted(async () => {
+  fetchLabels()
+  await fetchClients()
+  const savedClientId = localStorage.getItem('selectedClientId');
+  if (savedClientId) {
+    selectedClientId.value = JSON.parse(savedClientId);
+  }
+  
 })
+
+const handleClientChange = (newValue) => {
+  localStorage.setItem('selectedClientId', JSON.stringify(newValue));
+  console.log(JSON.stringify(newValue))
+  fetchLabels();
+};
+
+const fetchClients = async () => {
+  const { data, error } = await getClients()
+  
+  if (error.value) {
+    console.error('Ошибка при загрузке клиентов:', error.value)
+    return
+  }
+
+  clients.value = data.value || []
+}
 </script>
 
 <template>
@@ -94,25 +121,28 @@ onMounted(() => {
             placeholder="Введите название"
             style="inline-size: 200px;"
             class="me-3"
-            @focus="isSearchFocused = true"
-            @blur="isSearchFocused = false"
             clearable
+            @update:modelValue="fetchLabels"
           />
-          <div v-if="isSearchFocused" class="development-note">
-            Функция поиска ещё в разработке
-          </div>
+          <VSelect
+            v-model="selectedClientId"
+            :items="clients"
+            item-title="name"
+            item-value="id"
+            label="Клиент"
+            clearable
+            style="inline-size: 200px;"
+            class="me-3"
+            @update:modelValue="handleClientChange"
+          />
         </div>
 
         <VSpacer />
         <div class="d-flex gap-4 flex-wrap align-center">
-          <AppSelect
-            v-model="itemsPerPage"
-            :items="[5, 10, 20, 25, 50]"
-          />
           <!-- <VBtn
             color="primary"
             prepend-icon="tabler-box"
-            @click="router.push({ name: 'marking-details-id', params: { id: 0 } })"
+            @click="router.push({ name: 'label-details-id', params: { id: 0 } })"
           >
             По существующему товару
           </VBtn> -->
@@ -129,12 +159,10 @@ onMounted(() => {
 
       <VDivider class="mt-4" />
       <VDataTableServer
-        v-model:items-per-page="itemsPerPage"
-        v-model:page="page"
         :headers="headers"
         show-select
-        :items="markings"
-        :items-length="totalMarkings"
+        :items="labels"
+        :items-length="totalLabels"
         class="text-no-wrap"
         :loading="isLoading"
       >
@@ -188,7 +216,7 @@ onMounted(() => {
           <TablePagination
             v-model:page="page"
             :items-per-page="itemsPerPage"
-            :total-items="totalMarkings"
+            :total-items="totalLabels"
           />
         </template>
       </VDataTableServer>
@@ -197,11 +225,11 @@ onMounted(() => {
   
   <!-- <CreateProductDialog
     v-model="showCreateDialog"
-    @created="fetchMarkings"
+    @created="fetchLabels"
   /> -->
   <AddNewProductDrawer
     v-model:isDrawerOpen="showCreateDialog"
-    @created="fetchMarkings"
+    @created="fetchLabels"
   />
   
   <ConfirmDeleteDialog

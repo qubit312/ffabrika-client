@@ -129,22 +129,8 @@ async function onSubmit() {
           <h4 class="text-h4 mb-1">
             С возвращением на <span class="text-capitalize"> {{ themeConfig.app.title }} </span>! 👋🏻
           </h4>
-          <p class="mb-0">
-            Пожалуйста введите данные для входа. Подсказка: 
-          </p>
         </VCardText>
-
-        <VCardText>
-          <VAlert
-            color="primary"
-            variant="tonal"
-          >
-            <p class="text-sm mb-2">
-              Admin Email: <strong>admin@test.com</strong> / Пароль: <strong>admin</strong>
-            </p>
-          </VAlert>
-        </VCardText>
-
+        
         <VCardText>
           <VForm @submit.prevent="onSubmit">
             <VRow>

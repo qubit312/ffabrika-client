@@ -33,6 +33,9 @@ const deleteConfirmationQuestion = computed(() => {
 })
 const showLabelDialog = ref(false)
 const isDialogVisible = ref(false);
+const isLabelParent = computed(() => {
+  return props.labelId
+})
 
 const mapPS = (ps: ProductSizeWithLabels): ProductSizeWithLabels => ({
   id: ps.id,
@@ -63,6 +66,7 @@ const fetchSizes = async (productId: number) => {
 
 const saveVariant = async () => {
   try {
+    console.log(props)
     if (!props.product?.id) {
       console.error('saveVariant: product не определён')
       return
@@ -157,12 +161,6 @@ function onLabelsUpdated() {
   }
 }
 
-const handleRefresh = () => {
-  if (props.product?.id != null) {
-    fetchSizes(props.product.id)
-  }
-}
-
 onMounted(() => {
   if (props.product?.id != null) {
     fetchSizes(props.product.id)
@@ -207,7 +205,7 @@ onUnmounted(() => {
           </template>
           <span>Редактировать</span>
         </VTooltip>
-        <VTooltip open-delay="600">
+        <VTooltip open-delay="600" v-if="isLabelParent">
           <template #activator="{ props }">
             <IconBtn
               v-bind="props"
@@ -222,7 +220,7 @@ onUnmounted(() => {
         </VTooltip>
         <VTooltip open-delay="600">
           <template #activator="{ props }"> 
-            <IconBtn v-bind="props" @click="showLabelDialog = true">
+            <IconBtn v-if="isLabelParent" v-bind="props" @click="showLabelDialog = true">
               <VIcon icon="tabler-arrows-shuffle" />
             </IconBtn>
           </template>
@@ -319,7 +317,7 @@ onUnmounted(() => {
     </VCard>
   </VDialog>
   <PrintLabelDialog
-    v-if="currentItem"
+    v-if="isLabelParent && currentItem"
     v-model:visible="isDialogVisible"
     :name="props.name ?? ''"
     :sizeId="currentItem.id"
@@ -329,7 +327,7 @@ onUnmounted(() => {
     :labelId="props.labelId"
   />
   <UpdateChzLabel
-    v-if="props.product && props.product.id"
+    v-if="isLabelParent && props.product && props.product.id"
     v-model="showLabelDialog"
     :productId="props.product.id"
   />

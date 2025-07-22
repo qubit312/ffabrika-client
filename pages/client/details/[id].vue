@@ -313,6 +313,16 @@ function cancelEdit() {
     mode.value = 'view'
   }
 }
+
+const addSize = () => {
+  sizeItems.value.push({ value: '', quantity: 0, barcode: '' })
+}
+
+const removeSize = (idx: number) => {
+  if (sizeItems.value.length > 1) {
+    sizeItems.value.splice(idx, 1)
+  }
+}
 </script>
 
 <template>
@@ -442,7 +452,29 @@ function cancelEdit() {
 
             <VDivider class="my-4" />
 
-            <ProductSizesEditor v-model="sizeItems" />
+          <div v-for="(item, i) in sizeItems" :key="i">
+            <VRow class="align-center">
+              <VCol cols="4">
+                <VTextField v-model="item.barcode" label="Баркод" />
+              </VCol>
+              <VCol cols="3">
+                <VTextField v-model="item.value" label="Размер" />
+              </VCol>
+              <VCol cols="2" class="d-flex justify-center">
+                <VBtn class="me-4" icon color="primary" @click="addSize">
+                  <VIcon size="20" icon="tabler-plus" />
+                </VBtn>
+                <VBtn
+                  icon
+                  color="error"
+                  @click="removeSize(i)"
+                  v-if="sizeItems.length > 1"
+                >
+                  <VIcon size="20" icon="tabler-trash" />
+                </VBtn>
+              </VCol>
+            </VRow>
+          </div>
 
             <!-- Кнопки сохранения -->
             <VRow class="justify-end mt-4 mb-4">
@@ -453,6 +485,7 @@ function cancelEdit() {
             </VRow>
 
             <VDataTable :headers="productHeaders" :items="savedProducts">
+              <template #no-data></template>
               <template #bottom></template>
               <template #[`item.sizes`]="{ item }">
                 <div v-for="(s, i) in item.sizes" :key="i">
@@ -468,9 +501,14 @@ function cancelEdit() {
                     <VIcon>tabler-point</VIcon>
                   </VBtn>
                 </RouterLink> -->
-                <VBtn icon color="error" @click="handleDelete(item.id)">
+                <RouterLink :to="{ name: 'product-details-id', params: { id: item.id } }">
+                  <IconBtn class="me-2" icon>
+                    <VIcon size="20" icon="tabler-eye" />
+                  </IconBtn>
+                </RouterLink>
+                <IconBtn icon color="error" @click="handleDelete(item.id)">
                   <VIcon size="20" icon="tabler-trash" />
-                </VBtn>
+                </IconBtn>
               </template>
             </VDataTable>
           </VCardText>

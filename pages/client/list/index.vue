@@ -108,10 +108,10 @@ onMounted(fetchClients)
 
         <VSpacer />
         <div class="d-flex gap-4 flex-wrap align-center">
-          <AppSelect
+          <!-- <AppSelect
             v-model="itemsPerPage"
             :items="[5, 10, 20, 25, 50]"
-          />
+          /> -->
           <VBtn
             color="primary"
             prepend-icon="tabler-plus"
@@ -125,8 +125,6 @@ onMounted(fetchClients)
       <VDivider class="mt-4" />
 
       <VDataTableServer
-        v-model:items-per-page="itemsPerPage"
-        v-model:page="page"
         :headers="headers"
         show-select
         :items="clients"

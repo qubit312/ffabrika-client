@@ -8,9 +8,14 @@ export async function getLabel(id: number) {
   })
 }
 
-export async function getLabels () {
-  return await useApi<LabelsResponse>(`/api/labels`, {
-    method: 'GET'
+export async function getLabels (clientId?: number, name?: string) {
+  const params = new URLSearchParams()
+
+  if (clientId) params.append('client_id', String(clientId))
+  if (name) params.append('name', name)
+
+  return await useApi<LabelsResponse>(`/api/labels?${params.toString()}`, {
+    method: 'GET',
   })
 }
 

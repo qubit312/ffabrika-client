@@ -189,13 +189,6 @@ function cancelEdit() {
     mode.value = 'view'
   }
 }
-
-const sizeHeaders = [
-  { title: 'Баркод', key: 'barcode', sortable: false },
-  { title: 'Размер', key: 'value', sortable: false },
-  { title: 'Кол-во Честных знаков', key: 'available_labels_count', sortable: false },
-  { key: 'actions', sortable: false }
-];
 </script>
 
 <template>
@@ -290,8 +283,15 @@ const sizeHeaders = [
         </VCard>
         <VCard class="mb-6">
           <VCardText>
+            <LabelVariantDetails
+              v-if="form.id"
+              :product="form"
+              :name="form.name"
+              labelId="0"
+            />
+
             <!-- <ProductSizesEditor v-model="sizeItems" /> -->
-            <ProductSizeTable :productId="primaryId" />
+            <!-- <ProductSizeTable :productId="primaryId" /> -->
           </VCardText>
         </VCard>
       </VCol>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { getProductSizes } from '../services/productSizes'
+import { deleteProductSize, getProductSizes } from '../services/productSizes'
 import type { ProductSizeWithLabels } from '../types/productSize'
 
 const productSizeList = ref<ProductSizeWithLabels[]>([])
@@ -61,10 +61,21 @@ const deleteItem = (item: ProductSizeWithLabels) => {
   deleteDialog.value = true
 }
 
-const deleteItemConfirm = () => {
-  productSizeList.value = productSizeList.value.filter(p => p.id !== deleteItemId.value)
-  deleteDialog.value = false
-  deleteItemId.value = null
+const deleteItemConfirm = async () => {
+  if (!deleteItemId.value) {
+    return;
+  }
+
+  try {
+    const { error } = await deleteProductSize(deleteItemId.value)
+    if (error.value) throw error.value
+
+    productSizeList.value = productSizeList.value.filter(p => p.id !== deleteItemId.value)
+    deleteDialog.value = false
+    deleteItemId.value = null
+  } catch (e: any) {
+    console.error('Ошибка удаления:', e)
+  }
 }
 
 const closeEdit = () => {
@@ -77,10 +88,30 @@ const closeDelete = () => {
   deleteItemId.value = null
 }
 
+const addItem = () => {
+  editedIndex.value = null
+  editedItem.value = { id: 0, value: '', barcode: '', available_labels_count: 0, product_id: 0 }
+  editDialog.value = true
+}
+
 const deleteConfirmationQuestion = 'Вы уверены, что хотите удалить этот размер?'
 </script>
 
 <template>
+  <div class="d-flex align-center mb-4">
+    <h2 class="text-h5 ma-0">Размеры</h2>
+
+    <VBtn
+      class="ms-2"
+      icon
+      size="small"
+      variant="text"
+      @click="addItem"
+    >
+      <VIcon icon="tabler-plus" />
+    </VBtn>
+  </div>
+
   <VDataTable
     :headers="sizeHeaders"
     :items="productSizeList"

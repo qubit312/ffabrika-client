@@ -85,10 +85,20 @@ const handleDelete = async (id: number) => {
 const entities = computed<WbProduct[]>(() => entityData.value)
 const totalEntities = computed<number>(() => entities.value.length)
 
-onMounted(() => {
+onMounted(async () => {
   fetchProducts()
-  fetchClients()
+  await fetchClients()
+  const savedClientId = localStorage.getItem('selectedProductClientId');
+  if (savedClientId) {
+    selectedClientId.value = JSON.parse(savedClientId);
+  }
 })
+
+const handleClientChange = (newValue) => {
+  localStorage.setItem('selectedProductClientId', JSON.stringify(newValue));
+  console.log(JSON.stringify(newValue))
+  fetchProducts();
+};
 
 </script>
 
@@ -118,16 +128,12 @@ onMounted(() => {
             clearable
             style="inline-size: 200px;"
             class="me-3"
-            @update:modelValue="fetchProducts"
+            @update:modelValue="handleClientChange"
           />
         </div>
 
         <VSpacer />
         <div class="d-flex gap-4 flex-wrap align-center">
-          <AppSelect
-            v-model="itemsPerPage"
-            :items="[5, 10, 20, 25, 50]"
-          />
           <VBtn
             color="primary"
             prepend-icon="tabler-plus"
@@ -141,8 +147,6 @@ onMounted(() => {
       <VDivider class="mt-4" />
 
       <VDataTableServer
-        v-model:items-per-page="itemsPerPage"
-        v-model:page="page"
         :headers="headers"
         show-select
         :items="entities"
