@@ -4,7 +4,6 @@ import { PerfectScrollbar } from 'vue3-perfect-scrollbar'
 import type { VForm } from 'vuetify/components/VForm'
 import { categoryOptions } from '../../../../constants/productCategories'
 import { getClients } from '../../../../services/clients'
-import { createLabel } from '../../../../services/labels'
 import { createProduct } from '../../../../services/products'
 import type { Client } from '../../../../types/client'
 import type { CreateWbProductDto } from '../../../../types/product'
@@ -59,18 +58,9 @@ const onSubmit = async () => {
     
     if (!product?.data?.value?.id) throw new Error('Ошибка при создании товара')
 
-    const label = await createLabel({
-      product_id: product.data.value.id,
-      name: product.data.value.name,
-      has_chestny_znak: false,
-    })
-    const labelId = label?.data?.value?.id
-    if (!labelId) throw new Error('Ошибка при создании этикетки')
-
     emit('created')
     emit('update:isDrawerOpen', false)
     resetForm()
-    router.push({ name: 'marking-details-id', params: { id: labelId } })
   } catch (e) {
     console.error(e)
   }

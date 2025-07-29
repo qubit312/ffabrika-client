@@ -11,6 +11,7 @@ export interface WbProduct {
   has_chestny_znak: boolean
   category: string
   client_id: number | null
+  productSizes?: { value: string, barcode: string }[];
 }
 
 export interface CreateWbProductDto {

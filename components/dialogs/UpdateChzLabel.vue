@@ -38,6 +38,7 @@ watch(dialog, v => emit('update:modelValue', v))
 
 watch(selectedSourceProductId, async (id) => {
   selectedSourceSizeId.value = null
+  selectedTargetProductId.value = null
   sourceSizes.value = []
 
   if (id != null) {

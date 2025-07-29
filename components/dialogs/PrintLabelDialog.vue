@@ -2,9 +2,11 @@
 import barcodeEAN13 from '@/assets/images/barcode/barcode-ean13.png';
 import datamatrix from '@/assets/images/barcode/datamatrix.png';
 import CzLogo from '@/assets/images/logos/cz-logo.png';
-import { computed, defineEmits, defineProps, ref } from 'vue';
+import { computed, defineEmits, defineProps, onMounted, ref } from 'vue';
 import { useLabelEvents } from '../../composables/useLabelBus';
+import { createPrinter, getPrinter, getPrinters, syncPrinterCount, updatePrinter } from '../../services/printers';
 import type { ShortEntityParams } from '../../types/label';
+import type { CreatePrinterDto, Printer } from '../../types/printer';
 
 interface Props {
   sizeId: number
@@ -28,20 +30,25 @@ const emit = defineEmits<{
 const snackbar     = ref(false)
 const snackMessage = ref('')
 const snackColor   = ref<'success'|'error'>('success')
-
-const includeSHK  = ref(false)
+const selectedTemplate = ref<'1'|'2'|'3'>('1')
 const duplicateDM = ref(false)
-const duplicateSHK = ref(false)
+const selectedSHK = ref<null | 'include' | 'duplicate'>(null)
 
 const labelCount = ref<number>(1)
-const loadedLabelInPrinterCount = ref<number>(5)
+const loadedLabelInPrinterCount = ref<number>(0)
 const availableLabelsCount = computed(() => props.availableLabelsCount)
 const loading = ref(false)
 const labelError = computed(() => !labelCount.value || labelCount.value <= 0)
 
-const isLowloadedLabelInPrinterCount= computed(() => 
-  loadedLabelInPrinterCount.value < 10
+const isLowloadedLabelInPrinterCount = computed(() => {
+  const warning_threshold = selectedPrinter.value?.warning_threshold
+    if (warning_threshold) {
+      return loadedLabelInPrinterCount.value < warning_threshold
+    }
+    return loadedLabelInPrinterCount.value < 0
+  }
 )
+
 const isLowAvailableLabelsCount = computed(() => 
   availableLabelsCount.value <= 0
 )
@@ -61,6 +68,11 @@ function showSnackbar(message: string, isSuccess: boolean) {
 }
 
 async function downloadFile() {
+  if (!selectedPrinterId.value) { 
+    showSnackbar("Выберете принтер", false)
+    return
+  }
+
   if (labelError.value || isLowAvailableLabelsCount.value) {
     let errorMessage = labelError.value
       ? 'Введите число больше 0'
@@ -71,25 +83,25 @@ async function downloadFile() {
 
   loading.value = true
   if (labelCount.value == null || labelCount.value == 0) {
-    console.error('labelCount is null or empty')
+    console.error('Укажите количество этикеток')
     return
   }
 
   const payload = {
+    printerId: selectedPrinterId.value,
     labelId: props.labelId,
     sizeId: props.sizeId,
     quantity: labelCount.value,
-    includeDM: false,
-    includeSHK: false,
-    duplicateDM: false,
-  }
-
-  if (selectedTemplate.value === '2') {
-    payload.includeSHK = true;
-  } else {
-    payload.includeDM = true;
-    payload.includeSHK = includeSHK.value;
-    payload.duplicateDM = duplicateDM.value;
+    includeDM: selectedTemplate.value === '1',
+    includeSHK: selectedTemplate.value === '2'
+      ? true
+      : selectedSHK.value === 'include',
+    duplicateSHK: selectedTemplate.value === '2'
+      ? false
+      : selectedSHK.value === 'duplicate',
+    duplicateDM: selectedTemplate.value === '2'
+      ? false
+      : duplicateDM.value,
   }
 
   const token = localStorage.getItem('access_token') || ''
@@ -100,15 +112,22 @@ async function downloadFile() {
     const response = await fetch(baseURL + `/api/chestny-znak-labels/download-pdf`, {
       method: 'POST',
       headers: {
-        'Accept': 'application/pdf',
+        'Accept': 'application/json',
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify(payload),
     })
 
+    const contentType = response.headers.get('Content-Type')
     if (!response.ok) {
-      throw new Error(`Сервер вернул ${response.status}`)
+      if (contentType?.includes('application/json')) {
+        const errorData = await response.json()
+        showSnackbar(errorData.message || 'Произошла ошибка при генерации PDF', false)
+        throw new Error(errorData.message || 'Неизвестная ошибка')
+      } else {
+        throw new Error(`Сервер вернул ${response.status}`)
+      }
     }
 
     const blob = await response.blob()
@@ -116,18 +135,22 @@ async function downloadFile() {
     const link = document.createElement('a')
     link.href = url
     
-    const date = new Date().toISOString().slice(0,10)
-    const safeName = props.name.replace(/\s+/g,'_')
-    const safeSize = props.size.replace(/\s+/g,'_')
-    link.download = `${safeName}_${safeSize}_${date}.pdf`
+    const now = new Date()
+    const pad = (n: number) => n.toString().padStart(2, '0')
+    const ms = now.getMilliseconds().toString().padStart(3, '0')
+
+    const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}-${ms}`
+
+    const safeName = props.name.replace(/\s+/g, '_')
+    const safeSize = props.size.replace(/\s+/g, '_')
+    link.download = `${safeName}_${safeSize}_${dateStr}.pdf`
 
     document.body.appendChild(link)
     link.click()
     link.remove()
     URL.revokeObjectURL(url)
-
   } catch (err: any) {
-    console.error('Ошибка при скачивании PDF:', err)
+    showSnackbar(err.message || 'Произошла непредвиденная ошибка', false)
   } finally {
     onLabelsUpdated()
     loading.value = false
@@ -135,20 +158,125 @@ async function downloadFile() {
   }
 }
 
-const selectedTemplate = ref<'1'|'2'|'3'>('1')
+const dialog = ref(false)
+const isEditMode = ref(false)
+const editingId = ref<number | null>(null)
+const printers = ref<Printer[]>([])
+const selectedPrinter = ref<Printer | null>(null)
+const selectedPrinterId = ref<number | null>(null)
+
+const form = ref<CreatePrinterDto>({
+  name: '',
+  labels_count: 0,
+  capacity: 1,
+  warning_threshold: 0,
+})
+
+async function fetchPrinters() {
+  const { data, error } = await getPrinters()
+  if (data.value) {
+    printers.value = data.value.data
+  } else {
+    console.error('Ошибка при загрузке принтеров', error.value)
+  }
+}
+
+async function openDialog(id?: number | null) {
+  dialog.value = true
+  if (id) {
+    const { data, error } = await getPrinter(id);
+    const printer = data.value;
+    form.value = {
+      name: printer.name,
+      labels_count: printer.labels_count,
+      capacity: printer.capacity,
+      warning_threshold: printer.warning_threshold,
+    }
+    editingId.value = printer.id
+    isEditMode.value = true
+  } else {
+    form.value = {
+      name: '',
+      labels_count: 0,
+      capacity: 1,
+      warning_threshold: 0,
+    }
+  }
+}
+
+async function submitPrinter() {
+  const dto = { ...form.value }
+
+  if (isEditMode.value && editingId.value) {
+    const { data, error } = await updatePrinter(editingId.value, dto)
+    if (data.value) {
+      selectedPrinter.value = data.value.data     
+      showSnackbar("Успешно сохранено", true)
+    } else {
+      console.error(error.value.data)
+      const errorMessage = error?.value?.data?.message;
+      showSnackbar(!errorMessage ? "Произошла ошибка при сохранении" : errorMessage, false)
+      return
+    }
+  } else {
+    const { data, error } = await createPrinter(dto)
+    if (data.value) {
+      showSnackbar("Успешно сохранено", true)
+    } else {
+      console.error(error.value.data)
+      const errorMessage = error?.value?.data?.message;
+      showSnackbar(!errorMessage ? "Произошла ошибка при сохранении" : errorMessage, false)
+      return
+    }
+  }
+  fetchPrinters()
+  dialog.value = false
+}
+
+async function onPrinterSelect(id: number) {
+  const { data, error } = await getPrinter(id);
+  selectedPrinter.value = data.value
+  loadedLabelInPrinterCount.value = data.value.labels_count
+}
+
+async function refreshPrinterCount() {
+  if (!selectedPrinter.value || !selectedPrinterId.value) {
+    showSnackbar("Сначала выберите принтер", false)
+    return
+  }
+
+  try {
+    const { data, error } = await syncPrinterCount(selectedPrinterId.value)
+    
+    if (data.value) {
+      showSnackbar("Количество этикеток обновлено", true)
+      loadedLabelInPrinterCount.value = data.value.labels_count
+      await fetchPrinters()
+    } else {
+      console.error(error.value)
+      showSnackbar("Ошибка при обновлении количества", false)
+    }
+  } catch (err) {
+    console.error(err)
+    showSnackbar("Ошибка при выполнении запроса", false)
+  }
+}
+
+
+onMounted(fetchPrinters)
 </script>
 
 <template>
   <VDialog
     v-model="props.visible"
-    max-width="850"
+    max-width="750"
   >
     <DialogCloseBtn @click="close" />
     <VCard title="Форма печати">
       <VCardText>
         <VRow>
           <VCol cols="5">
-            <VRadioGroup v-model="selectedTemplate" class="mt-8">
+            <VRadioGroup v-model="selectedTemplate">
               <VRadio value="1" class="radio-card mb-4">
                 <template #label>
                   <div>
@@ -274,9 +402,9 @@ const selectedTemplate = ref<'1'|'2'|'3'>('1')
           </VCol>
 
           <VCol cols="7">
-            <VRow>
+            <VRow align="center">
               <VCol cols="6">
-                <VLabel class="mb-1 text-body-2 text-high-emphasis">Количество</VLabel>
+                <VLabel class="text-body-4 text-high-emphasis">Количество</VLabel>
               </VCol>
               <VCol cols="6">
                 <AppTextField
@@ -290,38 +418,11 @@ const selectedTemplate = ref<'1'|'2'|'3'>('1')
             
             <VRow>
               <VCol cols="6">
-                <span class="mb-1 text-body-2 text-high-emphasis">Количество этикеток в принтере</span>
-              </VCol>
-              <VCol cols="6">
-                <AppTextField
-                  :model-value="loadedLabelInPrinterCount"
-                  readonly
-                  :error="isLowloadedLabelInPrinterCount"
-                  :error-messages="isLowloadedLabelInPrinterCount ? ['Мало этикеток в принтере'] : []"
-                />
-              </VCol>
-            </VRow>
-
-            <VRow>
-              <VCol cols="6">
-                <span class="mb-1 text-body-2 text-high-emphasis">Доступно честных знаков</span>
-              </VCol>
-              <VCol cols="6">
-                <AppTextField
-                  :model-value="availableLabelsCount"
-                  readonly
-                  :error="isLowAvailableLabelsCount"
-                  :error-messages="isLowAvailableLabelsCount ? ['Недостаточно ЧЗ'] : []"
-                />
-              </VCol>
-            </VRow>
-            
-            <VRow>
-              <VCol cols="6">
                 <VSwitch
                   v-if="selectedTemplate === '1'"
-                  v-model="includeSHK"
-                  label="Печать ШК EAN-13"
+                  label="Печать 1 ШК"
+                  :model-value="selectedSHK === 'include'"
+                  @update:modelValue="val => selectedSHK = val ? 'include' : (selectedSHK === 'include' ? null : selectedSHK)"
                 />
               </VCol>
               <VCol cols="6">
@@ -335,10 +436,120 @@ const selectedTemplate = ref<'1'|'2'|'3'>('1')
 
             <VCol class="ps-0" cols="12">
               <VSwitch
-                v-if="includeSHK && selectedTemplate === '1'"
-                v-model="duplicateSHK"
-                label="Дублировать ШК"
+                v-if="selectedTemplate === '1'"
+                label="Печать 2 ШК"
+                :model-value="selectedSHK === 'duplicate'"
+                @update:modelValue="val => selectedSHK = val ? 'duplicate' : (selectedSHK === 'duplicate' ? null : selectedSHK)"
               />
+            </VCol>
+
+            <VCol class="pa-4" style="border-radius: 12px; border: 1px solid #e0e0e0;">
+              <VList class="card-list">
+                <VListItem>
+                  <template #prepend>
+                    <VAvatar
+                      size="34"
+                      color="primary"
+                      variant="tonal"
+                      class="me-1"
+                      rounded
+                    >
+                      <VIcon icon="tabler-wallet" size="22" />
+                    </VAvatar>
+                  </template>
+                  
+                  <div class="d-flex">
+                    <VSelect
+                      v-model="selectedPrinterId"
+                      :items="printers"
+                      item-title="name"
+                      item-value="id"
+                      placeholder="Выберете принтер"
+                      hide-details
+                      variant="plain"
+                      style="max-width: 165px"
+                      @update:model-value="onPrinterSelect"
+                    >
+                      <template #no-data>
+                        <div class="d-flex align-center justify-space-between">
+                          <span class="text-medium-emphasis">Принтеры не найдены</span>
+                          <VBtn
+                            icon
+                            variant="text"
+                            size="small"
+                            color="primary"
+                            @click="openDialog()"
+                          >
+                            <VIcon icon="tabler-plus" />
+                          </VBtn>
+                        </div>
+                      </template>
+                    </VSelect>
+
+                    <VBtn
+                      icon
+                      variant="text"
+                      @click="openDialog(selectedPrinterId)"
+                      :disabled="!selectedPrinterId"
+                    >
+                      <VIcon icon="tabler-edit" />
+                    </VBtn>
+                  </div>
+                  <VListItemSubtitle>Количество этикеток в принтере</VListItemSubtitle>
+
+                  <template #append>
+                    <div class="d-flex align-center">
+                      <VTextField
+                        style="width: 65px;"
+                        :model-value="loadedLabelInPrinterCount"
+                        readonly
+                        density="compact"
+                        :class="[
+                          'font-weight-medium',
+                          isLowloadedLabelInPrinterCount ? 'text-error' : 'text-default'
+                        ]"
+                      />
+
+                      <VTooltip open-delay="400">
+                        <template #activator="{ props }">
+                          <VBtn
+                            icon
+                            variant="text"
+                            @click="refreshPrinterCount"
+                            :disabled="!selectedPrinterId || (loadedLabelInPrinterCount == selectedPrinter?.capacity)"
+                          >
+                            <VIcon v-bind="props" icon="tabler-repeat" />
+                          </VBtn>
+                        </template>
+                        <span>Обновить количество на {{ selectedPrinter?.capacity }}</span>
+                      </VTooltip>
+                    </div>
+                  </template>
+                </VListItem>
+
+                <VListItem>
+                  <template #prepend>
+                    <VAvatar
+                      size="34"
+                      color="success"
+                      variant="tonal"
+                      class="me-1"
+                      rounded
+                    >
+                      <VIcon icon="tabler-building-bank" size="22" />
+                    </VAvatar>
+                  </template>
+
+                  <VListItemTitle class="font-weight-medium">ЧЗ</VListItemTitle>
+                  <VListItemSubtitle>Доступно честных знаков</VListItemSubtitle>
+
+                  <template #append>
+                    <span :class="[isLowAvailableLabelsCount ? 'text-error' : 'text-success', 'font-weight-medium']">
+                      {{ availableLabelsCount }}
+                    </span>
+                  </template>
+                </VListItem>
+              </VList>
             </VCol>
           </VCol>
         </VRow>
@@ -367,6 +578,44 @@ const selectedTemplate = ref<'1'|'2'|'3'>('1')
       {{ snackMessage }}
     </VSnackbar>
   </template>
+
+  <VDialog v-model="dialog" max-width="500">
+    <VCard>
+      <VCardTitle class="text-h6">
+        {{ isEditMode ? 'Редактировать принтер' : 'Создать принтер' }}
+      </VCardTitle>
+
+      <VCardText class="d-flex flex-column gap-3">
+        <AppTextField
+          v-model="form.name"
+          label="Название принтера"
+          required
+        />
+        
+        <AppTextField
+          v-model.number="form.capacity"
+          label="Вместимость"
+          type="number"
+          min="1"
+        />
+
+        <AppTextField
+          v-model.number="form.warning_threshold"
+          label="Порог предупреждения"
+          type="number"
+          min="0"
+        />
+      </VCardText>
+
+      <VCardActions>
+        <VSpacer />
+        <VBtn text @click="dialog = false">Отмена</VBtn>
+        <VBtn color="primary" @click="submitPrinter">
+          {{ isEditMode ? 'Сохранить' : 'Создать' }}
+        </VBtn>
+      </VCardActions>
+    </VCard>
+  </VDialog>
 </template>
 
 

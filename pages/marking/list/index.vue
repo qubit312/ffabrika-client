@@ -71,7 +71,6 @@ const fetchLabels = async () => {
 const handleDelete = async (id: number) => {
   try {
     const res = await removeLabel(id)
-    console.log(res)
     await fetchLabels()
     showSnackbarMessage('Этикетка удалена', 'success')
   } catch (err: any) {
@@ -248,10 +247,6 @@ function showSnackbarMessage(message: string, color = 'success') {
     </VCard>
   </div>
   
-  <!-- <CreateProductDialog
-    v-model="showCreateDialog"
-    @created="fetchLabels"
-  /> -->
   <AddNewProductDrawer
     v-model:isDrawerOpen="showCreateDialog"
     @created="fetchLabels"

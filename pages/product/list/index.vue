@@ -2,7 +2,7 @@
 import { useDebounce } from '@vueuse/core';
 import { computed, onMounted, ref, watch } from 'vue';
 import { getClients } from '../../../services/clients';
-import { deleteProduct, getProducts } from '../../../services/products';
+import { deleteProduct, getProductsWithSizes } from '../../../services/products';
 import type { Client } from '../../../types/client';
 import type { WbProduct } from '../../../types/product';
 
@@ -12,6 +12,7 @@ const headers = [
   { title: 'Название', key: 'name', sortable: false },
   { title: 'Артикул', key: 'article', sortable: false },
   { title: 'Цвет', key: 'color', sortable: false },
+  { title: 'Размеры', key: 'sizes', sortable: false },
   { title: '', key: 'actions', sortable: false },
 ]
 
@@ -63,11 +64,12 @@ const fetchClients = async () => {
 
 const fetchProducts = async () => {
   isLoading.value = true
-  const { data, error } = await getProducts(selectedClientId.value, undefined, searchQuery.value)
+  const { data, error } = await getProductsWithSizes(selectedClientId.value, searchQuery.value)
   if (error.value) {
     console.error('Ошибка при загрузке товаров:', error.value)
     return
   }
+  console.log(data.value)
   entityData.value = data.value
   isLoading.value = false
 }
@@ -126,7 +128,7 @@ const handleClientChange = (newValue) => {
   console.log(JSON.stringify(newValue))
   fetchProducts();
 };
-
+const isTooltipVisible = ref(false)
 </script>
 
 <template>
@@ -211,6 +213,54 @@ const handleClientChange = (newValue) => {
           </div>
         </template>
 
+        <!-- sizes -->
+        <template #item.sizes="{ item }">
+          <div class="sizes-text" @click="isTooltipVisible = !isTooltipVisible">
+            <div>
+              <span>{{ item.sizes?.map(size => size.value).join(', ') }}</span>
+            
+            <VTooltip
+              open-on-click
+              :open-on-hover="false"
+              :model-value="isTooltipVisible"
+              location="right"
+              activator="parent"
+            >
+              <VTable
+                density="compact"
+                class="text-no-wrap"
+              >
+              <!-- ajsdk1231 -->
+                <thead>
+                  <tr>
+                    <th>
+                      Баркод
+                    </th>
+                    <th>
+                      Размер
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody style="font-size: 14px;">
+                  <tr
+                    v-for="size in item.sizes"
+                    :key="size.barcode"
+                  >
+                    <td>
+                      {{ size.barcode }}
+                    </td>
+                    <td>
+                      {{ size.value }}
+                    </td>
+                  </tr>
+                </tbody>
+              </VTable>
+            </VTooltip>
+            </div>
+          </div>
+        </template>
+
         <!-- actions -->
         <template #item.actions="{ item }">
           <RouterLink :to="{ name: 'product-details-id', params: { id: item.id } }">
@@ -255,3 +305,13 @@ const handleClientChange = (newValue) => {
     {{ snackbar.text }}
   </VSnackbar>
 </template>
+
+<style lang="scss">
+  .sizes-text {
+    max-width: 150px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+  }
+</style>
