@@ -1,26 +1,32 @@
 <script setup lang="ts">
 import { useDebounce } from '@vueuse/core';
 import { computed, onMounted, ref, watch } from 'vue';
+import { categoryOptions, getCategoryLabel } from '../../../constants/productCategories';
 import { getClients } from '../../../services/clients';
 import { deleteProduct, getProductsWithSizes } from '../../../services/products';
 import type { Client } from '../../../types/client';
+import type { FilterRequest } from '../../../types/filter';
 import type { WbProduct } from '../../../types/product';
 
 const entityData = ref<WbProduct[]>([])
 
 const headers = [
-  { title: 'Название', key: 'name', sortable: false },
-  { title: 'Артикул', key: 'article', sortable: false },
-  { title: 'Цвет', key: 'color', sortable: false },
+  { title: 'Название', key: 'name' },
+  { title: 'Категория', key: 'category' },
+  { title: 'Артикул', key: 'article' },
+  { title: 'Цвет', key: 'color' },
   { title: 'Размеры', key: 'sizes', sortable: false },
-  { title: '', key: 'actions', sortable: false },
+  { title: 'Действия', key: 'actions', sortable: false },
 ]
 
 const isLoading = ref(false)
 const searchQuery = ref<string>('')
-const debouncedQuery = useDebounce(searchQuery, 400) 
+const debouncedQuery = useDebounce(searchQuery, 400)
+const searchArticle = ref<string>('')
+const debouncedArticle = useDebounce(searchArticle, 400) 
 const clients = ref<Client[]>([])
-const selectedClientId = ref<number | undefined>()
+const selectedClientId = ref<number>()
+const selectedCategory = ref<string>()
 
 const deleteDialog = ref(false)
 const selectedDeleteId = ref<number | null>(null)
@@ -51,6 +57,10 @@ watch(debouncedQuery, () => {
   fetchProducts()
 })
 
+watch(debouncedArticle, () => {
+  fetchProducts()
+})
+
 const fetchClients = async () => {
   const { data, error } = await getClients()
   
@@ -64,15 +74,39 @@ const fetchClients = async () => {
 
 const fetchProducts = async () => {
   isLoading.value = true
-  const { data, error } = await getProductsWithSizes(selectedClientId.value, searchQuery.value)
+
+  const payload: FilterRequest = {
+    filters: [],
+    sort_by: sortBy.value?.key ?? 'name',
+    sort_dir: sortBy.value?.order ?? 'asc',
+  }
+
+  if(selectedClientId.value) {
+    payload.filters?.push({ field: 'client_id', op: 'eq', value: selectedClientId.value })
+  }
+
+  if (selectedCategory.value) {
+    payload.filters?.push({ field: 'category', op: 'eq', value: selectedCategory.value })
+  }
+
+  if (searchArticle.value) {
+    payload.filters?.push({ field: 'article', op: 'like', value: searchArticle.value })
+  }
+
+  if (searchQuery.value) {
+    payload.filters?.push({ field: 'name', op: 'like', value: searchQuery.value })
+  }
+
+  const { data, error } = await getProductsWithSizes(payload)
   if (error.value) {
     console.error('Ошибка при загрузке товаров:', error.value)
     return
   }
-  console.log(data.value)
+
   entityData.value = data.value
   isLoading.value = false
 }
+
 
 const handleDelete = async (id: number) => {
   try {
@@ -100,6 +134,17 @@ function showSnackbarMessage(message: string, color = 'success') {
   snackbar.value.visible = true
 }
 
+const sortBy = ref<{ key: string, order: 'asc' | 'desc' } | null>(null)
+const onOptionsUpdate = (options: any) => {
+  if (options.sortBy?.length > 0) {
+    sortBy.value = options.sortBy[0]
+  } else {
+    sortBy.value = null
+  }
+
+  fetchProducts()
+}
+
 const entities = computed<WbProduct[]>(() => entityData.value)
 const totalEntities = computed<number>(() => entities.value.length)
 const displayedClientId = computed({
@@ -113,10 +158,26 @@ const displayedClientId = computed({
   }
 });
 
+const displayedCategory = computed({
+  get() {
+    const value = selectedCategory.value;
+    const exists = categoryOptions.some(c => c.value === value);
+    return exists ? value : undefined;
+  },
+  set(value) {
+    selectedCategory.value = value;
+  }
+});
+
 onMounted(async () => {
   const savedClientId = localStorage.getItem('selectedProductClientId');
   if (savedClientId) {
     selectedClientId.value = JSON.parse(savedClientId);
+  }
+
+  const savedCategory = localStorage.getItem('selectedProductCategoryId');
+  if (savedCategory) {
+    selectedCategory.value = JSON.parse(savedCategory);
   }
 
   fetchProducts();
@@ -125,7 +186,11 @@ onMounted(async () => {
 
 const handleClientChange = (newValue) => {
   localStorage.setItem('selectedProductClientId', JSON.stringify(newValue));
-  console.log(JSON.stringify(newValue))
+  fetchProducts();
+};
+
+const handleCategoryChange = (newValue) => {
+  localStorage.setItem('selectedProductCategoryId', JSON.stringify(newValue));
   fetchProducts();
 };
 const isTooltipVisible = ref(false)
@@ -159,6 +224,24 @@ const isTooltipVisible = ref(false)
             class="me-3"
             @update:modelValue="handleClientChange"
           />
+          <VSelect
+            v-model="displayedCategory"
+            :items="categoryOptions"
+            item-title="label"
+            item-value="value"
+            label="Категория"
+            clearable
+            style="inline-size: 200px;"
+            class="me-3"
+            @update:modelValue="handleCategoryChange"
+          />
+          <AppTextField
+            v-model="searchArticle"
+            placeholder="Введите артикул"
+            style="inline-size: 200px;"
+            class="me-3"
+            clearable
+          />
         </div>
 
         <VSpacer />
@@ -182,6 +265,7 @@ const isTooltipVisible = ref(false)
         :items-length="totalEntities"
         class="text-no-wrap"
         :loading="isLoading"
+        @update:options="onOptionsUpdate"
       >
         <template #no-data>
           <!-- ничего не выводим -->
@@ -203,6 +287,13 @@ const isTooltipVisible = ref(false)
                 {{ item.name }}
               </RouterLink>
             </div>
+          </div>
+        </template>
+
+        <!-- color -->
+        <template #item.category="{ item }">
+          <div class="d-flex flex-column">
+              <span>{{ getCategoryLabel(item.category) }}</span>
           </div>
         </template>
 

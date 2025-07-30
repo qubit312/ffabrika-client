@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { deleteClient, getClients } from '../../../services/clients';
+import { deleteClient, getClientsWithFilters } from '../../../services/clients';
+import type { FilterRequest } from '../../../types/filter';
 
 interface Client {
   id: number
@@ -17,19 +18,18 @@ const typeCaption: Record<Client['type'], string> = {
 }
 const isLoading = ref(false)
 const headers = [
-  { title: 'Название', key: 'name', sortable: false },
-  { title: 'Тип', key: 'type', sortable: false },
-  { title: 'Телефон', key: 'phone', sortable: false },
-  { title: 'Почта', key: 'email', sortable: false },
-  { title: 'Телеграм', key: 'telegram', sortable: false },
-  { title: '', key: 'actions', sortable: false },
+  { title: 'Название', key: 'name', sortable: true },
+  { title: 'Тип', key: 'type', sortable: true },
+  { title: 'Телефон', key: 'phone', sortable: true },
+  { title: 'Почта', key: 'email', sortable: true },
+  { title: 'Телеграм', key: 'telegram', sortable: true },
+  { title: 'Действия', key: 'actions', sortable: false },
 ]
 
 const clients = ref<Client[]>([])
 const totalClients = computed<number>(() => clients.value.length)
 
 const searchQuery     = ref<string>('')
-const isSearchFocused = ref<boolean>(false)
 
 const itemsPerPage = ref<number>(10)
 const page = ref<number>(1)
@@ -58,7 +58,17 @@ const deleteItemConfirm = async () => {
 
 const fetchClients = async () => {
   isLoading.value = true
-  const { data, error } = await getClients()
+  const payload: FilterRequest = {
+    filters: [],
+    sort_by: sortBy.value?.key ?? 'name',
+    sort_dir: sortBy.value?.order ?? 'asc',
+  }
+
+  if (searchQuery.value) {
+    payload.filters?.push({ field: 'name', op: 'like', value: searchQuery.value })
+  }
+
+  const { data, error } = await getClientsWithFilters(payload)
   if (error.value) {
     console.error('Ошибка при загрузке клиентов:', error.value)
     return
@@ -93,6 +103,17 @@ function showSnackbarMessage(message: string, color = 'success') {
   snackbar.value.visible = true
 }
 
+const sortBy = ref<{ key: string, order: 'asc' | 'desc' } | null>(null)
+const onOptionsUpdate = (options: any) => {
+  if (options.sortBy?.length > 0) {
+    sortBy.value = options.sortBy[0]
+  } else {
+    sortBy.value = null
+  }
+
+  fetchClients()
+}
+
 onMounted(fetchClients)
 </script>
 
@@ -112,13 +133,9 @@ onMounted(fetchClients)
             placeholder="Введите название"
             style="inline-size: 200px;"
             class="me-3"
-            @focus="isSearchFocused = true"
-            @blur="isSearchFocused = false"
             clearable
+            @update:modelValue="fetchClients"
           />
-          <div v-if="isSearchFocused" class="development-note">
-            Функция поиска ещё в разработке
-          </div>
         </div>
 
         <VSpacer />
@@ -146,6 +163,7 @@ onMounted(fetchClients)
         :items-length="totalClients"
         :loading="isLoading"
         class="text-no-wrap"
+        @update:options="onOptionsUpdate"
       >
         <template #no-data>
           <!-- ничего не выводим -->

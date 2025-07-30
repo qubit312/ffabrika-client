@@ -1,4 +1,5 @@
 import { useApi } from '../composables/useApi'
+import { FilterRequest } from '../types/filter'
 import type { Label } from '../types/label'
 import type { LabelsResponse } from '../types/markingsResponse'
 
@@ -16,6 +17,13 @@ export async function getLabels (clientId?: number, name?: string) {
 
   return await useApi<LabelsResponse>(`/api/labels?${params.toString()}`, {
     method: 'GET',
+  })
+}
+
+export async function getLabelsWithFilters(payload?: FilterRequest) {
+  return useApi<{ data: LabelsResponse[] }>('/api/labels/filters', {
+    method: 'POST',
+    body: payload,
   })
 }
 

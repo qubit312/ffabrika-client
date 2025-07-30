@@ -1,4 +1,5 @@
 import { useApi } from '../composables/useApi'
+import { FilterRequest } from '../types/filter'
 import type { CreateWbProductDto, UpdateWbProductDto, WbProduct } from '../types/product'
 
 export function createProduct(dto: CreateWbProductDto) {
@@ -27,15 +28,10 @@ export function getProducts(clientId?: number, productId?: number, name?: string
   })
 }
 
-export function getProductsWithSizes(clientId?: number, name?: string) {
-  const params = new URLSearchParams()
-
-  if (clientId) params.append('client_id', String(clientId))
-  if (name && name.trim() !== '') params.append('name', name.trim())
-  const queryString = params.toString() ? `?${params.toString()}` : ''
-
-  return useApi<{ data: WbProduct[] }>(`/api/wb-products/sizes${queryString}`, {
-    method: 'GET',
+export async function getProductsWithSizes(payload?: FilterRequest) {
+  return useApi<{ data: WbProduct[] }>('/api/wb-products/sizes', {
+    method: 'POST',
+    body: payload,
   })
 }
 

@@ -2,16 +2,17 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { getClients } from '../../../services/clients';
-import { getLabels, removeLabel } from '../../../services/labels';
+import { getLabelsWithFilters, removeLabel } from '../../../services/labels';
 import type { Client } from '../../../types/client';
+import type { FilterRequest } from '../../../types/filter';
 import type { Label } from '../../../types/label';
 import AddNewProductDrawer from '../../../views/pages/product/list/AddNewProductDrawer.vue';
 
 const headers = [
-  { title: 'Название', key: 'name', sortable: false },
-  { title: 'Артикул', key: 'article', sortable: false },
-  { title: 'Цвет', key: 'color', sortable: false },
-  { title: '', key: 'actions', sortable: false },
+  { title: 'Название', key: 'name', sortable: true },
+  { title: 'Артикул', key: 'product.article', sortable: true },
+  { title: 'Цвет', key: 'product.color', sortable: true },
+  { title: 'Действия', key: 'actions', sortable: false },
 ]
 const isDrawerOpen = ref(true)
 const isLoading = ref(false)
@@ -52,7 +53,21 @@ const deleteItemConfirm = async () => {
 
 const fetchLabels = async () => {
   isLoading.value = true
-  const { data, error } = await getLabels(selectedClientId.value, searchQuery.value?.trim())
+  const payload: FilterRequest = {
+    filters: [],
+    sort_by: sortBy.value?.key ?? 'name',
+    sort_dir: sortBy.value?.order ?? 'asc',
+  }
+
+  if(selectedClientId.value) {
+    payload.filters?.push({ field: 'product.client_id', op: 'eq', value: selectedClientId.value })
+  }
+
+  if (searchQuery.value) {
+    payload.filters?.push({ field: 'name', op: 'like', value: searchQuery.value })
+  }
+  
+  const { data, error } = await getLabelsWithFilters(payload)
   if (error.value) {
     console.error('Ошибка при загрузке этикеток', error.value)
     return
@@ -60,7 +75,7 @@ const fetchLabels = async () => {
 
   if (data.value) {
     labelsData.value = {
-      labels: data.value.data,
+      labels: data.value,
       total:    data.value.total,
     }
   }
@@ -128,6 +143,17 @@ function showSnackbarMessage(message: string, color = 'success') {
   snackbar.value.color = color
   snackbar.value.visible = true
 }
+
+const sortBy = ref<{ key: string, order: 'asc' | 'desc' } | null>(null)
+const onOptionsUpdate = (options: any) => {
+  if (options.sortBy?.length > 0) {
+    sortBy.value = options.sortBy[0]
+  } else {
+    sortBy.value = null
+  }
+
+  fetchLabels()
+}
 </script>
 
 <template>
@@ -189,6 +215,7 @@ function showSnackbarMessage(message: string, color = 'success') {
         :items-length="totalLabels"
         class="text-no-wrap"
         :loading="isLoading"
+        @update:options="onOptionsUpdate"
       >
         <template #no-data>
           <!-- ничего не выводим -->
@@ -214,12 +241,12 @@ function showSnackbarMessage(message: string, color = 'success') {
         </template>
         
         <!-- article -->
-        <template #item.article="{ item }">
+        <template #item.product.article="{ item }">
           {{ item.product?.article || '—' }}
         </template>
 
         <!-- color -->
-        <template #item.color="{ item }">
+        <template #item.product.color="{ item }">
           {{ item.product?.color || '—' }}
         </template>
 

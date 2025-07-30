@@ -1,5 +1,6 @@
 import { useApi } from '../composables/useApi'
 import type { Client, CreateClientDto } from '../types/client'
+import { FilterRequest } from '../types/filter'
 
 export function getClient(id: number) {
   return useApi<{ data: Client }>(`/api/clients/${id}`, {
@@ -10,6 +11,13 @@ export function getClient(id: number) {
 export function getClients() {
   return useApi<{ data: Client[] }>(`/api/clients`, {
     method: 'GET',
+  })
+}
+
+export async function getClientsWithFilters(payload?: FilterRequest) {
+  return useApi<{ data: Client[] }>('/api/clients/filters', {
+    method: 'POST',
+    body: payload,
   })
 }
 

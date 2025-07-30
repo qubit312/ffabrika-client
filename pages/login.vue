@@ -40,7 +40,7 @@ async function onSubmit() {
   loading.value = true
   errorMessage.value = ''
   try {
-    const { data, error } = useApi('/api/auth/login', {
+    const { data, error } = await useApi('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({
         email: form.value.email,
