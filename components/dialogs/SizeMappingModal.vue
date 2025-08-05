@@ -4,6 +4,14 @@ import { useLabelEvents } from '../../composables/useLabelBus'
 import { importChestnyZnakLabels } from '../../services/chz'
 import { getProductSizes } from '../../services/productSizes'
 
+interface ImportFileResponce {
+  fileName: string
+  created: number
+  errors: {
+    code: string
+    message: string
+  }[]
+}
 
 interface Props {
   modelValue: boolean
@@ -24,20 +32,14 @@ const localMap = ref<Record<number, string>>({})
 const sizeOptions = ref<{ label: string; value: string }[]>([])
 const loading = ref(false)
 
-const snackbar = reactive({
+const resultDialog = reactive({
   show: false,
-  text: '',
-  color: 'success' as 'success' | 'error'
+  items: [] as ImportFileResponce[] | null
 })
 
-function showSnackbar(message: string, isSuccess: boolean) {
-  snackbar.show = true
-  snackbar.text = message
-  if (isSuccess) {
-    snackbar.color = 'success'
-  } else {
-    snackbar.color = 'error'
-  }
+function showResultDialog(errors: ImportFileResponce[] | null) {
+  resultDialog.show = true
+  resultDialog.items = errors
 }
 
 watch(
@@ -93,44 +95,72 @@ async function onSave() {
   try {
     const { data, error } = await importChestnyZnakLabels(formData)
 
-    if (error.value) {
-      throw new Error(error.value)
-    }
-
-    const createdCount = data.value.created?.length ?? 0
-    const errorsObj = data.value.errors as Record<string, { code: string[] }>
-    const errorFiles = errorsObj ? Object.keys(errorsObj) : []
-
-    if (errorFiles.length > 0) {
-      showSnackbar(
-        `Импорт завершён: добавлено ${createdCount}, ошибки в ${errorFiles.length} файлах`,
-        false
-      )
-      errorFiles.forEach(fileName => {
-        const errorCount = Object.keys(errorsObj[fileName]).length
-        console.log(`Ошибка в файле ${fileName}, число ошибок: ${errorCount}`)
-      })
-    } else {
-      showSnackbar(`Добавлено ${createdCount} ЧЗ`, true)
+    if (error.value) throw new Error(error.value)
+    const fileResults: ImportFileResponce[] = data.value ?? []
+    const hasErrors = fileResults.some(f => f.errors && f.errors.length > 0)
+    showResultDialog(fileResults)
+    if (!hasErrors) {
       close()
     }
 
     onLabelsUpdated()
   } catch (err: any) {
     console.error('Ошибка при импорте:', err)
-    showSnackbar(`Произошла ошибка при импорте`, false)
+    showResultDialog(null)
   } finally {
     loading.value = false
   }
+}
+
+interface GroupedError {
+  fileName: string
+  created: number
+  errorCount: number
+  errors: { message: string; quantity: number }[]
+}
+
+function groupByFileName(data: ImportFileResponce[]): GroupedError[] {
+  return data.map(file => {
+    const grouped: Record<string, number> = {}
+    const errorCount = file.errors.length
+
+    for (const err of file.errors) {
+      grouped[err.message] = (grouped[err.message] || 0) + 1
+    }
+
+    const groupedErrors = Object.entries(grouped).map(([message, quantity]) => ({
+      message,
+      quantity,
+    }))
+
+    return {
+      fileName: file.fileName,
+      created: file.created,
+      errorCount: errorCount,
+      errors: groupedErrors,
+    }
+  })
+}
+
+function getStatusIcon(errors: number, created: number): string {
+  if (errors === 0) return 'tabler-circle-check'
+  if (errors > 0 && created > 0) return 'tabler-alert-triangle'
+  return 'tabler-circle-x'
+}
+
+function getStatusColor(errors: number, created: number): string {
+  if (errors === 0) return 'success'
+  if (errors > 0 && created > 0) return 'warning'
+  return 'error'
 }
 </script>
 
 <template>
   <VDialog v-model="isOpen" max-width="700px">
-    <VCard>
+    <VCard class="pt-2 pb-2">
       <VCardTitle>Соответствие размеров</VCardTitle>
-      <VCardText>
-        <div v-if="loading && sizeOptions.length === 0" class="text-center pa-6">
+      <VCardText class="pa-4">
+        <div v-if="loading && sizeOptions.length === 0" class="text-center">
           <VProgressCircular indeterminate size="40" width="4" />
           <div class="mt-2">Загрузка размеров…</div>
         </div>
@@ -139,7 +169,7 @@ async function onSave() {
           <VRow
             v-for="(file, idx) in props.files"
             :key="idx"
-            class="mb-4 align-center"
+            class="mb-2 align-center"
           >
             <VCol cols="6">
               {{ file.name }}
@@ -162,11 +192,11 @@ async function onSave() {
           </div>
         </div>
       </VCardText>
-      <VCardActions>
+      <VCardActions class="pe-4">
         <VSpacer />
-        <VBtn @click="close">Отмена</VBtn>
-
+        <VBtn @click="close">Закрыть</VBtn>
         <VBtn
+          variant="flat"
           color="primary"
           @click="onSave"
           :disabled="loading || !isFormValid"
@@ -177,9 +207,7 @@ async function onSave() {
                 indeterminate
                 size="20"
                 width="2"
-                class="mr-2"
               />
-              Сохранение...
             </span>
             <span v-else>Сохранить</span>
           </template>
@@ -188,12 +216,63 @@ async function onSave() {
     </VCard>
   </VDialog>
 
-  <VSnackbar
-    v-model="snackbar.show"
-    :color="snackbar.color"
-    timeout="3000"
-    location="top right"
-  >
-    {{ snackbar.text }}
-  </VSnackbar>
+  <VDialog v-model="resultDialog.show" max-width="650px" persistent>
+    <VCard>
+      <VCardTitle class="d-flex align-center">
+        <span>
+          Результат импорта
+        </span>
+      </VCardTitle>
+
+      <VCardText class="pt-2 pb-2 ps-4 pe-4">
+        <div>
+          <ul style="list-style-type: none; padding-left: 0;">
+            <li
+              v-for="item in groupByFileName(resultDialog.items || [])"
+              :key="item.fileName"
+              class="mb-4"
+            >
+              <div class="d-flex align-center">
+                <span v-if="item.errorCount">
+                  <VIcon
+                    :color="getStatusColor(item.errorCount, item.created)"
+                    class="me-1"
+                  >
+                  {{ getStatusIcon(item.errorCount, item.created) }}
+                  </VIcon> 
+                  Импорт файла <strong>{{ item.fileName }}</strong> завершен с ошибками.
+                  <span v-if="item.errorCount > 0 && item.created > 0">
+                    Загружено {{ item.created }} из {{ item.created + item.errorCount }}.
+                  </span>
+                </span>
+
+                <span v-if="!item.errorCount">
+                  <VIcon
+                    :color="getStatusColor(item.errorCount, item.created)"
+                    class="me-1"
+                  >
+                  {{ getStatusIcon(item.errorCount, item.created) }}
+                  </VIcon> 
+                  <strong>{{ item.fileName }}</strong>
+                  <span v-if="!item.errorCount"> — {{ item.created }} шт.</span>
+                </span>
+              </div>
+              <span v-if="item.errorCount"></span>
+              <ul style="list-style-type: none;" class="mt-1 ps-8">
+                <li v-for="(err, idx) in item.errors" :key="idx">
+                   {{ err.message }} — {{ err.quantity }} шт.
+                </li>
+              </ul>
+            </li>
+          </ul>
+        </div>
+      </VCardText>
+
+      <VCardActions>
+        <VSpacer />
+        <VBtn variant="flat" color="primary" @click="resultDialog.show = false">Закрыть</VBtn>
+      </VCardActions>
+    </VCard>
+  </VDialog>
+
 </template>

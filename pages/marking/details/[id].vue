@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CustomLoading from '../../../components/CustomLoading.vue'
 import DefectiveLabelModal from '../../../components/dialogs/DefectiveLabelModal.vue'
+import PrintCardModule from '../../../components/dialogs/PrintCardModule.vue'
 import SizeMappingModal from '../../../components/dialogs/SizeMappingModal.vue'
 import { createLabel, getLabel, updateLabel } from '../../../services/labels'
 import { getProduct, getProducts } from '../../../services/products'
@@ -204,6 +205,7 @@ function openSizeMappingModal() {
   showSizeModal.value = true
 }
 
+const isDialogVisible = ref(true)
 const loading = ref(false)
 </script>
 
@@ -271,7 +273,7 @@ const loading = ref(false)
                 />
               </VCol> -->
             </VRow>
-            <VRow>
+            <!-- <VRow>
               <VCol cols="12" md="6">
                 <AppTextField
                   label="Название для этикетки"
@@ -279,7 +281,7 @@ const loading = ref(false)
                   v-model="name"
                 />
               </VCol>
-            </VRow>
+            </VRow> -->
           </VCardText>
         </VCard>
 
@@ -293,6 +295,19 @@ const loading = ref(false)
             />
           </VCardText>
         </VCard>
+        <PrintCardModule
+          v-if="true"
+          v-model:visible="isDialogVisible"
+          :name="name ?? ''"
+          :sizeId="14"
+          :article="'123456'"
+          :size="'123'"
+          :availableLabelsCount="10"
+          :labelId="entityId"
+          :composition="''"
+          :color="''"
+          :client="null"
+        />
       </VCol>
 
       <VCol

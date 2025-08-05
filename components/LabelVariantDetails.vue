@@ -14,8 +14,8 @@ interface Props {
 const headers = [
   { title: 'Баркод', key: 'barcode', sortable: false },
   { title: 'Размер', key: 'value', sortable: false },
-  { title: 'Кол-во Честных знаков', key: 'available_labels_count', sortable: false },
-  { key: 'actions', sortable: false },
+  { title: 'ЧЗ', key: 'available_labels_count', sortable: false },
+  { title: 'Действия', key: 'actions', sortable: false },
 ];
 
 const { registerLabelUpdateListener, unregisterLabelUpdateListener } = useLabelEvents()
@@ -195,6 +195,14 @@ onUnmounted(() => {
   >
     <template #no-data></template>
     <template #bottom></template>
+    <template #header.available_labels_count="{ column }">
+      <VTooltip open-delay="400">
+        <template #activator="{ props }">
+          <span v-bind="props" class="text-truncate">{{ column.title }}</span>
+        </template>
+        <span>Кол-во честных знаков</span>
+      </VTooltip>
+    </template>
     <template #item.actions="{ item }">
       <div class="d-flex gap-1">
         <VTooltip open-delay="600">

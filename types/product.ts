@@ -1,9 +1,11 @@
+import type { ProductSize } from "./productSize"
+
 export interface WbProduct {
   id: number
   created_by: number | null
-  created_at: string
+  created_at: Date
   updated_by: number | null
-  updated_at: string
+  updated_at: Date
   name: string
   color: string
   article: string
@@ -11,7 +13,7 @@ export interface WbProduct {
   has_chestny_znak: boolean
   category: string
   client_id: number | null
-  productSizes?: { value: string, barcode: string }[];
+  productSizes?: ProductSize[];
 }
 
 export interface CreateWbProductDto {

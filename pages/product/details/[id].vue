@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, toRaw, watch } from 'vue'
+import { computed, onMounted, reactive, ref, toRaw, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '../../../composables/useApi'
 import { categoryOptions } from '../../../constants/productCategories'
 import { createProduct, getProduct, updateProduct } from '../../../services/products'
-import { getProductSizes } from '../../../services/productSizes'
+import { createProductSize, updateProductSize } from '../../../services/productSizes'
 import type { CreateWbProductDto, WbProduct } from '../../../types/product'
-import type { ProductSizeWithLabels } from '../../../types/productSize'
+import type { ProductSize } from '../../../types/productSize'
 
 const route = useRoute()
 const router = useRouter()
@@ -14,19 +14,16 @@ const idParam = route.params.id as string
 const primaryId = Number(idParam)
 const mode = ref<'create' | 'edit' | 'view' >('create')
 const isFormInitialized = ref(false)
-const productSizeList = ref<ProductSizeWithLabels[]>([])
-const mapPS = (ps: ProductSizeWithLabels): ProductSizeWithLabels => ({
-  id: ps.id,
-  product_id: ps.product_id,
-  value: ps.value,
-  barcode: ps.barcode,
-  available_labels_count: ps.available_labels_count,
+const originalForm = ref<WbProduct | null>(null)
+
+const productSize = reactive<ProductSize>({
+  id: 0,
+  product_id: 0,
+  value: '',
+  barcode: '',
+  quantity: 0
 })
 
-const originalForm = ref<WbProduct | null>(null)
-// const sizeItems = ref<SizeItem[]>([
-//   { value: '', quantity: 0, barcode: '' }
-// ])
 const form = reactive<WbProduct>({
   id: 0,
   created_by: null,
@@ -37,20 +34,22 @@ const form = reactive<WbProduct>({
   composition: '',
   category: '',
   client_id: null,
-  created_at: '',
-  updated_at: '',
+  created_at: new Date(),
+  updated_at: new Date(),
   has_chestny_znak: false
 })
 
-const fetchSizes = async (productId: number) => {
-  const { data, error } = await getProductSizes(productId)
-  if (error.value) {
-    console.error('Ошибка загрузки размеров:', error.value)
-    return
+const firstSizeBarcode = computed({
+  get: () => {
+    console.log(form.productSizes)
+    return form.productSizes?.[0]?.barcode ?? ''
+  },
+  set: val => {
+    if (form.productSizes?.[0]) {
+      form.productSizes[0].barcode = val
+    }
   }
-
-  productSizeList.value = data.value.data.map(mapPS)
-}
+})
 
 function mapServerResponseToForm(serverData: any): void {
   form.id = serverData.id || 0;
@@ -66,6 +65,10 @@ function mapServerResponseToForm(serverData: any): void {
   form.created_at = serverData.created_at || '';
   form.updated_at = serverData.updated_at || '';
   form.has_chestny_znak = serverData.has_chestny_znak;
+  const sizes = serverData.sizes;
+  if (sizes) {
+    form.productSizes = sizes
+  }
   originalForm.value = structuredClone(toRaw(form))
 }
 
@@ -119,7 +122,7 @@ async function fetchProduct(id: number) {
   mode.value = 'view';
   mapServerResponseToForm(data.value)
   isFormInitialized.value = true
-  await fetchSizes(data.value.id)
+  console.log(data.value)
   loading.value = false
 }
 
@@ -131,7 +134,7 @@ async function onSubmit() {
     loading.value = false
     return
   }
-
+  
   const payload: CreateWbProductDto = {
     client_id: form.client_id,
     name: form.name,
@@ -156,6 +159,16 @@ async function onSubmit() {
     loading.value = false
     return
   }
+  
+  if (form.category === 'COMMON') {
+    const result = await saveSize(data.value.id)
+    showSnackbar(result.message, result.success)
+    console.log(result.message)
+    if (!result.success) {
+      loading.value = false
+      return
+    }
+  }
 
   showSnackbar('Успешно сохранено', true)
   if (mode.value !== 'edit') {
@@ -163,6 +176,48 @@ async function onSubmit() {
   }
 
   loading.value = false
+}
+
+async function saveSize(productId: number): Promise<{ success: boolean, message: string }> {
+  if (form.category !== 'COMMON') {
+    return { success: true, message: 'категория не общая' }
+  }
+
+  if (!form.category) {
+    return { success: false, message: 'Выберите категорию' }
+  }
+
+  const sizeList = form.productSizes
+  const firstSize = Array.isArray(sizeList) && sizeList.length > 0 ? sizeList[0] : null
+
+  if (!firstSize) {
+    return { success: true, message: 'Не найден размер' }
+  }
+
+  const payload = {
+    product_id: productId,
+    value: firstSize.value || '',
+    barcode: firstSize.barcode || ''
+  }
+
+  let data, error
+
+  if (mode.value === 'edit') {
+    if (!firstSize.id) {
+      ({ data, error } = await createProductSize(payload))
+    } else {
+      ({ data, error } = await updateProductSize(firstSize.id, payload))
+    }
+  } else {
+    ({ data, error } = await createProductSize(payload))
+  }
+
+  if (error?.value) {
+    console.error('Ошибка при сохранении размера:', error.value)
+    return { success: false, message: 'Ошибка при сохранении размера' }
+  }
+
+  return { success: true, message: 'Размер успешно сохранён' }
 }
 
 onMounted(async () => {
@@ -264,27 +319,35 @@ function handlePlaceholderClick() {
         <VCard class="mb-6">
           <VCardText>
             <VRow>
-              <VCol cols="12" md="6">
+              <VCol cols="12" md="4">
                 <AppTextField v-model="form.name" label="Название" outlined />
               </VCol>
-              <VCol cols="6">
+              <VCol cols="4">
                 <AppTextField
                   label="Артикул товара"
                   placeholder="FXSK123U"
                   v-model="form.article"
                 />
               </VCol>
-              <VCol cols="12" md="6">
+              <VCol cols="12" md="4">
                 <AppTextField v-model="form.color" label="Цвет" outlined />
               </VCol>
-              <VCol cols="12" md="6">
+              <VCol cols="12" md="4">
                 <AppTextField
                   label="Состав"
                   placeholder="Хлопок 95%"
                   v-model="form.composition"
                 />
               </VCol>
-              <VCol cols="6">
+              <VCol cols="12" md="4">
+                <AppTextField
+                  v-if="form.id && form.category != 'CLOTHES'"
+                  label="Баркод"
+                  placeholder=""
+                  v-model="firstSizeBarcode"
+                />
+              </VCol>
+              <VCol cols="6" md="6">
                 <VSwitch
                   v-model="form.has_chestny_znak"
                   label="Нужна маркировка ЧЗ"
@@ -293,7 +356,7 @@ function handlePlaceholderClick() {
             </VRow>
           </VCardText>
         </VCard>
-        <VCard class="mb-6" v-if="form.id">
+        <VCard class="mb-6" v-if="form.id && form.category == 'CLOTHES'">
           <VCardText>
             <LabelVariantDetails
               v-if="form.id"

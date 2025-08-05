@@ -16,6 +16,7 @@ const headers = [
   { title: 'Артикул', key: 'article' },
   { title: 'Цвет', key: 'color' },
   { title: 'Размеры', key: 'sizes', sortable: false },
+  { title: 'Изменено', key: 'updatedAt' },
   { title: 'Действия', key: 'actions', sortable: false },
 ]
 
@@ -104,6 +105,7 @@ const fetchProducts = async () => {
   }
 
   entityData.value = data.value
+  console.log(entityData.value)
   isLoading.value = false
 }
 
@@ -193,7 +195,24 @@ const handleCategoryChange = (newValue) => {
   localStorage.setItem('selectedProductCategoryId', JSON.stringify(newValue));
   fetchProducts();
 };
-const isTooltipVisible = ref(false)
+
+const visibleTooltipIndex = ref<number | null>(null)
+
+function toggleTooltip(index: number) {
+  visibleTooltipIndex.value = visibleTooltipIndex.value === index ? null : index
+}
+
+function formatDate(date: string | Date) {
+  const d = new Date(date)
+
+  const day = String(d.getDate()).padStart(2, '0')
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const hours = String(d.getHours()).padStart(2, '0')
+  const minutes = String(d.getMinutes()).padStart(2, '0')
+
+  return `${day}.${month} ${hours}:${minutes}`
+}
+
 </script>
 
 <template>
@@ -290,7 +309,7 @@ const isTooltipVisible = ref(false)
           </div>
         </template>
 
-        <!-- color -->
+        <!-- category -->
         <template #item.category="{ item }">
           <div class="d-flex flex-column">
               <span>{{ getCategoryLabel(item.category) }}</span>
@@ -305,50 +324,42 @@ const isTooltipVisible = ref(false)
         </template>
 
         <!-- sizes -->
-        <template #item.sizes="{ item }">
-          <div class="sizes-text" @click="isTooltipVisible = !isTooltipVisible">
-            <div>
-              <span>{{ item.sizes?.map(size => size.value).join(', ') }}</span>
-            
+        <template #item.sizes="{ item, index }">
+          <div class="sizes-text">
             <VTooltip
+              class="sizes-card"
               open-on-click
               :open-on-hover="false"
-              :model-value="isTooltipVisible"
+              :model-value="visibleTooltipIndex === index"
               location="right"
-              activator="parent"
             >
-              <VTable
-                density="compact"
-                class="text-no-wrap"
-              >
-              <!-- ajsdk1231 -->
+              <template #activator="{ props }">
+                <span
+                  v-bind="props"
+                  class="cursor-pointer"
+                  @click="toggleTooltip(index)"
+                >
+                  {{ item.sizes?.map(size => size.value).join(', ') }}
+                </span>
+              </template>
+
+              <VTable density="compact" class="text-no-wrap">
                 <thead>
                   <tr>
-                    <th>
-                      Баркод
-                    </th>
-                    <th>
-                      Размер
-                    </th>
+                    <th style="font-weight: 700;">Баркод</th>
+                    <th style="font-weight: 700;">Размер</th>
+                    <th style="font-weight: 700;">ЧЗ</th>
                   </tr>
                 </thead>
-
                 <tbody style="font-size: 14px;">
-                  <tr
-                    v-for="size in item.sizes"
-                    :key="size.barcode"
-                  >
-                    <td>
-                      {{ size.barcode }}
-                    </td>
-                    <td>
-                      {{ size.value }}
-                    </td>
+                  <tr v-for="size in item.sizes" :key="size.barcode">
+                    <td>{{ size.barcode }}</td>
+                    <td>{{ size.value }}</td>
+                    <td>{{ size.available_labels_count }}</td>
                   </tr>
                 </tbody>
               </VTable>
             </VTooltip>
-            </div>
           </div>
         </template>
 
@@ -367,6 +378,13 @@ const isTooltipVisible = ref(false)
               value="delete"
             />
           </IconBtn>
+        </template>
+
+        <!-- color -->
+        <template #item.updatedAt="{ item }">
+          <div class="d-flex flex-column">
+              <span>{{ formatDate(item.updated_at) }}</span>
+          </div>
         </template>
 
         <!-- pagination -->
@@ -404,5 +422,11 @@ const isTooltipVisible = ref(false)
     overflow: hidden;
     text-overflow: ellipsis;
     cursor: pointer;
+  }
+  .sizes-card > .v-overlay__content {
+    border: 2px solid rgb(115, 103, 240);
+    background: none;
+    padding: 0 !important;
+    box-shadow: rgba(114, 103, 240, 0.17) 7px 6px 2px 1px;
   }
 </style>
