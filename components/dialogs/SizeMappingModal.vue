@@ -241,8 +241,8 @@ function getStatusColor(errors: number, created: number): string {
                   {{ getStatusIcon(item.errorCount, item.created) }}
                   </VIcon> 
                   Импорт файла <strong>{{ item.fileName }}</strong> завершен с ошибками.
-                  <span v-if="item.errorCount > 0 && item.created > 0">
-                    Загружено {{ item.created }} из {{ item.created + item.errorCount }}.
+                  <span v-if="item.errorCount > 0">
+                    Загружено {{ item.created }}.
                   </span>
                 </span>
 

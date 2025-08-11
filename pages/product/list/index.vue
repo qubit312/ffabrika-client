@@ -105,7 +105,6 @@ const fetchProducts = async () => {
   }
 
   entityData.value = data.value
-  console.log(entityData.value)
   isLoading.value = false
 }
 
@@ -324,7 +323,7 @@ function formatDate(date: string | Date) {
         </template>
 
         <!-- sizes -->
-        <template #item.sizes="{ item, index }">
+        <template #item.sizes="{ item, index }" >
           <div class="sizes-text">
             <VTooltip
               class="sizes-card"

@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CustomLoading from '../../../components/CustomLoading.vue'
 import DefectiveLabelModal from '../../../components/dialogs/DefectiveLabelModal.vue'
 import PrintCardModule from '../../../components/dialogs/PrintCardModule.vue'
 import SizeMappingModal from '../../../components/dialogs/SizeMappingModal.vue'
+import PrinterInfo from '../../../components/PrinterInfo.vue'
 import { createLabel, getLabel, updateLabel } from '../../../services/labels'
 import { getProduct, getProducts } from '../../../services/products'
-import type { Label, ShortEntityParams } from '../../../types/label'
+import type { Label, NewLabelInterface, ShortEntityParams } from '../../../types/label'
 
 const route = useRoute()
 const router = useRouter()
@@ -25,8 +26,8 @@ const dropZoneRef = ref<HTMLDivElement>()
 interface FileData { file: File; url: string }
 const fileData = ref<FileData[]>([])
 
-const onChange   = (cb: (files: File[] | null) => void) => {}
-const useDropZone = (_el: any, _fn: any) => {}
+const onChange = (cb: (files: File[] | null) => void) => { }
+const useDropZone = (_el: any, _fn: any) => { }
 
 function onDrop(files: File[] | null) {
   files?.forEach(file => {
@@ -45,13 +46,36 @@ onChange(selected => onDrop(selected))
 useDropZone(dropZoneRef, onDrop)
 
 const markingData = ref<Label | null>(null)
+
+const form = reactive<NewLabelInterface>({
+  name: '',
+  product_id: 0,
+  printer_id: null,
+  client_name: '',
+  print_single_ean13: false,
+  print_double_ean13: false,
+  duplicate_chz: false,
+  product: null
+})
+
+function mapLabelResponseToForm(response: any) {
+  form.name = response.name ?? ''
+  form.product_id = response.product_id ?? 0
+  form.printer_id = response.printer_id ?? null
+  form.client_name = response.client_name ?? ''
+  form.print_single_ean13 = !!response.print_single_ean13
+  form.print_double_ean13 = !!response.print_double_ean13
+  form.duplicate_chz = !!response.duplicate_chz
+  form.product = response.product ?? null
+}
+
 const name = ref<string>('')
 
-const loadedLabelCount      = ref<number>(0)
-const newLabelCount         = ref<number | null>(null)
-const showLoadLabelDialog   = ref<boolean>(false)
+const loadedLabelCount = ref<number>(0)
+const newLabelCount = ref<number | null>(null)
+const showLoadLabelDialog = ref<boolean>(false)
 const isLowLoadedLabelCount = computed(() => loadedLabelCount.value < 10)
-const showDefectiveModal    = ref(false)
+const showDefectiveModal = ref(false)
 
 const selectedProduct = ref<ShortEntityParams | null>(null)
 const products = ref<ShortEntityParams[]>([])
@@ -86,7 +110,6 @@ const fetchProducts = async () => {
 }
 
 const fetchLabel = async (id: number) => {
-  loading.value = true
   if (id <= 0) {
     mode.value = 'create'
     loading.value = false
@@ -103,11 +126,11 @@ const fetchLabel = async (id: number) => {
 
     markingData.value = data.value || null
     if (markingData.value) {
+      mapLabelResponseToForm(data.value)
       patchFormWithData(markingData.value)
       mode.value = 'edit'
     }
     loading.value = false
-    console.log(markingData.value)
   } catch (e) {
     console.error('Непредвиденная ошибка:', e)
     loading.value = false
@@ -146,8 +169,13 @@ async function onSubmit() {
   const payload = {
     name: name.value,
     product_id: selectedProduct.value?.id ?? null,
+    client_name: form.client_name,
+    printer_id: form.printer_id,
+    print_single_ean13: form.print_single_ean13,
+    print_double_ean13: form.print_double_ean13,
+    duplicate_chz: form.duplicate_chz
   }
-
+  
   try {
     let labelId: number = 0
 
@@ -164,7 +192,7 @@ async function onSubmit() {
     showSnackbar(mode.value === 'edit' ? 'Этикетка успешно обновлена!' : 'Этикетка успешно создана!', false)
     if (mode.value === 'create' && labelId) {
       await router.push({
-        name:   'marking-details-id',
+        name: 'marking-details-id',
         params: { id: labelId }
       })
     }
@@ -187,10 +215,12 @@ function showSnackbar(message: string, isError: boolean) {
 }
 
 onMounted(async () => {
+  loading.value = true
   await fetchProducts()
   if (entityId > 0) {
     await fetchLabel(entityId)
   }
+  loading.value = false
 })
 
 function openDefective() {
@@ -205,7 +235,6 @@ function openSizeMappingModal() {
   showSizeModal.value = true
 }
 
-const isDialogVisible = ref(true)
 const loading = ref(false)
 </script>
 
@@ -227,53 +256,38 @@ const loading = ref(false)
       <div class="d-flex gap-4 align-center flex-wrap">
         <VBtn variant="tonal" color="secondary" @click="router.back()">Закрыть</VBtn>
         <VBtn color="primary" @click="onSubmit">Сохранить </VBtn>
-        
+
       </div>
     </div>
 
     <VRow>
       <VCol md="8">
-        <VCard class="mb-6">
+        <!-- <VCard class="mb-6">
           <VCardText>
             <VRow>
               <VCol cols="12" md="6">
                 <div class="d-flex align-center" style="gap: 8px">
-                  <AppAutocomplete
-                    v-model="selectedProduct"
-                    :items="filteredProducts"
-                    item-title="name"
-                    item-value="id"
-                    searchable
-                    readonly
-                    return-object
-                    label="Товар"
-                    placeholder="Выберите товар"
-                    @update:search="searchProducts"
-                    class="flex-grow-1"
-                  />
-                  <VBtn
-                    class="mt-6"
-                    v-if="selectedProduct"
-                    :to="{ name: 'product-details-id', params: { id: selectedProduct.id } }"
-                    icon
-                    variant="text"
-                    color="primary"
-                  >
+                  <AppAutocomplete v-model="selectedProduct" :items="filteredProducts" item-title="name" item-value="id"
+                    searchable readonly return-object label="Товар" placeholder="Выберите товар"
+                    @update:search="searchProducts" class="flex-grow-1" />
+                  <VBtn class="mt-6" v-if="selectedProduct"
+                    :to="{ name: 'product-details-id', params: { id: selectedProduct.id } }" icon variant="text"
+                    color="primary">
                     <VIcon>tabler-edit</VIcon>
                     <VTooltip activator="parent" location="top">Перейти к товару</VTooltip>
                   </VBtn>
                 </div>
               </VCol>
-              
-              <!-- <VCol cols="12" md="6">
+
+              <VCol cols="12" md="6">
                 <VSwitch
                   class="mt-6"
                   v-model="has_chestny_znak"
                   label="Нужна маркировка ЧЗ"
                 />
-              </VCol> -->
+              </VCol>
             </VRow>
-            <!-- <VRow>
+            <VRow>
               <VCol cols="12" md="6">
                 <AppTextField
                   label="Название для этикетки"
@@ -281,50 +295,51 @@ const loading = ref(false)
                   v-model="name"
                 />
               </VCol>
-            </VRow> -->
+            </VRow>
           </VCardText>
-        </VCard>
+        </VCard> -->
 
         <VCard class="mb-6">
           <VCardText>
-            <LabelVariantDetails
-              v-if="markingData?.product"
-              :product="markingData?.product"
-              :name="name"
-              :labelId="entityId"
-            />
+            <VRow class="mb-4">
+              <VCol cols="12" md="6">
+                <div class="d-flex align-center" style="gap: 8px">
+                  <AppAutocomplete v-model="selectedProduct" :items="filteredProducts" item-title="name" item-value="id"
+                    searchable readonly return-object label="Товар" placeholder="Выберите товар"
+                    @update:search="searchProducts" class="flex-grow-1" />
+                  <VBtn class="mt-6" v-if="selectedProduct"
+                    :to="{ name: 'product-details-id', params: { id: selectedProduct.id } }" icon variant="text"
+                    color="primary">
+                    <VIcon>tabler-edit</VIcon>
+                    <VTooltip activator="parent" location="top">Перейти к товару</VTooltip>
+                  </VBtn>
+                </div>
+              </VCol>              
+            </VRow>
+
+            <LabelVariantDetails :product="markingData?.product" :name="name" :labelId="entityId" parentComponent="marking" />
           </VCardText>
         </VCard>
         <PrintCardModule
-          v-if="true"
-          v-model:visible="isDialogVisible"
           :name="name ?? ''"
           :sizeId="14"
-          :article="'123456'"
-          :size="'123'"
-          :availableLabelsCount="10"
+          size="123"
           :labelId="entityId"
-          :composition="''"
-          :color="''"
-          :client="null"
+          v-model="form"
         />
       </VCol>
 
-      <VCol
-        md="4"
-        cols="12"
-      >
+      <VCol md="4" cols="12">
         <VCard class="mb-6" title="Принтер">
           <VCardText>
-            <VCol cols="12">
+            <PrinterInfo :labelId="entityId" v-model:printerId="form.printer_id"/>
+            <!-- <VCol cols="12">
                 <div class="d-flex align-center">
-                  <!-- Текст и значение -->
                   <span>
                     Кол-во этикеток в принтере:
                     <strong>{{ loadedLabelCount }}</strong>
                   </span>
 
-                  <!-- Значок предупреждения -->
                   <VTooltip bottom>
                     <template #activator="{ props }">
                       <VIcon
@@ -336,18 +351,11 @@ const loading = ref(false)
                     </template>
                     <span>Мало этикеток в принтере</span>
                   </VTooltip>
-
-                  <!-- Кнопка обновления -->
-                  <VBtn
-                    color="primary"
-                    @click="showLoadLabelDialog = true"
-                    size="small"
-                    class="ms-6"
-                  >
+                  <VBtn color="primary" @click="showLoadLabelDialog = true" size="small" class="ms-6">
                     Обновить
                   </VBtn>
-                </div>
-              </VCol>
+                  </div>
+                  </VCol> -->
           </VCardText>
         </VCard>
 
@@ -356,7 +364,7 @@ const loading = ref(false)
           <VCardTitle class="ma-2">
             <div class="d-flex justify-space-between align-center w-100">
               <span>Честный знак</span>
-              
+
               <VMenu>
                 <template #activator="{ props }">
                   <IconBtn v-bind="props">
@@ -372,22 +380,13 @@ const loading = ref(false)
               </VMenu>
             </div>
           </VCardTitle>
-          
+
           <div class="d-flex flex-column">
             <VCardText>
-              <VFileInput
-                accept=".csv,text/csv"
-                label="Загрузить CSV файл"
-                multiple
-                v-model="csvFiles"
-              />
+              <VFileInput accept=".csv,text/csv" label="Загрузить CSV файл" multiple v-model="csvFiles" />
               <VRow class="mt-4">
                 <VCol cols="12" class="d-flex justify-end">
-                  <VBtn
-                    color="primary"
-                    :disabled="csvFiles.length === 0"
-                    @click="openSizeMappingModal"
-                  >
+                  <VBtn color="primary" :disabled="csvFiles.length === 0" @click="openSizeMappingModal">
                     Настроить соответствие размеров
                   </VBtn>
                 </VCol>
@@ -403,12 +402,7 @@ const loading = ref(false)
     <VCard>
       <VCardTitle>Введите количество</VCardTitle>
       <VCardText>
-        <VTextField
-          v-model.number="newLabelCount"
-          label="Количество"
-          type="number"
-          min="0"
-        />
+        <VTextField v-model.number="newLabelCount" label="Количество" type="number" min="0" />
       </VCardText>
       <VCardActions>
         <VSpacer />
@@ -418,27 +412,15 @@ const loading = ref(false)
     </VCard>
   </VDialog>
 
-  <VSnackbar
-    v-model="snackbar"
-    :timeout="3000"
-    :color="snackColor"
-    location="top right"
-  >
+  <VSnackbar v-model="snackbar" :timeout="3000" :color="snackColor" location="top right">
     {{ snackMessage }}
   </VSnackbar>
 
-  <SizeMappingModal
-    v-model="showSizeModal"
-    :productId="markingData ? markingData.product_id : 0"
-    :files="csvFiles"
-  />
+  <SizeMappingModal v-model="showSizeModal" :productId="markingData ? markingData.product_id : 0" :files="csvFiles" />
 
-  <DefectiveLabelModal
-    v-model="showDefectiveModal"
-  />
+  <DefectiveLabelModal v-model="showDefectiveModal" />
 
-  <CustomLoading :loading="loading"/>
+  <CustomLoading :loading="loading" />
 </template>
 
-<style lang="scss" scoped>
-</style>
+<style lang="scss" scoped></style>

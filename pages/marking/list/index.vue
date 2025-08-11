@@ -19,15 +19,13 @@ const isLoading = ref(false)
 const router = useRouter()
 const clients = ref<Client[]>([])
 const selectedClientId = ref<number | undefined>()
-const labelsData = ref<{ labels: Label[]; total: number }>({ labels: [], total: 0 })
+const labels = ref<Label[]>()
 const searchQuery     = ref<string>('')
 const isSearchFocused = ref<boolean>(false)
 const showCreateDialog = ref(false)
 const itemsPerPage = ref<number>(10)
 const page = ref<number>(1)
-
-const labels = computed<Label[]>(() => labelsData.value.labels)
-const totalLabels = computed<number>(() => labelsData.value.total)
+const totalLabels = computed<number>(() => labels.value?.length || 0)
 
 const deleteDialog = ref(false)
 const selectedDeleteId = ref<number | null>(null)
@@ -74,10 +72,7 @@ const fetchLabels = async () => {
   }
 
   if (data.value) {
-    labelsData.value = {
-      labels: data.value,
-      total:    data.value.total,
-    }
+    labels.value = data.value
   }
 
   isLoading.value = false

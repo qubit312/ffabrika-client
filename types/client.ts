@@ -9,6 +9,7 @@ export interface Client {
   tin: string
   psrn: string
   account: string
+  wb_api_token: string
   bank: string
   correspondent_account: string
   bic: string
@@ -38,6 +39,7 @@ export interface CreateClientDto {
   correspondent_account: string;
   bic: string;
   legal_address: string;
+  wb_api_token: string;
   vat: string;
 }
 

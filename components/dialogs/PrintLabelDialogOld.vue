@@ -43,7 +43,6 @@ const labelError = computed(() => !labelCount.value || labelCount.value <= 0)
 const isLowloadedLabelInPrinterCount = computed(() => {
   const warning_threshold = selectedPrinter.value?.warning_threshold
     if (warning_threshold) {
-      console.log(loadedLabelInPrinterCount.value * (1 - warning_threshold))
       return loadedLabelInPrinterCount.value < loadedLabelInPrinterCount.value * (1 - warning_threshold)
     }
     return loadedLabelInPrinterCount.value < 0

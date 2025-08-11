@@ -16,7 +16,7 @@ const mode = ref<'create' | 'edit' | 'view' >('create')
 const isFormInitialized = ref(false)
 const originalForm = ref<WbProduct | null>(null)
 
-const productSize = reactive<ProductSize>({
+const productSize = ref<ProductSize>({
   id: 0,
   product_id: 0,
   value: '',
@@ -41,7 +41,6 @@ const form = reactive<WbProduct>({
 
 const firstSizeBarcode = computed({
   get: () => {
-    console.log(form.productSizes)
     return form.productSizes?.[0]?.barcode ?? ''
   },
   set: val => {
@@ -68,6 +67,7 @@ function mapServerResponseToForm(serverData: any): void {
   const sizes = serverData.sizes;
   if (sizes) {
     form.productSizes = sizes
+    productSize.value = Array.isArray(sizes) && sizes.length > 0 ? sizes[0] : null
   }
   originalForm.value = structuredClone(toRaw(form))
 }
@@ -122,7 +122,6 @@ async function fetchProduct(id: number) {
   mode.value = 'view';
   mapServerResponseToForm(data.value)
   isFormInitialized.value = true
-  console.log(data.value)
   loading.value = false
 }
 
@@ -161,9 +160,9 @@ async function onSubmit() {
   }
   
   if (form.category === 'COMMON') {
-    const result = await saveSize(data.value.id)
+    const result = await saveSingleSize(data.value.id)
     showSnackbar(result.message, result.success)
-    console.log(result.message)
+
     if (!result.success) {
       loading.value = false
       return
@@ -178,35 +177,29 @@ async function onSubmit() {
   loading.value = false
 }
 
-async function saveSize(productId: number): Promise<{ success: boolean, message: string }> {
-  if (form.category !== 'COMMON') {
-    return { success: true, message: 'категория не общая' }
+async function saveSingleSize(productId: number): Promise<{ success: boolean, message: string }> {
+  const size = productSize.value 
+  if (form.category !== 'COMMON' || (!size.id && !size.barcode)) {
+    return { success: true, message: '' }
   }
 
   if (!form.category) {
     return { success: false, message: 'Выберите категорию' }
   }
-
-  const sizeList = form.productSizes
-  const firstSize = Array.isArray(sizeList) && sizeList.length > 0 ? sizeList[0] : null
-
-  if (!firstSize) {
-    return { success: true, message: 'Не найден размер' }
-  }
-
+  
   const payload = {
     product_id: productId,
-    value: firstSize.value || '',
-    barcode: firstSize.barcode || ''
+    value: size.value || '',
+    barcode: size.barcode || ''
   }
-
+  
   let data, error
 
   if (mode.value === 'edit') {
-    if (!firstSize.id) {
+    if (!size.id) {
       ({ data, error } = await createProductSize(payload))
     } else {
-      ({ data, error } = await updateProductSize(firstSize.id, payload))
+      ({ data, error } = await updateProductSize(size.id, payload))
     }
   } else {
     ({ data, error } = await createProductSize(payload))
@@ -319,7 +312,7 @@ function handlePlaceholderClick() {
         <VCard class="mb-6">
           <VCardText>
             <VRow>
-              <VCol cols="12" md="4">
+              <VCol cols="12" md="8">
                 <AppTextField v-model="form.name" label="Название" outlined />
               </VCol>
               <VCol cols="4">
@@ -341,10 +334,10 @@ function handlePlaceholderClick() {
               </VCol>
               <VCol cols="12" md="4">
                 <AppTextField
-                  v-if="form.id && form.category != 'CLOTHES'"
+                  v-if="form.category != 'CLOTHES'"
                   label="Баркод"
                   placeholder=""
-                  v-model="firstSizeBarcode"
+                  v-model="productSize.barcode"
                 />
               </VCol>
               <VCol cols="6" md="6">

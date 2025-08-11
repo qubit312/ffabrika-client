@@ -72,7 +72,6 @@ watch(selectedTargetProductId, id => {
 })
 const availableSourceQuantity = computed(() => {
   const size = sourceSizes.value.find(s => s.id === selectedSourceSizeId.value)
-  console.log(size?.available_labels_count ?? 0)
   return size?.available_labels_count ?? 0
 })
 

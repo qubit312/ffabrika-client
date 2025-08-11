@@ -9,6 +9,7 @@ interface Props {
   product: WbProduct
   name: string
   labelId: number
+  parentComponent: string
 }
 
 const headers = [
@@ -61,12 +62,11 @@ const fetchSizes = async (productId: number) => {
     return
   }
 
-  productSizeList.value = data.value.data.map(mapPS)
+  productSizeList.value = data.value.data.map(mapPS)  
 }
 
 const saveVariant = async () => {
   try {
-    console.log(props)
     if (!props.product?.id) {
       console.error('saveVariant: product не определён')
       return
@@ -175,7 +175,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="d-flex align-center mb-4">
+  <!-- <div class="d-flex align-center mb-4">
     <h2 class="text-h5 ma-0">Размеры</h2>
 
     <VBtn
@@ -187,7 +187,7 @@ onUnmounted(() => {
     >
       <VIcon icon="tabler-plus" />
     </VBtn>
-  </div>
+  </div> -->
 
   <VDataTable
     :headers="headers"
@@ -213,7 +213,7 @@ onUnmounted(() => {
           </template>
           <span>Редактировать</span>
         </VTooltip>
-        <VTooltip open-delay="600" v-if="isLabelParent">
+        <VTooltip open-delay="600" v-if="parentComponent === 'marking'">
           <template #activator="{ props }">
             <IconBtn
               v-bind="props"
@@ -245,7 +245,7 @@ onUnmounted(() => {
       </div>
     </template>
   </VDataTable>
-  <VBtn color="primary" class="mb-4 me-4" @click="addItem">
+  <VBtn color="primary" class="mb-4 me-4 mt-4" @click="addItem">
     Добавить размер
   </VBtn>
   
