@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url'
 import { defineNuxtConfig } from 'nuxt/config'
 import vuetify from 'vite-plugin-vuetify'
 import svgLoader from 'vite-svg-loader'
+
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   ssr: false,
