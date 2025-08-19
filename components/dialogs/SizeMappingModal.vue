@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ProductSize } from '@/types/productSize'
 import { computed, reactive, ref, watch } from 'vue'
 import { useLabelEvents } from '../../composables/useLabelBus'
 import { importChestnyZnakLabels } from '../../services/chz'
@@ -70,7 +71,7 @@ async function fetchSizes() {
       return
     }
 
-    sizeOptions.value = data.value.data.map(ps => ({
+    sizeOptions.value = data.value.data.map((ps: ProductSize) => ({
       value: String(ps.id),
       label: ps.value,
     }))

@@ -9,7 +9,7 @@ import { getBrands } from '../../../services/brands'
 import { createProduct, getProduct, updateProduct } from '../../../services/products'
 import { createProductSize, updateProductSize } from '../../../services/productSizes'
 import type { CreateWbProductDto, WbProduct } from '../../../types/product'
-import type { ProductSize } from '../../../types/productSize'
+import type { ProductSize, ProductSizeWithLabels } from '../../../types/productSize'
 
 const route = useRoute()
 const router = useRouter()
@@ -54,6 +54,7 @@ const form = reactive<WbProduct>({
   created_at: new Date(),
   updated_at: new Date(),
   has_chestny_znak: false,
+  sizes: []
 })
 
 function mapServerResponseToForm(serverData: any): void {
@@ -107,7 +108,7 @@ async function fetchClients() {
     return
   }
   if (data.value) {
-    clientOptions.value = data.value.map(c => ({
+    clientOptions.value = data.value.map((c: { id: number; name: string })=> ({
       label: c.name,
       value: c.id,
     }))
@@ -292,7 +293,7 @@ async function fetchBrands() {
   loading.value = false
 }
 
-const handleChildCall = (params) => {
+const handleChildCall = (params: ProductSizeWithLabels) => {
   if (!params) {
     return
   }
