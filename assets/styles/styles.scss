@@ -1,1 +1,13 @@
 // Write your overrides
+/* assets/styles/variables/_vuetify.scss */
+$theme-colors: (
+  'primary': #000000, // Устанавливаем основной цвет темы
+);
+
+:root {
+  --v-global-theme-primary: #000000;
+}
+
+.logo-container svg {
+  height: 50px ;
+}

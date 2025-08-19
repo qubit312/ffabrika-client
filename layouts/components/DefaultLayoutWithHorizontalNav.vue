@@ -22,9 +22,6 @@ import { VNodeRenderer } from '@layouts/components/VNodeRenderer'
       >
         <VNodeRenderer :nodes="themeConfig.app.logo" />
 
-        <h1 class="app-title font-weight-bold leading-normal text-xl text-capitalize">
-          {{ themeConfig.app.title }}
-        </h1>
       </NuxtLink>
       <VSpacer />
 

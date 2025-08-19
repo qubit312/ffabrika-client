@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, toRaw, watch } from 'vue'
+import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
+import { useBreadcrumbs } from '@/composables/useBreadcrumbs'
+import { computed, onMounted, reactive, ref, toRaw, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '../../../composables/useApi'
 import { categoryOptions } from '../../../constants/productCategories'
@@ -16,6 +18,17 @@ const primaryId = Number(idParam)
 const mode = ref<'create' | 'edit' | 'view' >('create')
 const isFormInitialized = ref(false)
 const originalForm = ref<WbProduct | null>(null)
+
+
+const isCreate = computed(() => mode.value === 'create')
+const currentTitle = computed(() => form.name)
+
+const { items: productCrumbs, fullTitle: productTitle } = useBreadcrumbs(
+  'Товары',
+  { name: 'product-list' },
+  currentTitle,
+  isCreate,
+)
 
 const productSize = ref<ProductSize>({
   id: 0,
@@ -292,6 +305,7 @@ const handleChildCall = (params) => {
 
 <template>
   <div>
+  <AppBreadcrumbs :items="productCrumbs" class="mb-2" />
     <div class="d-flex flex-wrap justify-start justify-sm-space-between gap-y-4 gap-x-6 mb-6">
       <div class="d-flex flex-column justify-center">
         <h4 class="text-h4 font-weight-medium">

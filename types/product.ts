@@ -2,6 +2,7 @@ import type { Brand } from "./brand"
 import type { ProductSize } from "./productSize"
 
 export interface WbProduct {
+  sizes: any
   id: number
   created_by: number | null
   created_at: Date

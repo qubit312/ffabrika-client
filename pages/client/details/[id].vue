@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, toRaw, watch } from 'vue'
+import { computed, onMounted, reactive, ref, toRaw, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CustomLoading from '../../../components/CustomLoading.vue'
 import { categoryOptions } from '../../../constants/productCategories'
@@ -34,6 +34,16 @@ const snackColor = ref<'success' | 'error'>('success')
 const sizeItems = ref<ProductSize[]>([
   { id: 0, value: '', tech_size: '', barcode: '', product_id: 0 }
 ])
+
+const isCreate = computed(() => mode.value === 'create')
+const currentTitle = computed(() => form.name)
+
+const { items: clientCrumbs, fullTitle: clientTitle } = useBreadcrumbs(
+  'Клиенты',
+  { name: 'client-list' },
+  currentTitle,
+  isCreate,
+)
 
 const savedProducts = ref<WbProduct[]>([])
 const form = reactive<Client>({
@@ -434,6 +444,7 @@ const editedBrand = reactive({
 
 <template>
   <div>
+   <AppBreadcrumbs :items="clientCrumbs" class="mb-2" />
     <div class="d-flex flex-wrap justify-start justify-sm-space-between gap-y-4 gap-x-6 mb-6">
       <div class="d-flex flex-column justify-center">
         <h4 class="text-h4 font-weight-medium">
