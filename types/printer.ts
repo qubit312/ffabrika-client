@@ -5,10 +5,6 @@ export interface Printer {
   capacity: number
   warning_threshold: number
   last_synced_at: string | null
-  created_at: string
-  updated_at: string
-  created_by: number | null
-  updated_by: number | null
 }
 
 export interface CreatePrinterDto {

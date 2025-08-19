@@ -5,6 +5,7 @@ import { replaceProductSize } from '../../services/chz';
 import { getProducts } from '../../services/products';
 import { getProductSizes } from '../../services/productSizes';
 import type { WbProduct } from '../../types/product';
+import type { ProductSizeWithLabels } from '../../types/productSize';
 
 interface Props {
   modelValue: boolean
@@ -16,14 +17,6 @@ const emit  = defineEmits<{
 }>()
 const dialog = ref(props.modelValue)
 const { onLabelsUpdated } = useLabelEvents()
-
-interface ProductSize {
-  id: number
-  product_id: number
-  value: string
-  barcode: string
-  available_labels_count: number
-}
 
 const sourceProducts = ref<WbProduct[]>([])
 const targetProducts = ref<WbProduct[]>([])
@@ -75,8 +68,8 @@ const availableSourceQuantity = computed(() => {
   return size?.available_labels_count ?? 0
 })
 
-const sourceSizes = ref<ProductSize[]>([])
-const targetSizes = ref<ProductSize[]>([])
+const sourceSizes = ref<ProductSizeWithLabels[]>([])
+const targetSizes = ref<ProductSizeWithLabels[]>([])
 
 async function fetchProducts() {
   const { data, error } = await getProducts()
@@ -130,29 +123,79 @@ async function onReplaceSize() {
 
 onMounted(fetchProducts)
 </script>
+
 <template>
-  <VDialog v-model="dialog" max-width="600">
+  <VDialog v-model="dialog" max-width="750">
     <VCard>
       <VCardTitle>Перенос этикеток</VCardTitle>
       <VCardText>
         <VRow dense align="start">
           <!-- Откуда -->
-          <VCol cols="5" class="d-flex flex-column">
+          <VCol class="d-flex flex-column">
             <div class="font-weight-medium mb-2">Откуда берём этикетки</div>
-            <AppSelect
+            <VLabel class="text-body-2 mb-1" style="color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity))">Товар</VLabel>
+            <VAutocomplete
               v-model="selectedSourceProductId"
               :items="sourceProducts"
               item-title="name"
               item-value="id"
-              label="Товар"
-              outlined
-            />
+              :density="selectedSourceProductId ? 'compact' : 'comfortable'"
+              :variant="selectedSourceProductId ? 'plain' : 'outlined'"  
+              :menu-icon="null"
+              :clearable="false"
+              placeholder="Поиск по артикулу WB или названию"
+              class="mb-6"
+            >
+              <template #selection="{ item }">
+                <template v-if="item && item.raw">
+                  <div class="mt-4 d-flex align-center" style="min-width: 0; overflow: hidden;">
+                    <div class="mr-2 d-flex">
+                      <img
+                        style="border-radius: 5px; max-height: 48px;"
+                        width="36"
+                        src="https://placehold.co/36x48"
+                      />
+                    </div>
+                    <div class="d-flex flex-column" style="min-width: 0; overflow: hidden;">
+                      <div
+                        style="
+                          font-size: 14px;
+                          font-weight: 600;
+                          white-space: nowrap;
+                          overflow: hidden;
+                          text-overflow: ellipsis;
+                        "
+                      >
+                        {{ item.title }}
+                      </div>
+
+                      <div
+                        style="
+                          font-size: 13px;
+                          font-weight: 600;
+                          color: rgba(0, 0, 0, 0.55);
+                          white-space: nowrap;
+                          overflow: hidden;
+                          text-overflow: ellipsis;
+                        "
+                      >
+                        <span>{{ item.raw.article }}</span>
+                        <span class="mx-1">•</span>
+                        <span>{{ 'long-sliv-black' }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </template>
+            </VAutocomplete>
+
             <AppSelect
               v-model="selectedSourceSizeId"
               :items="sourceSizes"
               item-title="value"
               item-value="id"
               :disabled="!selectedSourceProductId"
+              class="mt-2"
               label="Размер"
               outlined
             />
@@ -160,24 +203,69 @@ onMounted(fetchProducts)
           </VCol>
 
           <!-- Стрелка -->
-          <VCol cols="2"
-            class="d-flex justify-center"
+          <VCol cols="auto"
+            class="d-flex justify-center ma-2"
             align-self="center"
           >
             <VIcon size="36">tabler-arrow-right</VIcon>
           </VCol>
 
           <!-- Куда -->
-          <VCol cols="5" class="d-flex flex-column">
+          <VCol  class="d-flex flex-column">
             <div class="font-weight-medium mb-2">Куда переносим</div>
-            <AppSelect
+            <VLabel class="text-body-2 mb-1" style="color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity))">Товар</VLabel>
+            <VAutocomplete
               v-model="selectedTargetProductId"
               :items="targetProducts"
               item-title="name"
               item-value="id"
-              label="Товар"
-              outlined
-            />
+              :density="selectedTargetProductId ? 'compact' : 'comfortable'"
+              :variant="selectedTargetProductId ? 'plain' : 'outlined'"
+              placeholder="Поиск по артикулу WB или названию"
+              :menu-icon="null"
+              :clearable="false"
+              class="mb-6"
+            >
+              <template #selection="{ item }">
+                <div class="mt-4 d-flex align-center" style="min-width: 0; overflow: hidden;">
+                  <div class="mr-2 d-flex">
+                    <img 
+                      style="border-radius: 5px; max-height: 48px;" 
+                      width="36"
+                      src="https://placehold.co/36x48"
+                    />
+                  </div>
+                  <div class="d-flex flex-column" style="min-width: 0; overflow: hidden;">
+                    <div 
+                      style="
+                        font-size: 14px;
+                        font-weight: 600;
+                        white-space: nowrap;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                      "
+                    >
+                      {{ item.title }}
+                    </div>
+
+                    <div 
+                      style="
+                        font-size: 13px;
+                        font-weight: 600;
+                        color: rgba(0, 0, 0, 0.55);
+                        white-space: nowrap;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                      "
+                    >
+                      <span>{{ item.raw.article }}</span>
+                      <span class="mx-1">•</span>
+                      <span>{{ 'long-sliv-black' }}</span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </VAutocomplete>
             <AppSelect
               v-model="selectedTargetSizeId"
               :items="targetSizes"
@@ -185,6 +273,7 @@ onMounted(fetchProducts)
               item-value="id"
               :disabled="!selectedTargetProductId"
               label="Размер"
+              class="mt-2"
               outlined
             />
             <AppTextField
@@ -198,9 +287,9 @@ onMounted(fetchProducts)
           </VCol>
         </VRow>
       </VCardText>
-      <VCardActions class="justify-end">
+      <VCardActions class="justify-end pa-6 pt-0">
         <VBtn @click="dialog = false">Отмена</VBtn>
-        <VBtn color="primary" @click="onReplaceSize">Сохранить</VBtn>
+        <VBtn color="primary" variant="flat" @click="onReplaceSize">Сохранить</VBtn>
       </VCardActions>
     </VCard>
   </VDialog>

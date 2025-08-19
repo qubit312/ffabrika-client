@@ -1,29 +1,17 @@
-export interface ProductSize {
-  id: number
-  product_id: number
+export interface ProductSizeBase {
   value: string
+  tech_size: string
   barcode: string
-  quantity: number
+  product_id: number
 }
 
-export interface SizeItem {
-  id?:       number
-  value:     string
-  quantity:  number
-  barcode:   string
-}
-export interface ProductSizeWithLabels {
+export interface ProductSize extends ProductSizeBase {
   id: number
-  product_id: number
-  value: string
-  barcode: string
+}
+
+export interface ProductSizeWithLabels extends ProductSize {
   available_labels_count: number
 }
 
-export interface CreateProductSizeDto {
-  product_id: number
-  value:      string
-  barcode:    string
-}
-
-export type UpdateProductSizeDto = CreateProductSizeDto
+export type CreateProductSizeDto = ProductSizeBase
+export type UpdateProductSizeDto = ProductSizeBase

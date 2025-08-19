@@ -3,12 +3,14 @@ import { onMounted, reactive, ref, toRaw, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CustomLoading from '../../../components/CustomLoading.vue'
 import { categoryOptions } from '../../../constants/productCategories'
+import { createBrand, getBrands } from '../../../services/brands'
 import { createClient, getClient, updateClient } from '../../../services/clients'
 import { createProduct, deleteProduct, getProducts } from '../../../services/products'
-import { createProductSize, updateProductSize } from '../../../services/productSizes'
+import { createProductSize } from '../../../services/productSizes'
+import type { Brand } from '../../../types/brand'
 import type { Client, CreateClientDto } from '../../../types/client'
 import type { CreateWbProductDto, WbProduct } from '../../../types/product'
-import type { CreateProductSizeDto, SizeItem } from '../../../types/productSize'
+import type { CreateProductSizeDto, ProductSize } from '../../../types/productSize'
 
 const typeOptions = [
   { label: 'Юридическое лицо', value: 'LEGAL_ENTITY' },
@@ -29,14 +31,11 @@ const snackbar = ref(false)
 const snackMessage = ref('')
 const snackColor = ref<'success' | 'error'>('success')
 
-const sizeItems = ref<SizeItem[]>([
-  { value: '', quantity: 0, barcode: '' }
+const sizeItems = ref<ProductSize[]>([
+  { id: 0, value: '', tech_size: '', barcode: '', product_id: 0 }
 ])
-interface ProductUI extends WbProduct {
-  sizes: SizeItem[]
-}
 
-const savedProducts = ref<ProductUI[]>([])
+const savedProducts = ref<WbProduct[]>([])
 const form = reactive<Client>({
   id: 0,
   name: '',
@@ -142,6 +141,8 @@ async function saveProduct() {
     composition:     productForm.composition,
     category:     productForm.category,
     has_chestny_znak: productForm.hasChestnyZnak,
+    vendor_code: '',
+    brand_id: null
   }
   const response = await createProduct(payload)
 
@@ -168,20 +169,17 @@ async function saveProduct() {
   loading.value = false
 }
 
-async function saveSize(item: SizeItem, productId: number) {
+async function saveSize(item: ProductSize, productId: number) {
   try {
     const dto: CreateProductSizeDto = {
       product_id: productId,
       value:      item.value,
+      tech_size:      item.tech_size,
       barcode:    item.barcode,
     }
 
     let response
-    if (item.id) {
-      response = await updateProductSize(item.id, dto)
-    } else {
-      response = await createProductSize(dto)
-    }
+    response = await createProductSize(dto)
 
     const { data, error } = response
     if (error.value) throw error.value
@@ -212,10 +210,10 @@ async function fetchProducts() {
   if (error.value) {
     console.error('Ошибка при загрузке товаров:', error.value)
   } else {
-    const list: ProductUI[] = (data.value ?? []).map(prod => {
+    const list: WbProduct[] = (data.value ?? []).map(prod => {
       return {
         ...prod,
-        sizes: []
+        productSizes: []
       }
     })
 
@@ -287,6 +285,7 @@ onMounted(() => {
   if (primaryId > 0) {
     fetchClient(primaryId)
     fetchProducts()
+    fetchBrands(primaryId)
   }
 })
 
@@ -305,9 +304,7 @@ function resetProductForm() {
   productForm.category = ''
   productForm.hasChestnyZnak = false
   productForm.size = [] 
-  sizeItems.value = [
-    { value: '', quantity: 0, barcode: '' }
-  ]
+  sizeItems.value = []
 }
 
 function cancelEdit() {
@@ -318,7 +315,7 @@ function cancelEdit() {
 }
 
 const addSize = () => {
-  sizeItems.value.push({ value: '', quantity: 0, barcode: '' })
+  sizeItems.value.push({ value: '', tech_size: '', barcode: '', id: 0, product_id: 0 })
 }
 
 const removeSize = (idx: number) => {
@@ -357,7 +354,6 @@ const importProductsFromWb = async () => {
         errors: data.value.errors || []
       })
       
-      // Обновляем список товаров после успешного импорта
       await fetchProducts()
     }
   } catch (e) {
@@ -371,6 +367,69 @@ const importProductsFromWb = async () => {
   }
 }
 
+// Бренды
+async function fetchBrands(clientId: number) {
+  loading.value = true
+  const { data, error } = await getBrands(clientId)
+  if (error.value) {
+    console.error('Ошибка при загрузке брендов:', error.value)
+  } else {
+    mode.value = 'view';
+    clientBrands.value = data.value
+  }
+  loading.value = false
+}
+
+const submitBrand = async () => {
+  if (!editedBrandVisible.value) {
+    editedBrandVisible.value = true
+    return
+  }
+
+  loading.value = true
+  
+  try {
+    const payload = {
+      name: editedBrand.name,
+      client_id: editedBrand.clientId
+    }
+
+    const { data, error } = await createBrand(payload)
+    console.log(data.value)
+    if (error.value) {
+      snackColor.value = 'error'
+      snackMessage.value = 'Ошибка при сохранении бренда'
+    } else {
+      snackColor.value = 'success'
+      snackMessage.value = 'Бренд создан'
+      const brand: Brand = data.value
+      if (brand && brand.id && brand.name) {
+        clientBrands.value.push({
+          name: brand.name, 
+          id: brand.id, 
+          client_id: brand.client_id
+        })
+      }
+      editedBrand.name = ''
+    }
+
+    editedBrandVisible.value = false
+    snackbar.value = true
+  } catch (e) {
+    console.error('Brand submit error:', e)
+    snackColor.value = 'error'
+    snackMessage.value = 'Неизвестная ошибка при сохранении бренда'
+  } finally {
+    loading.value = false
+  }
+}
+
+const editedBrandVisible = ref(false)
+const clientBrands = ref<Brand[]>([])
+const editedBrand = reactive({
+  name: '',
+  clientId: primaryId,
+})
 </script>
 
 <template>
@@ -426,6 +485,40 @@ const importProductsFromWb = async () => {
               </VCol>
               <VCol cols="12" md="12">
                 <AppTextField v-model="form.telegram" label="Telegram" placeholder="@username" outlined />
+              </VCol>
+            </VRow>
+          </VCardText>
+        </VCard>
+        <VCard title="Мои бренды" class="mb-6">
+          <VCardText>
+            <VRow>
+              <VCol md="12" class="pt-0 pb-0">
+                <VList class="pt-0 pb-0">
+                  <template
+                    v-for="(brand, index) of clientBrands"
+                    :key="brand.id"
+                  >
+                    <AppTextField class="mb-4" v-model="brand.name" outlined readonly/>
+                  </template>
+                </VList>
+                <AppTextField class="mb-4" v-if="editedBrandVisible" v-model="editedBrand.name" outlined>
+                  <template #append>
+                    <VIcon
+                      color="error"
+                      icon="tabler-x"
+                      @click="editedBrandVisible = !editedBrandVisible"
+                    />
+                  </template>
+                </AppTextField>
+              </VCol>  
+
+              <VCol md="12">
+                <VBtn color="primary" :onclick="submitBrand">
+                  <VIcon
+                    start
+                    :icon="editedBrandVisible ? 'tabler-check' : 'tabler-plus'"
+                  />{{ editedBrandVisible ? "Сохранить" : "Добавить"}}
+                </VBtn>
               </VCol>
             </VRow>
           </VCardText>
@@ -541,20 +634,7 @@ const importProductsFromWb = async () => {
             <VDataTable :headers="productHeaders" :items="savedProducts">
               <template #no-data></template>
               <template #bottom></template>
-              <template #[`item.sizes`]="{ item }">
-                <div v-for="(s, i) in item.sizes" :key="i">
-                  {{ s.value }} ({{ s.quantity }}) - {{ s.barcode }}
-                </div>
-              </template>
               <template #[`item.actions`]="{ item, index }">
-                <!-- <VBtn class="me-4" icon color="primary" @click="editProduct(item)">
-                  <VIcon>tabler-edit</VIcon>
-                </VBtn> -->
-                <!-- <RouterLink class="me-4" :to="{ name: 'product-details-id', params: { id: item.id } }">
-                  <VBtn icon color="primary">
-                    <VIcon>tabler-point</VIcon>
-                  </VBtn>
-                </RouterLink> -->
                 <RouterLink :to="{ name: 'product-details-id', params: { id: item.id } }">
                   <IconBtn class="me-2" icon>
                     <VIcon size="20" icon="tabler-eye" />

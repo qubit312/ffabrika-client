@@ -2,19 +2,28 @@
 import { computed, defineExpose, defineProps, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useLabelEvents } from '../composables/useLabelBus';
 import { createProductSize, deleteProductSize, getProductSizes, updateProductSize } from '../services/productSizes';
+import type { NewLabelInterface } from '../types/label';
+import type { Printer } from '../types/printer';
 import type { WbProduct } from '../types/product';
 import type { ProductSizeWithLabels } from '../types/productSize';
 
 interface Props {
   product: WbProduct
   name: string
-  labelId: number
+  label: NewLabelInterface | null
   parentComponent: string
+  printer: Printer | null
 }
+
+const emit = defineEmits<{
+  (e: 'printer-updated', v: number | null): void;
+  (e: 'callParentMethod', v: ProductSizeWithLabels | null): void;
+}>()
 
 const headers = [
   { title: 'Баркод', key: 'barcode', sortable: false },
   { title: 'Размер', key: 'value', sortable: false },
+  { title: 'Рос. Размер', key: 'tech_size', sortable: false },
   { title: 'ЧЗ', key: 'available_labels_count', sortable: false },
   { title: 'Действия', key: 'actions', sortable: false },
 ];
@@ -26,7 +35,7 @@ const editDialog = ref(false)
 const deleteDialog = ref(false)
 const currentItem = ref<ProductSizeWithLabels | null>(null)
 const editedIndex = ref<number | null>(null)
-const editedItem = ref<ProductSizeWithLabels>({ id: 0, value: '', barcode: '', available_labels_count: 0, product_id: 0 })
+const editedItem = ref<ProductSizeWithLabels>({ id: 0, value: '', barcode: '', tech_size: '', available_labels_count: 0, product_id: 0 })
 
 const deleteConfirmationQuestion = computed(() => {
   let question  = `Удалить размер ${editedItem.value.value}?`
@@ -34,14 +43,19 @@ const deleteConfirmationQuestion = computed(() => {
 })
 const showLabelDialog = ref(false)
 const isDialogVisible = ref(false);
+
 const isLabelParent = computed(() => {
-  return props.labelId
+  if (!props.label || !props.label.id) {
+    return false
+  }
+  return true
 })
 
 const mapPS = (ps: ProductSizeWithLabels): ProductSizeWithLabels => ({
   id: ps.id,
   product_id: ps.product_id,
   value: ps.value,
+  tech_size: ps.tech_size,
   barcode: ps.barcode,
   available_labels_count: ps.available_labels_count,
 })
@@ -75,6 +89,7 @@ const saveVariant = async () => {
     const payload = {
       product_id: props.product.id,
       value: editedItem.value.value,
+      tech_size: editedItem.value.tech_size,
       barcode: editedItem.value.barcode,
     }
 
@@ -84,12 +99,14 @@ const saveVariant = async () => {
         throw new Error('Не удалось обновить вариант')
       }
       productSizeList.value[editedIndex.value] = mapPS(resp.value.data)
+      emit('callParentMethod', resp.value.data)
     } else {
       const { data: resp, error } = await createProductSize(payload)
       if (error.value) {
         throw new Error('Не удалось создать вариант. Ошибка: ' + resp.value)
       }
       productSizeList.value.push(mapPS(resp.value))
+      emit('callParentMethod', resp.value)
     }
   } catch (e: any) {
     console.error('Ошибка сохранения:', e)
@@ -127,7 +144,7 @@ const editItem = (item: ProductSizeWithLabels) => {
 
 const addItem = () => {
   editedIndex.value = null
-  editedItem.value = { id: 0, value: '', barcode: '', available_labels_count: 0, product_id: 0 }
+  editedItem.value = { id: 0, value: '', tech_size: '', barcode: '', available_labels_count: 0, product_id: 0 }
   editDialog.value = true
 }
 
@@ -175,20 +192,6 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <!-- <div class="d-flex align-center mb-4">
-    <h2 class="text-h5 ma-0">Размеры</h2>
-
-    <VBtn
-      class="ms-2"
-      icon
-      size="small"
-      variant="text"
-      @click="addItem"
-    >
-      <VIcon icon="tabler-plus" />
-    </VBtn>
-  </div> -->
-
   <VDataTable
     :headers="headers"
     :items="productSizeList"
@@ -249,7 +252,7 @@ onUnmounted(() => {
     Добавить размер
   </VBtn>
   
-  <VDialog v-model="editDialog" max-width="600px" >
+  <VDialog v-model="editDialog" max-width="500px" >
     <VCard>
       <VCardTitle>
         <span class="headline">Редактирование</span>
@@ -258,17 +261,24 @@ onUnmounted(() => {
       <VCardText>
         <VContainer>
           <VRow>
-            <VCol cols="12" sm="6" md="6" >
+            <VCol cols="12" >
               <VTextField
                 v-model="editedItem.barcode"
                 label="Баркод"
               />
             </VCol>
 
-            <VCol cols="12" sm="6" md="6" >
+            <VCol cols="12" >
               <VTextField
                 v-model="editedItem.value"
                 label="Размер"
+              />
+            </VCol>
+
+            <VCol cols="12" >
+              <VTextField
+                v-model="editedItem.tech_size"
+                label="Рос. Размер"
               />
             </VCol>
           </VRow>
@@ -325,14 +335,11 @@ onUnmounted(() => {
     </VCard>
   </VDialog>
   <PrintLabelDialog
-    v-if="isLabelParent && currentItem"
     v-model:visible="isDialogVisible"
-    :name="props.name ?? ''"
-    :sizeId="currentItem.id"
-    :article="currentItem.barcode"
-    :size="currentItem.value"
-    :availableLabelsCount="currentItem.available_labels_count"
-    :labelId="props.labelId"
+    :label="props.label"
+    :size="currentItem"
+    :printer="props.printer"
+    @printer-updated="emit('printer-updated', $event)"
   />
   <UpdateChzLabel
     v-if="isLabelParent && props.product && props.product.id"

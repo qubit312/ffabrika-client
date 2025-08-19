@@ -1,13 +1,5 @@
 import { useApi } from '../composables/useApi';
-
-interface ProductSize {
-  id: number
-  product_id: number
-  value: string
-  barcode: string
-  printable_label_count: number
-}
-
+import { ProductSize } from '../types/productSize';
 interface PaginatedResponse<T> {
   data: T[]
 }

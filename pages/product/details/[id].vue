@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, toRaw, watch } from 'vue'
+import { onMounted, reactive, ref, toRaw, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '../../../composables/useApi'
 import { categoryOptions } from '../../../constants/productCategories'
+import { getBrands } from '../../../services/brands'
 import { createProduct, getProduct, updateProduct } from '../../../services/products'
 import { createProductSize, updateProductSize } from '../../../services/productSizes'
 import type { CreateWbProductDto, WbProduct } from '../../../types/product'
@@ -20,8 +21,8 @@ const productSize = ref<ProductSize>({
   id: 0,
   product_id: 0,
   value: '',
-  barcode: '',
-  quantity: 0
+  tech_size: '',
+  barcode: ''
 })
 
 const form = reactive<WbProduct>({
@@ -31,23 +32,15 @@ const form = reactive<WbProduct>({
   name: '',
   color: '',
   article: '',
+  vendor_code: '',
   composition: '',
   category: '',
   client_id: null,
+  brand_id: null,
+  brand: null,
   created_at: new Date(),
   updated_at: new Date(),
-  has_chestny_znak: false
-})
-
-const firstSizeBarcode = computed({
-  get: () => {
-    return form.productSizes?.[0]?.barcode ?? ''
-  },
-  set: val => {
-    if (form.productSizes?.[0]) {
-      form.productSizes[0].barcode = val
-    }
-  }
+  has_chestny_znak: false,
 })
 
 function mapServerResponseToForm(serverData: any): void {
@@ -55,10 +48,13 @@ function mapServerResponseToForm(serverData: any): void {
   form.name = serverData.name || '';
   form.color = serverData.color || '';
   form.article = serverData.article || '';
+  form.vendor_code = serverData.vendor_code || '';
   form.composition = serverData.composition || '';
   form.category = serverData.category || '';
     
   form.client_id = serverData.client_id;
+  form.brand_id = serverData.brand_id;
+  form.brand = serverData.brand;
   form.created_by = serverData.created_by || '';
   form.updated_by = serverData.updated_by || '';
   form.created_at = serverData.created_at || '';
@@ -133,15 +129,17 @@ async function onSubmit() {
     loading.value = false
     return
   }
-  
+
   const payload: CreateWbProductDto = {
     client_id: form.client_id,
     name: form.name,
     color: form.color,
     article: form.article,
+    vendor_code: form.vendor_code,
     category: form.category,
     composition: form.composition,
-    has_chestny_znak: form.has_chestny_znak
+    has_chestny_znak: form.has_chestny_znak,
+    brand_id: form.brand_id,
   }
 
   let data, error
@@ -190,6 +188,7 @@ async function saveSingleSize(productId: number): Promise<{ success: boolean, me
   const payload = {
     product_id: productId,
     value: size.value || '',
+    tech_size: size.tech_size || '',
     barcode: size.barcode || ''
   }
   
@@ -240,6 +239,55 @@ function cancelEdit() {
 function handlePlaceholderClick() {
   console.log('Заглушка: клик по загрузке изображения');
 }
+
+const brandOptions = ref<{ label: string; value: number }[]>([])
+
+watch(
+  () => form.client_id,
+  (clientId) => {
+    if (clientId) {
+      // form.brand_id = null
+      const brandClientId = form.brand?.client_id
+      if (brandClientId != clientId) {
+        form.brand_id = null
+      } 
+      fetchBrands()
+    }
+  },
+  { immediate: true }
+);
+
+async function fetchBrands() {
+  loading.value = true
+  const clientId = form.client_id
+  if (!clientId) {
+    return
+  }
+
+  const { data, error } = await getBrands(clientId)
+  if (error.value) {
+    console.error('Ошибка при загрузке брендов:', error.value)
+    loading.value = false
+    return
+  }
+  if (data.value) {
+    brandOptions.value = data.value
+  } else {
+    brandOptions.value = []
+    console.warn('data.value is null')
+  }
+  loading.value = false
+}
+
+const handleChildCall = (params) => {
+  if (!params) {
+    return
+  }
+
+  if (params.id == productSize.value.id) {
+    productSize.value = params
+  }
+};
 </script>
 
 <template>
@@ -315,16 +363,17 @@ function handlePlaceholderClick() {
               <VCol cols="12" md="8">
                 <AppTextField v-model="form.name" label="Название" outlined />
               </VCol>
-              <VCol cols="4">
-                <AppTextField
-                  label="Артикул товара"
-                  placeholder="FXSK123U"
-                  v-model="form.article"
-                />
-              </VCol>
               <VCol cols="12" md="4">
                 <AppTextField v-model="form.color" label="Цвет" outlined />
               </VCol>
+              <VCol cols="4">
+                <AppTextField
+                  label="Артикул товара"
+                  placeholder=""
+                  v-model="form.article"
+                />
+              </VCol>
+              
               <VCol cols="12" md="4">
                 <AppTextField
                   label="Состав"
@@ -339,6 +388,26 @@ function handlePlaceholderClick() {
                   placeholder=""
                   v-model="productSize.barcode"
                 />
+              </VCol>
+              <VCol cols="12" md="4">
+                <AppTextField
+                  label="Артикул продавца"
+                  placeholder="112233445"
+                  v-model="form.vendor_code"
+                />
+              </VCol>
+              <VCol cols="12" md="4">
+                <AppSelect
+                  v-model="form.brand_id"
+                  :items="brandOptions"
+                  item-title="name"
+                  item-value="id"
+                  label="Бренд"
+                  placeholder="Выберите бренд"
+                  clearable
+                />
+              </VCol>
+              <VCol cols="12" md="4">
               </VCol>
               <VCol cols="6" md="6">
                 <VSwitch
@@ -356,6 +425,7 @@ function handlePlaceholderClick() {
               :product="form"
               :name="form.name"
               labelId="0"
+              @call-parent-method="handleChildCall"
             />
           </VCardText>
         </VCard>

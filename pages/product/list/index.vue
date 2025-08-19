@@ -16,7 +16,7 @@ const headers = [
   { title: 'Артикул', key: 'article' },
   { title: 'Цвет', key: 'color' },
   { title: 'Размеры', key: 'sizes', sortable: false },
-  { title: 'Изменено', key: 'updatedAt' },
+  { title: 'Изменено', key: 'updated_at' },
   { title: 'Действия', key: 'actions', sortable: false },
 ]
 
@@ -347,14 +347,14 @@ function formatDate(date: string | Date) {
                   <tr>
                     <th style="font-weight: 700;">Баркод</th>
                     <th style="font-weight: 700;">Размер</th>
-                    <th style="font-weight: 700;">ЧЗ</th>
+                    <th style="font-weight: 700;" v-if="item.has_chestny_znak">ЧЗ</th>
                   </tr>
                 </thead>
                 <tbody style="font-size: 14px;">
                   <tr v-for="size in item.sizes" :key="size.barcode">
                     <td>{{ size.barcode }}</td>
                     <td>{{ size.value }}</td>
-                    <td>{{ size.available_labels_count }}</td>
+                    <td v-if="item.has_chestny_znak">{{ size.available_labels_count }}</td>
                   </tr>
                 </tbody>
               </VTable>
@@ -380,7 +380,7 @@ function formatDate(date: string | Date) {
         </template>
 
         <!-- color -->
-        <template #item.updatedAt="{ item }">
+        <template #item.updated_at="{ item }">
           <div class="d-flex flex-column">
               <span>{{ formatDate(item.updated_at) }}</span>
           </div>

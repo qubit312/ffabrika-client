@@ -33,6 +33,7 @@ export interface CreateLabelDto {
 }
 
 export interface NewLabelInterface {
+  id: number
   name: string
   product_id: number
   product: WbProduct | null
@@ -41,4 +42,6 @@ export interface NewLabelInterface {
   print_single_ean13: boolean
   print_double_ean13: boolean
   duplicate_chz: boolean
+  label_template_id: number
+  size_display_type: string
 }

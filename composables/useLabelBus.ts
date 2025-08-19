@@ -7,6 +7,10 @@ export function useLabelEvents() {
     labelUpdateListeners.value.forEach(cb => cb())
   }
 
+  function onPrinterUpdated() {
+    labelUpdateListeners.value.forEach(cb => cb())
+  }
+
   function registerLabelUpdateListener(cb: () => void) {
     if (!labelUpdateListeners.value.includes(cb)) {
       labelUpdateListeners.value.push(cb)
@@ -19,6 +23,7 @@ export function useLabelEvents() {
 
   return {
     onLabelsUpdated,
+    onPrinterUpdated,
     registerLabelUpdateListener,
     unregisterLabelUpdateListener,
   }

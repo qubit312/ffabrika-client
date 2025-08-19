@@ -1,72 +1,50 @@
 <script setup lang="ts">
-import { computed, defineEmits, defineProps, onMounted, ref, watch } from 'vue';
-import { createPrinter, getPrinter, getPrinters, syncPrinterCount, updatePrinter } from '../services/printers';
+import { computed, defineEmits, defineProps, onMounted, reactive, ref, watch } from 'vue';
+import { createPrinter, getPrinters, syncPrinterCount, updatePrinter } from '../services/printers';
 import type { CreatePrinterDto, Printer } from '../types/printer';
 
 interface Props {
-  labelId: number
-  printerId: number | null
+  printer: Printer | null
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<{
-  (e: 'update:printerId', v: number | null): void
+  (e: 'printer-updated', v: number | null): void;
 }>()
 
 const snackbar = ref(false)
 const snackMessage = ref('')
 const snackColor = ref<'success' | 'error'>('success')
-const loadedLabelInPrinterCount = ref<number>(0)
-
-const isLowloadedLabelInPrinterCount = computed(() => {
-  const warning_threshold = selectedPrinter.value?.warning_threshold
-  if (warning_threshold) {
-    return loadedLabelInPrinterCount.value < loadedLabelInPrinterCount.value * (1 - warning_threshold)
-  }
-  return loadedLabelInPrinterCount.value < 0
-}
-)
-
-function showSnackbar(message: string, isSuccess: boolean) {
-  snackbar.value = true
-  snackMessage.value = message
-  if (isSuccess) {
-    snackColor.value = 'success'
-  } else {
-    snackColor.value = 'error'
-  }
-}
 
 const dialog = ref(false)
 const isEditMode = ref(false)
 const editingId = ref<number | null>(null)
 const printers = ref<Printer[]>([])
+
+const selectedPrinterId = ref<number | null>(null)
 const selectedPrinter = ref<Printer | null>(null)
-const selectedPrinterId = computed({
-  get: () => props.printerId,
-  set: v => {
-    if (v) {
-      onPrinterSelect(v)
-    }
-    emit('update:printerId', v || null)
-  },
-})
 
 watch(
-  () => props.printerId,
-  (id: number | null) => {
-    if (id) {
-      onPrinterSelect(id)
+  () => props.printer,
+  (newPrinter) => {
+    if (newPrinter) {
+      selectedPrinter.value = { ...newPrinter }
+      selectedPrinterId.value = newPrinter.id
+    } else {
+      selectedPrinter.value = null
+      selectedPrinterId.value = null
     }
   },
-)
+  { immediate: true }
+);
 
-const form = ref<CreatePrinterDto>({
-  name: '',
-  labels_count: 0,
-  capacity: 1,
-  warning_threshold: 0,
-})
+const printerName = computed(() => selectedPrinter.value?.name || '');
+
+const printerCapacity = computed(() => selectedPrinter.value?.capacity || 0);
+
+const printerWarningThreshold = computed(() => selectedPrinter.value?.warning_threshold || 0);
+
+const printerLabelsCount = computed(() => selectedPrinter.value?.labels_count || 0);
 
 async function fetchPrinters() {
   const { data, error } = await getPrinters()
@@ -80,60 +58,67 @@ async function fetchPrinters() {
 async function openDialog(id?: number | null) {
   dialog.value = true
   if (id) {
-    const { data, error } = await getPrinter(id);
-    const printer = data.value;
-    form.value = {
-      name: printer.name,
-      labels_count: printer.labels_count,
-      capacity: printer.capacity,
-      warning_threshold: printer.warning_threshold,
-    }
-    editingId.value = printer.id
+    editedPrinter.name = printerName.value
+    editedPrinter.labels_count = printerLabelsCount.value
+    editedPrinter.capacity = printerCapacity.value
+    editedPrinter.warning_threshold = printerWarningThreshold.value
+    editingId.value = id
     isEditMode.value = true
   } else {
-    form.value = {
-      name: '',
-      labels_count: 0,
-      capacity: 1,
-      warning_threshold: 0,
-    }
+    // resetForm()
   }
 }
+
+const editedPrinter = reactive<CreatePrinterDto>({
+  name: "",
+  capacity: 0,
+  labels_count: 1,
+  warning_threshold: 1
+})
 
 async function submitPrinter() {
-  const dto = { ...form.value }
-
-  if (isEditMode.value && editingId.value) {
-    const { data, error } = await updatePrinter(editingId.value, dto)
-    if (data.value) {
-      selectedPrinter.value = data.value.data
-      showSnackbar("Успешно сохранено", true)
-    } else {
-      console.error(error.value.data)
-      const errorMessage = error?.value?.data?.message;
-      showSnackbar(!errorMessage ? "Произошла ошибка при сохранении" : errorMessage, false)
-      return
-    }
-  } else {
-    const { data, error } = await createPrinter(dto)
-    if (data.value) {
-      showSnackbar("Успешно сохранено", true)
-    } else {
-      console.error(error.value.data)
-      const errorMessage = error?.value?.data?.message;
-      showSnackbar(!errorMessage ? "Произошла ошибка при сохранении" : errorMessage, false)
-      return
-    }
+  const printer = props.printer
+  if (!printer) {
+    showSnackbar('Принтер не выбран', false)
+    return
   }
-  fetchPrinters()
-  dialog.value = false
+
+  try {
+    if (isEditMode.value && editingId.value) {
+      await updatePrinter(editingId.value, editedPrinter)
+      onUpdatePrinter(editingId.value)
+      showSnackbar('Успешно сохранено', true)
+    } else {
+      await createPrinter(editedPrinter)
+      showSnackbar('Успешно создано', true)
+    }
+    await fetchPrinters()
+    dialog.value = false
+    // resetForm()
+  } catch (e: any) {
+    console.error('Ошибка сохранения принтера', e)
+    const msg = e?.message || 'Произошла ошибка при сохранении'
+    showSnackbar(msg, false)
+  }
 }
 
-async function onPrinterSelect(id: number) {
-  const { data, error } = await getPrinter(id);
-  selectedPrinter.value = data.value
-  loadedLabelInPrinterCount.value = data.value.labels_count
+function onUpdatePrinter(id: number) {
+  emit('printer-updated', id)
 }
+
+function showSnackbar(message: string, isSuccess: boolean) {
+  snackbar.value = true
+  snackMessage.value = message
+  if (isSuccess) {
+    snackColor.value = 'success'
+  } else {
+    snackColor.value = 'error'
+  }
+}
+
+onMounted(() => {
+  fetchPrinters()
+})
 
 async function refreshPrinterCount() {
   if (!selectedPrinter.value || !selectedPrinterId.value) {
@@ -145,8 +130,7 @@ async function refreshPrinterCount() {
     const { data, error } = await syncPrinterCount(selectedPrinterId.value)
 
     if (data.value) {
-      showSnackbar("Количество этикеток обновлено", true)
-      loadedLabelInPrinterCount.value = data.value.labels_count
+      onUpdatePrinter(selectedPrinterId.value)
       await fetchPrinters()
     } else {
       console.error(error.value)
@@ -158,9 +142,34 @@ async function refreshPrinterCount() {
   }
 }
 
-onMounted(async () => {
-  await fetchPrinters()
-})
+// const form = reactive<CreatePrinterDto>({
+//   name: "",
+//   capacity: 0,
+//   labels_count: 1,
+//   warning_threshold: 1 
+// })
+
+function resetForm() {
+  editedPrinter.name = ''
+  editedPrinter.labels_count = 0
+  editedPrinter.capacity = 1
+  editedPrinter.warning_threshold = 0
+  editingId.value = null
+  isEditMode.value = false
+}
+
+// async function onUserSelectPrinter(id: number) {
+//   try {
+    
+//     const { data } = await getPrinter(id)
+//     emit('update:printer', data)
+//     selectedPrinter.value = data.value
+//     loadedLabelInPrinterCount.value = data.value.labels_count
+//   } catch (e) {
+//     console.error('Ошибка при получении принтера', e)
+//     showSnackbar('Не удалось получить данные принтера', false)
+//   }
+// }
 </script>
 
 <template>
@@ -172,8 +181,8 @@ onMounted(async () => {
     </VCol>
 
     <VCol cols="6" class="d-flex align-center">
-      <VSelect v-model="selectedPrinterId" :items="printers" item-title="name" item-value="id" placeholder="Принтер"
-        hide-details variant="outlined" style="max-width: 165px" @update:model-value="onPrinterSelect">
+      <VSelect v-model="selectedPrinter" :items="printers" item-title="name" item-value="id" placeholder="Принтер"
+        hide-details variant="outlined" style="max-width: 165px" @update:model-value="onUpdatePrinter">
         <template #no-data>
           <div class="d-flex align-center justify-space-between ps-4">
             <span class="text-medium-emphasis">Добавить
@@ -191,15 +200,12 @@ onMounted(async () => {
     </VCol>
 
     <VCol cols="4" class="d-flex align-center justify-end">
-      <VTextField style="margin-left: 20px" :model-value="loadedLabelInPrinterCount" readonly :class="[
-        'font-weight-medium',
-        isLowloadedLabelInPrinterCount ? 'text-error' : 'text-default'
-      ]" />
+      <VTextField style="margin-left: 20px" :model-value="printerLabelsCount" readonly class="font-weight-medium text-default" />
 
       <VTooltip open-delay="400">
         <template #activator="{ props }">
           <VBtn style="margin-right: -30px;" icon variant="text" v-bind="props" @click="refreshPrinterCount"
-            :disabled="!selectedPrinterId || (loadedLabelInPrinterCount == selectedPrinter?.capacity)">
+            :disabled="!selectedPrinterId || (printerLabelsCount == selectedPrinter?.capacity)">
             <VIcon icon="tabler-repeat" />
           </VBtn>
         </template>
@@ -208,11 +214,10 @@ onMounted(async () => {
 
     </VCol>
   </VRow>
-  <template>
-    <VSnackbar v-model="snackbar" :timeout="3000" :color="snackColor" location="top right">
-      {{ snackMessage }}
-    </VSnackbar>
-  </template>
+
+  <VSnackbar v-model="snackbar" :timeout="3000" :color="snackColor" location="top right">
+    {{ snackMessage }}
+  </VSnackbar>
 
   <VDialog v-model="dialog" max-width="500">
     <VCard>
@@ -221,11 +226,11 @@ onMounted(async () => {
       </VCardTitle>
 
       <VCardText class="d-flex flex-column gap-3">
-        <AppTextField v-model="form.name" label="Название принтера" required />
+        <AppTextField v-model="editedPrinter.name" label="Название принтера" required />
 
-        <AppTextField v-model.number="form.capacity" label="Вместимость" type="number" min="1" />
+        <AppTextField v-model.number="editedPrinter.capacity" label="Вместимость" type="number" min="1" />
 
-        <AppTextField v-model.number="form.warning_threshold" label="Порог предупреждения" type="number" min="0" />
+        <AppTextField v-model.number="editedPrinter.warning_threshold" label="Порог предупреждения" type="number" min="0" />
       </VCardText>
 
       <VCardActions>

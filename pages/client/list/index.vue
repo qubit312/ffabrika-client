@@ -13,7 +13,7 @@ interface Client {
 }
 
 const typeCaption: Record<Client['type'], string> = {
-  INDIVIDUAL:    'Физическое лицо',
+  INDIVIDUAL:    'Индивидуальный предприниматель',
   LEGAL_ENTITY:  'Юридическое лицо',
 }
 const isLoading = ref(false)

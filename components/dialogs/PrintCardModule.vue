@@ -3,20 +3,17 @@ import barcodeEAN13 from '@/assets/images/barcode/barcode-ean13.png'
 import datamatrix from '@/assets/images/barcode/datamatrix.png'
 import CzLogo from '@/assets/images/logos/cz-logo.png'
 import { computed, defineEmits, defineProps, ref } from 'vue'
-import { useLabelEvents } from '../../composables/useLabelBus'
+import { productSizeTypes } from '../../constants/productSizeTypes'
 import type { NewLabelInterface } from '../../types/label'
 
 interface Props {
-  sizeId: number
   labelId: number
-  name: string
-  size: string
   variant?: any
   modelValue: NewLabelInterface
 }
-const props = defineProps<Props>()
 
-const { onLabelsUpdated } = useLabelEvents()
+const props = defineProps<Props>()
+const size = ref<string>("M")
 const emit = defineEmits<{
   (e: 'update:modelValue', v: NewLabelInterface): void
 }>()
@@ -30,8 +27,6 @@ const name = computed({
   get: () => form.value.name,
   set: v => (form.value.name = v)
 })
-
-// const clientBrand = ref('')
 
 const clientName = computed({
   get: () => form.value.client_name,
@@ -59,128 +54,19 @@ const duplicateDM = computed({
   set: v => (form.value.duplicate_chz = v)
 })
 
-const selectedPrinterId = computed({
-  get: () => form.value.printer_id,
-  set: v => (form.value.printer_id = v)
+const selectedTemplate = computed({
+  get: () => form.value.label_template_id,
+  set: v => (form.value.label_template_id = v)
 })
 
+const productSizeType = computed({
+  get: () => form.value.size_display_type,
+  set: v => (form.value.size_display_type = v),
+})
 
 const snackbar = ref(false)
 const snackMessage = ref('')
 const snackColor = ref<'success' | 'error'>('success')
-const selectedTemplate = ref<'1' | '2' | '3'>('1')
-const selectedSHK = ref<null | 'include' | 'duplicate'>(null)
-
-const labelCount = ref<number>(1)
-const availableLabelsCount = computed(() => 9999)
-const loading = ref(false)
-const labelError = computed(() => !labelCount.value || labelCount.value <= 0)
-
-function showSnackbar(message: string, isSuccess: boolean) {
-  snackbar.value = true
-  snackMessage.value = message
-  snackColor.value = isSuccess ? 'success' : 'error'
-}
-
-async function downloadFile() {
-  if (!selectedPrinterId.value) {
-    showSnackbar('Выберете принтер', false)
-    return
-  }
-
-  if (labelError.value || 9999) {
-    let errorMessage = labelError.value
-      ? 'Введите число больше 0'
-      : `Недостаточно этикеток для печати`
-    showSnackbar(errorMessage, false)
-    return
-  }
-
-  loading.value = true
-  if (!labelCount.value) {
-    console.error('Укажите количество этикеток')
-    return
-  }
-
-  const payload = {
-    printerId: selectedPrinterId.value,
-    labelId: props.labelId,
-    sizeId: props.sizeId,
-    quantity: labelCount.value,
-    includeDM: selectedTemplate.value === '1',
-    includeSHK: selectedTemplate.value === '2'
-      ? true
-      : selectedSHK.value === 'include',
-    duplicateSHK: selectedTemplate.value === '2'
-      ? false
-      : selectedSHK.value === 'duplicate',
-    duplicateDM: selectedTemplate.value === '2'
-      ? false
-      : duplicateDM.value
-  }
-
-  const token = localStorage.getItem('access_token') || ''
-  try {
-    const config = useRuntimeConfig()
-    const baseURL = config.public.apiBaseUrl
-
-    const response = await fetch(
-      baseURL + `/api/chestny-znak-labels/download-pdf`,
-      {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      }
-    )
-
-    const contentType = response.headers.get('Content-Type')
-    if (!response.ok) {
-      if (contentType?.includes('application/json')) {
-        const errorData = await response.json()
-        showSnackbar(
-          errorData.message || 'Произошла ошибка при генерации PDF',
-          false
-        )
-        throw new Error(errorData.message || 'Неизвестная ошибка')
-      } else {
-        throw new Error(`Сервер вернул ${response.status}`)
-      }
-    }
-
-    const blob = await response.blob()
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-
-    const now = new Date()
-    const pad = (n: number) => n.toString().padStart(2, '0')
-    const ms = now.getMilliseconds().toString().padStart(3, '0')
-
-    const dateStr = `${now.getFullYear()}-${pad(
-      now.getMonth() + 1
-    )}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(
-      now.getMinutes()
-    )}-${pad(now.getSeconds())}-${ms}`
-
-    const safeName = props.name.replace(/\s+/g, '_')
-    const safeSize = props.size.replace(/\s+/g, '_')
-    link.download = `${safeName}_${safeSize}_${dateStr}.pdf`
-
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    URL.revokeObjectURL(url)
-  } catch (err: any) {
-    showSnackbar(err.message || 'Произошла непредвиденная ошибка', false)
-  } finally {
-    onLabelsUpdated()
-    loading.value = false
-  }
-}
 </script>
 
 <template>
@@ -188,12 +74,49 @@ async function downloadFile() {
     <VCardText>
       <VRow>
         <VRadioGroup inline v-model="selectedTemplate">
-            <VRadio value="1" class="mb-4">
+          <VRadio :value="1" class="mb-4" >
+              <template #label>
+                <div
+                  class="label-box"
+                  :class="{ 'label-box--selected': selectedTemplate === 1 }"
+                >
+                    <div class="label-header">
+                    <span class="label-header-text">{{ name }}</span>
+                    </div>
+                    <div class="label-content">
+                    <div class="label" style="width: 70%">
+                        <div class="label-line">Артикул: {{ form.product?.article || ''}}</div>
+                        <div class="label-line">Цвет: {{ form.product?.color || ''}}</div>
+                    </div>
+
+                    <div class="label" style="width: 30%">
+                        <div class="label-size">{{ size }}</div>
+                    </div>
+                    </div>
+                    <div class="label-content">
+                    <div class="label">
+                        <div class="label-line">{{ "Название клиента" }}</div>
+                        <div class="label-line">Состав: {{ form.product?.composition || '' }}</div>
+                    </div>                  
+                    </div>
+                    
+                    <div class="label-barcode-block">
+                    <img
+                      style="height: 14mm;"
+                      alt="Штрихкод"
+                      :src="barcodeEAN13"
+                    />
+                    </div>
+                </div>
+              </template>
+            </VRadio>   
+          
+          <VRadio :value="2" class="mb-4">
               <template #label>
                 <div>
                   <div
                     class="label-box"
-                    :class="{ 'label-box--selected': selectedTemplate === '1' }"
+                    :class="{ 'label-box--selected': selectedTemplate === 2 }"
                   >
                     <div class="label-content" style="margin-top: 5px">
                       <div class="label left" style="width: 50%">
@@ -213,9 +136,9 @@ async function downloadFile() {
 
                         <div class="spacer">
                           <div style="text-align: left;">
-                            <p style="margin-block-end: 0">{{props.name}}</p>
+                            <p style="margin-block-end: 0">{{ name }}</p>
                             <p style="margin-block-end: 0">{{ form.product?.color }}</p>
-                            <p style="margin-block-end: 0">{{props.size}}</p>
+                            <p style="margin-block-end: 0">{{ size }}</p>
                           </div>
                         </div>
                       </div>
@@ -234,81 +157,7 @@ async function downloadFile() {
               </template>
             </VRadio>
 
-            <VRadio value="2" class="mb-4" >
-              <template #label>
-                <div
-                  class="label-box"
-                  :class="{ 'label-box--selected': selectedTemplate === '2' }"
-                >
-                    <div class="label-header">
-                    <span class="label-header-text">{{ props.name }}</span>
-                    </div>
-                    <div class="label-content">
-                    <div class="label" style="width: 70%">
-                        <div class="label-line">Артикул: {{ form.product?.article || ''}}</div>
-                        <div class="label-line">Цвет: {{ form.product?.color || ''}}</div>
-                    </div>
-
-                    <div class="label" style="width: 30%">
-                        <div class="label-size">{{ props.size }}</div>
-                    </div>
-                    </div>
-                    <div class="label-content">
-                    <div class="label">
-                        <div class="label-line">{{ "Название клиента" }}</div>
-                        <div class="label-line">Состав: {{ form.product?.composition || '' }}</div>
-                    </div>                  
-                    </div>
-                    
-                    <div class="label-barcode-block">
-                    <img
-                      style="height: 14mm;"
-                      alt="Штрихкод"
-                      :src="barcodeEAN13"
-                    />
-                    </div>
-                </div>
-              </template>
-            </VRadio>
-
-            <!-- <VRadio value="3" class="radio-card">
-              <template #label>
-                  <div
-                    class="label-box"
-                    :class="{ 'label-box--selected': selectedTemplate === '3' }"
-                  >
-                      <div class="label-header">
-                      <span class="label-header-text">{{ props.name }}</span>
-                      </div>
-                      <div class="label-content">
-                      <div class="label left" style="width: 50%">
-                          <img
-                          style="height: 21mm; width: 21mm;"
-                          alt="Штрихкод"
-                          src="https://barcode.tec-it.com/barcode.ashx?data=01046605684903452152NnIRDZfTGMD%1D91EE11%1D92oeGgLmUSMbPtHc2xVZxqkcrYSXz6%2B2ADQ0H4ZUANOqw%3D&code=GS1DataMatrix&translate-esc=on&dmsize=Default" />
-                      </div>
-                      <div class="label right">
-                          <div style="text-align: center;">
-                          ЧЕСТНЫЙ ЗНАК
-                          </div>
-
-                          <div class="spacer">
-                          <div style="text-align: center;">
-                              {{props.name}}, цвет {{ props.color }}, размер {{props.size}}
-                          </div>
-                          </div>
-                      </div>
-                      </div>
-                      <div style="text-align: right;">
-                      <span style="font-size: 14px; font-weight: bold">1</span>
-                      </div>
-                      <div>
-                      <span style="margin-right: 10px; font-size: 10px">01234567891011</span>
-                      <span style="font-size: 10px">2NnIRDZfTGMDA</span>
-                      </div>
-                  </div>
-              </template>
-            </VRadio> -->       
+                
           </VRadioGroup>
       </VRow>
       
@@ -322,33 +171,31 @@ async function downloadFile() {
                 v-model="name"
               />
             </VCol>
-            <!-- <VCol cols="6">
-              <AppTextField
-                label="Бренд"
-                v-model="clientBrand"
-              />
-            </VCol> -->
             <VCol cols="6">
               <AppTextField
                 label="Наименование продавца"
                 v-model="clientName"
               />
             </VCol>
+            <VCol cols="6">
+              <AppSelect
+                :items="productSizeTypes"
+                v-model="productSizeType"
+                item-title="displayValue"
+                item-value="value"
+                label="Используемый размер"
+                placeholder="Выберите тип размера"
+              />
+            </VCol>
 
             <VCol cols="12" class="pt-0 pb-0">
               <VSwitch
-                v-if="selectedTemplate === '1'"
+                v-if="selectedTemplate === 2"
                 label="Печать 1 ШК"
                 v-model="printSingleEAN"
               />
-              <!-- <VSwitch
-                v-if="selectedTemplate === '1'"
-                label="Печать 1 ШК"
-                :model-value="selectedSHK === 'include'"
-                @update:modelValue="val => selectedSHK = val ? 'include' : (selectedSHK === 'include' ? null : selectedSHK)"
-              /> -->
               <VSwitch
-                v-if="selectedTemplate === '2'"
+                v-if="selectedTemplate === 1"
                 disabled
                 label="Печать 1 ШК"
                 :model-value="false"
@@ -357,18 +204,12 @@ async function downloadFile() {
 
             <VCol cols="12" class="pt-0 pb-0">
               <VSwitch
-                v-if="selectedTemplate === '1'"
+                v-if="selectedTemplate === 2"
                 label="Печать 2 ШК"
                 v-model="printDoubleEAN"
               />
-              <!-- <VSwitch
-                v-if="selectedTemplate === '1'"
-                label="Печать 2 ШК"
-                :model-value="selectedSHK === 'duplicate'"
-                @update:modelValue="val => selectedSHK = val ? 'duplicate' : (selectedSHK === 'duplicate' ? null : selectedSHK)"
-              /> -->
               <VSwitch
-                v-if="selectedTemplate === '2'"
+                v-if="selectedTemplate === 1"
                 disabled
                 label="Печать 2 ШК"
                 :model-value="false"
@@ -377,12 +218,12 @@ async function downloadFile() {
 
             <VCol cols="12" class="pt-0 pb-0">
               <VSwitch
-                v-if="selectedTemplate === '1'"
-                v-model="form.duplicate_chz"
+                v-if="selectedTemplate === 2"
+                v-model="duplicateDM"
                 label="Дублировать ЧЗ"
               />
               <VSwitch
-                v-if="selectedTemplate === '2'"
+                v-if="selectedTemplate === 1"
                 disabled
                 :model-value="false"
                 label="Дублировать ЧЗ"
@@ -391,17 +232,6 @@ async function downloadFile() {
           </VRow>
         </VCol>
       </VRow>
-    </VCardText>
-
-    <VCardText>
-      <VBtn
-        color="primary"
-        :loading="loading"
-        :disabled="loading"
-        @click="downloadFile"
-      >
-        Скачать документ
-      </VBtn>
     </VCardText>
   </VCard>
   <template>
