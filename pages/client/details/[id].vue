@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, toRaw, watch } from 'vue'
+import { computed, onMounted, reactive, ref, toRaw, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CustomLoading from '../../../components/CustomLoading.vue'
 import { categoryOptions } from '../../../constants/productCategories'
@@ -35,6 +35,16 @@ const sizeItems = ref<SizeItem[]>([
 interface ProductUI extends WbProduct {
   sizes: SizeItem[]
 }
+
+const isCreate = computed(() => mode.value === 'create')
+const currentTitle = computed(() => form.name)
+
+const { items: clientCrumbs, fullTitle: clientTitle } = useBreadcrumbs(
+  'Клиенты',
+  { name: 'client-list' },
+  currentTitle,
+  isCreate,
+)
 
 const savedProducts = ref<ProductUI[]>([])
 const form = reactive<Client>({
@@ -375,6 +385,7 @@ const importProductsFromWb = async () => {
 
 <template>
   <div>
+   <AppBreadcrumbs :items="clientCrumbs" class="mb-2" />
     <div class="d-flex flex-wrap justify-start justify-sm-space-between gap-y-4 gap-x-6 mb-6">
       <div class="d-flex flex-column justify-center">
         <h4 class="text-h4 font-weight-medium">

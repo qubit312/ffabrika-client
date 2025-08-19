@@ -1,7 +1,7 @@
 import type { ThemeDefinition } from 'vuetify'
 
-export const staticPrimaryColor = '#7367F0'
-export const staticPrimaryDarkenColor = '#675DD8'
+export const staticPrimaryColor = '#000000'
+export const staticPrimaryDarkenColor = '#292929c5'
 
 export const themes: Record<string, ThemeDefinition> = {
   light: {
@@ -9,7 +9,7 @@ export const themes: Record<string, ThemeDefinition> = {
     colors: {
       'primary': staticPrimaryColor,
       'on-primary': '#fff',
-      'primary-darken-1': '#675DD8',
+      'primary-darken-1': '#292929c5',
       'secondary': '#808390',
       'on-secondary': '#fff',
       'secondary-darken-1': '#737682',

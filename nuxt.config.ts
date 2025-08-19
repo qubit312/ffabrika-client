@@ -14,11 +14,13 @@ export default defineNuxtConfig({
       link: [{
         rel: 'icon',
         type: 'image/x-icon',
-        href: '/favicon.ico',
+        href: '/logo.svg',
       }],
     },
   },
-
+  devServer: {
+    port: 3001,
+  },
   runtimeConfig: {
     public: {
       apiBaseUrl: process.env.NUXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8000',
@@ -26,12 +28,12 @@ export default defineNuxtConfig({
   },
 
   devtools: {
-    enabled: true,
+    enabled: false,
   },
 
   css: [
-    '@core/scss/template/index.scss',
     '@styles/styles.scss',
+    '@core/scss/template/index.scss',
     '@/plugins/iconify/icons.css',
   ],
 

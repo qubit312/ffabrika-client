@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useBreadcrumbs } from '@/composables/useBreadcrumbs'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CustomLoading from '../../../components/CustomLoading.vue'
@@ -28,6 +29,16 @@ const fileData = ref<FileData[]>([])
 
 const onChange = (cb: (files: File[] | null) => void) => { }
 const useDropZone = (_el: any, _fn: any) => { }
+
+const isCreate = computed(() => mode.value === 'create')
+const currentTitle = computed(() => form.name)
+
+const { items: markingCrumbs, fullTitle: markingTitle } = useBreadcrumbs(
+  'Маркировка',
+  { name: 'marking-list' },
+  currentTitle,
+  isCreate,
+)
 
 function onDrop(files: File[] | null) {
   files?.forEach(file => {
@@ -240,6 +251,7 @@ const loading = ref(false)
 
 <template>
   <div>
+   <AppBreadcrumbs :items="markingCrumbs" class="mb-2" />
     <div class="d-flex flex-wrap justify-start justify-sm-space-between gap-y-4 gap-x-6 mb-6">
       <div class="d-flex flex-column justify-center">
         <h4 class="text-h4 font-weight-medium">
