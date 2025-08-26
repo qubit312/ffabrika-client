@@ -14,9 +14,12 @@ interface Props {
 }
 
 const loading = ref(false)
+const loadingPreview = ref(false)
+
 const props = defineProps<Props>()
 const { onLabelsUpdated } = useLabelEvents()
 const emit = defineEmits<{
+  (e: 'download-started', callback: (result: boolean) => void): void
   (e: 'update:visible', v: boolean): void
   (e: 'printer-updated', v: number | null): void
 }>()
@@ -46,13 +49,18 @@ function showSnackbar(message: string, isSuccess: boolean) {
   }
 }
 
-async function downloadFile() {
-  const printerId = props.printer?.id
-  if (!printerId) { 
-    showSnackbar("Выберете принтер", false)
-    return
-  } 
+async function saveAndeDownloadFile() {
+  emit('download-started', async (saveResult: boolean) => {
+    if (!saveResult) {
+      showSnackbar("Не удалось сохранить данные", false)
+      return
+    }
+    
+    await downloadFile()
+  })
+}
 
+async function downloadFile() {
   if (labelError.value) {
     let errorMessage = 'Введте число больше 0'
 
@@ -60,25 +68,36 @@ async function downloadFile() {
       errorMessage = 'Недостаточно этикеток для печати'
     }
     showSnackbar(errorMessage, false)
+    loading.value = false
     return
   }
 
   loading.value = true
   if (labelCount.value == null || labelCount.value == 0) {
     console.error('Укажите количество этикеток')
+    loading.value = false
     return
   }
   const size = props.size
   const label = props.label
   if (!size || !size.id) {
     console.error('Укажите размер')
+    loading.value = false
     return
   }
 
   if (!label || !label.id) {
     console.error('Укажите этикетку')
+    loading.value = false
     return
   }
+
+  const printerId = props.printer?.id
+  if (!printerId) { 
+    showSnackbar("Выберете принтер", false)
+    loading.value = false
+    return
+  } 
 
   const payload = {
     labelId: props.label.id,
@@ -138,6 +157,77 @@ async function downloadFile() {
     onLabelsUpdated()
     loading.value = false
     emit('printer-updated', printerId)
+    close()
+  }
+}
+
+async function previewLabel() {
+  loadingPreview.value = true
+
+  const size = props.size
+  const label = props.label
+  if (!size || !size.id) {
+    console.error('Укажите размер')
+    return
+  }
+
+  if (!label || !label.id) {
+    console.error('Укажите этикетку')
+    return
+  }
+
+  const payload = {
+    label_id: props.label.id,
+    size_id: size.id,
+  }
+
+  const token = localStorage.getItem('access_token') || ''
+  try {
+    const config = useRuntimeConfig()
+    const baseURL = config.public.apiBaseUrl;
+
+    const response = await fetch(baseURL + `/api/labels-pdf/preview`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(payload),
+    })
+
+    const contentType = response.headers.get('Content-Type')
+    if (!response.ok) {
+      if (contentType?.includes('application/json')) {
+        const errorData = await response.json()
+        showSnackbar(errorData.message || 'Произошла ошибка при генерации PDF', false)
+        throw new Error(errorData.message || 'Неизвестная ошибка')
+      } else {
+        throw new Error(`Сервер вернул ${response.status}`)
+      }
+    }
+
+    const blob = await response.blob()
+    const url  = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    
+    const now = new Date()
+    const pad = (n: number) => n.toString().padStart(2, '0')
+    const ms = now.getMilliseconds().toString().padStart(3, '0')
+
+    const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}-${ms}`
+
+    link.download = `Предпросмотр_${dateStr}.pdf`
+
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  } catch (err: any) {
+    showSnackbar(err.message || 'Произошла непредвиденная ошибка', false)
+  } finally {
+    loadingPreview.value = false
     close()
   }
 }
@@ -205,9 +295,17 @@ async function downloadFile() {
         <VBtn variant="tonal" color="secondary" @click="close">Отменить</VBtn>
         <VBtn
           color="primary"
+          :loading="loadingPreview"
+          :disabled="loadingPreview"
+          @click="previewLabel"
+        >
+          Предпросмотр
+        </VBtn>
+        <VBtn
+          color="primary"
           :loading="loading"
           :disabled="loading"
-          @click="downloadFile"
+          @click="saveAndeDownloadFile"
         >
           Скачать этикетку
         </VBtn>
@@ -225,82 +323,3 @@ async function downloadFile() {
     </VSnackbar>
   </template>
 </template>
-
-
-<style lang="scss">
-  .v-selection-control {
-    align-items: flex-start;
-  }
-
-  .label-box {
-    border-radius: 10px;
-    color: #000;
-    position: relative;
-    width: 58mm;
-    height: 40mm;
-    padding: 8px;
-    background: #fff;
-    font-family: Arial, sans-serif;
-    font-size: 9px;
-    line-height: 1.3;
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
-    border: 2px solid rgb(156, 156, 156);
-    transition: border-color 0.2s ease;
-  }
-
-  .label-box--selected {
-    border-color: rgb(var(--v-theme-primary));
-  }
-
-  .label-header {
-    text-align: center;
-    margin-bottom: 4px;
-  }
-
-  .label-header-text {
-    font-weight: bold;
-    font-size: 11px;
-  }
-
-  .label-content {
-    display: flex;
-    align-items: stretch;
-  }
-
-  .label {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .label.left {
-    width: 50%;
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-  }
-
-  .label.right {
-    width: 50%;
-    position: relative;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .label.right .spacer {
-    display: flex;
-    flex: 1;
-    align-items: center;
-  }
-
-  .label-size {
-    font-size: 14px;
-    font-weight: bold;
-  }
-
-  .label-barcode-block {
-    margin-top: 5px;
-    text-align: center;
-  }
-</style>

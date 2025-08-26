@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import barcodeEAN13 from '@/assets/images/barcode/barcode-ean13.png'
-import datamatrix from '@/assets/images/barcode/datamatrix.png'
-import CzLogo from '@/assets/images/logos/cz-logo.png'
-import { computed, defineEmits, defineProps, ref } from 'vue'
+import { computed, defineEmits, defineProps, onMounted, ref } from 'vue'
 import { productSizeTypes } from '../../constants/productSizeTypes'
+import { getLabelTemplates } from '../../services/labelTemplates'
 import type { NewLabelInterface } from '../../types/label'
 
 interface Props {
@@ -19,7 +17,9 @@ const emit = defineEmits<{
 }>()
 
 const form = computed({
-  get: () => props.modelValue,
+  get: () => {console.log(props.modelValue)
+    return props.modelValue
+  },
   set: v => emit('update:modelValue', v),
 })
 
@@ -67,6 +67,46 @@ const productSizeType = computed({
 const snackbar = ref(false)
 const snackMessage = ref('')
 const snackColor = ref<'success' | 'error'>('success')
+
+const templates = ref<any[]>([])
+const loadingTemplates = ref(false)
+
+const previewData = computed(() => {
+  return {
+    name: form.value.name,
+    brand: 'BRAND',
+    client: form.value.client_name,
+    size: size.value,
+    article: form.value.product?.article,
+    color: form.value.product?.color,
+    composition: form.value.product?.composition,
+    barcode: form.value.product?.article,
+    print_single_ean13: form.value.print_single_ean13,
+    print_double_ean13: form.value.print_double_ean13,
+    duplicate_chz: form.value.duplicate_chz,
+  }
+})
+
+async function loadTemplates() {
+  loadingTemplates.value = true
+  try {
+    const { data, error } = await getLabelTemplates()
+    if (error.value) throw error.value
+
+    templates.value = data.value?.data || []
+  } catch (e: any) {
+    snackMessage.value = 'Ошибка загрузки шаблонов'
+    snackColor.value = 'error'
+    snackbar.value = true
+    console.error(e)
+  } finally {
+    loadingTemplates.value = false
+  }
+}
+
+onMounted(() => {
+  loadTemplates()
+})
 </script>
 
 <template>
@@ -74,93 +114,18 @@ const snackColor = ref<'success' | 'error'>('success')
     <VCardText>
       <VRow>
         <VRadioGroup inline v-model="selectedTemplate">
-          <VRadio :value="1" class="mb-4" >
-              <template #label>
-                <div
-                  class="label-box"
-                  :class="{ 'label-box--selected': selectedTemplate === 1 }"
-                >
-                    <div class="label-header">
-                    <span class="label-header-text">{{ name }}</span>
-                    </div>
-                    <div class="label-content">
-                    <div class="label" style="width: 70%">
-                        <div class="label-line">Артикул: {{ form.product?.article || ''}}</div>
-                        <div class="label-line">Цвет: {{ form.product?.color || ''}}</div>
-                    </div>
-
-                    <div class="label" style="width: 30%">
-                        <div class="label-size">{{ size }}</div>
-                    </div>
-                    </div>
-                    <div class="label-content">
-                    <div class="label">
-                        <div class="label-line">{{ "Название клиента" }}</div>
-                        <div class="label-line">Состав: {{ form.product?.composition || '' }}</div>
-                    </div>                  
-                    </div>
-                    
-                    <div class="label-barcode-block">
-                    <img
-                      style="height: 14mm;"
-                      alt="Штрихкод"
-                      :src="barcodeEAN13"
-                    />
-                    </div>
-                </div>
-              </template>
-            </VRadio>   
-          
-          <VRadio :value="2" class="mb-4">
-              <template #label>
-                <div>
-                  <div
-                    class="label-box"
-                    :class="{ 'label-box--selected': selectedTemplate === 2 }"
-                  >
-                    <div class="label-content" style="margin-top: 5px">
-                      <div class="label left" style="width: 50%">
-                        <img
-                          style="height: 21mm; width: 21mm;"
-                          alt="Штрихкод"
-                          :src="datamatrix"
-                        />
-                      </div>
-                      <div class="label right">
-                        <div style="text-align: center;">
-                          <img
-                            style="height: 5mm;"
-                            alt="Штрихкод"
-                            :src="CzLogo" />
-                        </div>
-
-                        <div class="spacer">
-                          <div style="text-align: left;">
-                            <p style="margin-block-end: 0">{{ name }}</p>
-                            <p style="margin-block-end: 0">{{ form.product?.color }}</p>
-                            <p style="margin-block-end: 0">{{ size }}</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style="text-align: right; margin-bottom: 5px">
-                      <span style="font-size: 14px; font-weight: bold">10</span>
-                    </div>
-
-                    <div>
-                      <span style="margin-right: 10px; font-size: 11px">01234567891011</span>
-                      <span style="font-size: 11px">2NnIRDZfTGMDA</span>
-                    </div>
-                  </div>
-                </div>
-              </template>
-            </VRadio>
-
-                
-          </VRadioGroup>
+          <VRadio
+            v-for="tpl in templates"
+            :key="tpl.id"
+            :value="tpl.id"
+            class="mb-4"
+          >
+            <template #label>
+              <LabelPreview :schema="JSON.parse(tpl.content)" :data="previewData" />
+            </template>
+          </VRadio>
+        </VRadioGroup>
       </VRow>
-      
       <VRow>
         <VCol cols="12">
           <VRow class="pb-6">

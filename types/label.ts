@@ -35,6 +35,7 @@ export interface CreateLabelDto {
 export interface NewLabelInterface {
   id: number
   name: string
+  brand: string
   product_id: number
   product: WbProduct | null
   printer_id: number | null

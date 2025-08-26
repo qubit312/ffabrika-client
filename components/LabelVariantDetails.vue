@@ -17,6 +17,7 @@ interface Props {
 
 const emit = defineEmits<{
   (e: 'printer-updated', v: number | null): void;
+  (e: 'download-started', callback: (result: boolean) => void): void;
   (e: 'callParentMethod', v: ProductSizeWithLabels | null): void;
 }>()
 
@@ -189,6 +190,10 @@ onUnmounted(() => {
   unregisterLabelUpdateListener(onLabelsUpdated)
 })
 
+function handleDownloadStarted(callback: (result: boolean) => void) {
+  emit('download-started', callback)
+}
+
 </script>
 
 <template>
@@ -340,6 +345,7 @@ onUnmounted(() => {
     :size="currentItem"
     :printer="props.printer"
     @printer-updated="emit('printer-updated', $event)"
+    @download-started="handleDownloadStarted"
   />
   <UpdateChzLabel
     v-if="isLabelParent && props.product && props.product.id"

@@ -33,6 +33,7 @@ const useDropZone = (_el: any, _fn: any) => { }
 
 const isCreate = computed(() => mode.value === 'create')
 const currentTitle = computed(() => form.name)
+const productColor = computed(() => form.product?.color || '')
 
 const { items: markingCrumbs, fullTitle: markingTitle } = useBreadcrumbs(
   'Маркировка',
@@ -81,6 +82,7 @@ const form = reactive<NewLabelInterface>({
   product_id: 0,
   printer_id: null,
   client_name: '',
+  brand: '',
   print_single_ean13: false,
   print_double_ean13: false,
   duplicate_chz: false,
@@ -179,8 +181,10 @@ async function onSubmit() {
   } catch (err: any) {
     console.error(err)
     showSnackbar('Ошибка при сохранении: ' + (err.message || err), true)
+    return false
   }
   loading.value = false
+  return true
 }
 
 function showSnackbar(message: string, isError: boolean) {
@@ -220,6 +224,12 @@ const onPrinterUpdated = (id: number | null) => {
     onPrinterSelect(id)
   }
 };
+
+function handleDownloadStarted(callback: (result: boolean) => void) {
+  onSubmit().then(isSaved => {
+    callback(isSaved)
+  })
+}
 
 </script>
 
@@ -262,6 +272,17 @@ const onPrinterUpdated = (id: number | null) => {
                     <VTooltip activator="parent" location="top">Перейти к товару</VTooltip>
                   </VBtn>
                 </div>
+              </VCol>
+              <VCol cols="12" md="6">
+                <VLabel
+                    class="mb-1 text-body-2"
+                    text="Цвет"
+                  />
+                  <AppTextField
+                    class="flex-grow-1"
+                    readonly
+                    v-model="productColor"
+                  />
               </VCol>              
             </VRow>
 
@@ -269,6 +290,7 @@ const onPrinterUpdated = (id: number | null) => {
               v-if="form" :product="markingData?.product" 
               :name="form.name" :label="form" parentComponent="marking" 
               :printer="printer" @printer-updated="onPrinterUpdated"
+              @download-started="handleDownloadStarted"
             />
           </VCardText>
         </VCard>
