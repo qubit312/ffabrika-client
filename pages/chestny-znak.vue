@@ -221,7 +221,7 @@ watch(() => [filters.productId, filters.sizeValue, filters.used, debouncedBarcod
 </script>
 
 <template>
-  <VCard title="Честный знак — агрегированный список">
+  <VCard title="Честный знак">
     <VDivider />
 
     <VCardText>
