@@ -24,7 +24,7 @@ const go = (path: string) => { if (route.path !== path) router.push(path) }
     <VBtn
       v-for="s in sections"
       :key="s.value"
-      :variant="route.path === s.value ? 'elevated' : 'tonal'"
+      :variant="route.path === s.value ? 'elevated' : 'text'"
       :color="route.path === s.value ? 'primary' : undefined"
       @click="go(s.value)"
     >

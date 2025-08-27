@@ -9,7 +9,7 @@ import authV2MaskLight from '@images/pages/misc-mask-light.png'
 import { VNodeRenderer } from '@layouts/components/VNodeRenderer'
 import { themeConfig } from '@themeConfig'
 import { useRouter } from 'vue-router'
-import { apiRegister, setAuthSession, type AuthPayload, type RegisterDto } from '~/services/auth'
+import { apiLogin, apiRegister, setAuthSession, type RegisterDto } from '~/services/auth'
 
 definePageMeta({
   layout: 'blank',
@@ -40,43 +40,46 @@ const authThemeImg = useGenerateImageVariant(
 )
 const authThemeMask = useGenerateImageVariant(authV2MaskLight, authV2MaskDark)
 
+const MIN_PASSWORD = 11
 const rules = {
   required: (v: any) => (!!v || v === false) || 'Обязательное поле',
   email: (v: string) => /.+@.+\..+/.test(v) || 'Неверный email',
-  min6: (v: string) => (v?.length ?? 0) >= 6 || 'Минимум 6 символов',
+  minLen: (v: string) => (v?.length ?? 0) >= MIN_PASSWORD || `Минимум ${MIN_PASSWORD} символов`,
   samePwd: () => form.password === form.password_repeat || 'Пароли не совпадают',
 }
+
 
 async function onSubmit() {
   errorMessage.value = ''
   successMessage.value = ''
 
-  if (!form.name || !rules.email(form.email) || !rules.min6(form.password) || !rules.samePwd()) {
+  if (!form.name || !rules.email(form.email) || !rules.minLen(form.password) || !rules.samePwd()) {
     errorMessage.value = 'Проверьте правильность заполнения полей'
     return
   }
 
   loading.value = true
   try {
-    const { data, error } = await apiRegister(form)
-    const payload = data.value
-
-    if (!payload || !payload.success) {
-      throw new Error((error.value as any)?.data?.message || payload?.message || 'Ошибка регистрации')
+    const { data: regData, error: regErr } = await apiRegister(form)
+    const reg = regData.value
+    if (!reg || !reg.success === false) {
+      throw new Error((regErr.value as any)?.data?.message || reg?.message || 'Ошибка регистрации')
     }
 
-    const auth = payload.data as AuthPayload | null
-    if (auth && auth.access_token) {
-      setAuthSession(auth)
-      await router.push('/')
-      return
+    const { data: loginData, error: loginErr } = await apiLogin({
+      email: form.email,
+      password: form.password,
+      remember: true,
+    })
+    const login = loginData.value
+    if (!login || !login.success || !login.data?.access_token) {
+      throw new Error((loginErr.value as any)?.data?.message || login?.message || 'Ошибка авторизации после регистрации')
     }
 
-    successMessage.value = 'Регистрация выполнена. Теперь войдите с вашими данными.'
-    setTimeout(() => router.push('/login'), 1200)
+    setAuthSession(login.data)
+    await router.push('/')
   } catch (e: any) {
     errorMessage.value = e?.message || 'Ошибка регистрации'
-    console.error(e)
   } finally {
     loading.value = false
   }

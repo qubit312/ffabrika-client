@@ -11,3 +11,21 @@ $theme-colors: (
 .logo-container svg {
   height: 50px ;
 }
+
+@media (min-width: 960px) {
+  .layout-nav-type-vertical .layout-vertical-nav .nav-header {
+    padding: 1.25rem 0.1rem !important;
+  }
+}
+
+.layout-vertical-nav .v-list-item .v-icon.nav-icon--chz {
+  inline-size: 20px;
+  block-size: 20px;
+  background: url('/icons/chz.svg') center / contain no-repeat;
+  color: transparent !important; /* скрываем «tabler-circle» */
+}
+.layout-vertical-nav .v-list-item .v-icon.nav-icon--chz svg,
+.layout-vertical-nav .v-list-item .v-icon.nav-icon--chz i {
+  display: none !important; /* на всякий */
+}
+

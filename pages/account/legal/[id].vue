@@ -59,7 +59,9 @@ const back = () => router.push('/account/legal')
     <VDivider />
 
     <VCardText>
+    <VCardItem>
       <VTextField v-model="draftTitle" label="Название" :disabled="!isEdit" />
+      </VCardItem>
       <VTextarea v-model="draftContent" label="Содержимое" rows="12" :disabled="!isEdit" auto-grow />
 
       <div class="text-medium-emphasis mt-4">

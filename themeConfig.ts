@@ -21,7 +21,7 @@ export const { themeConfig, layoutConfig } = defineThemeConfig({
     }),
 
     contentWidth: ContentWidth.Boxed,
-    contentLayoutNav: AppContentLayoutNav.Horizontal,
+    contentLayoutNav: AppContentLayoutNav.Vertical,
     overlayNavFromBreakpoint: breakpointsVuetify.md + 16,
     i18n: {
       enable: false,
@@ -44,7 +44,7 @@ export const { themeConfig, layoutConfig } = defineThemeConfig({
         },
       ],
     },
-    theme: 'system',
+    theme: 'light',
     skin: Skins.Default,
     iconRenderer: VIcon,
   },
