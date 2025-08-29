@@ -9,15 +9,16 @@ export default [
     to: { name: 'marking-list' },
     icon: { icon: 'tabler-barcode' },
   },
-  {
-    title: 'Честный знак',
-    to: { name: 'chestny-znak' },
-    icon: { icon: 'chz' },         
-  },
+
   {
     title: 'Клиенты',
     to: { name: 'client-list' },
     icon: { icon: 'tabler-users' },
+  },
+    {
+    title: 'Честный знак',
+    to: { name: 'chestny-znak' },
+    icon: { icon: 'chz' },         
   },
 ]
 

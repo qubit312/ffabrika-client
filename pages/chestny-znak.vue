@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { useDebounce } from '@vueuse/core';
-import { computed, onMounted, reactive, ref, watch } from 'vue';
-import { getChestnyZnakLabels } from '~/services/chz';
-import { getProduct } from '~/services/products';
+import { useDebounce } from '@vueuse/core'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { getChestnyZnakLabels } from '~/services/chz'
+import { getProduct } from '~/services/products'
 
 type ChzApiItem = {
   id: number
@@ -14,14 +15,17 @@ type ChzApiItem = {
 }
 
 type GroupRow = {
+  id: number           
   product_id: number
   product_name: string
   size_value: string
   barcode: string
-  created_minute: string
-  used: boolean
-  count: number
+  total: number
+  used: number
+  unused: number
 }
+
+const router = useRouter()
 
 const loading = ref(false)
 const errorMessage = ref('')
@@ -29,54 +33,25 @@ const errorMessage = ref('')
 const allItems = ref<ChzApiItem[]>([])
 const grouped = ref<GroupRow[]>([])
 
-const filters = reactive<{
-  productId?: number
-  sizeValue?: string
-  used?: boolean | null | undefined
-  barcode?: string
-}>({
+const filters = reactive<{ productId?: number; sizeValue?: string; barcode?: string }>({
   productId: undefined,
   sizeValue: undefined,
-  used: undefined,
   barcode: '',
 })
 
 const debouncedBarcode = useDebounce(computed(() => filters.barcode?.trim() || ''), 300)
 
-const sortBy = ref<{ key: string; order: 'asc' | 'desc' } | null>(null)
 const page = ref(1)
 const itemsPerPage = ref(15)
 
+const sortBy = ref<{ key: string; order: 'asc' | 'desc' } | null>(null)
+
 const productNameCache = new Map<number, string>()
-
-function toMinuteISO(iso: string) {
-  const d = new Date(iso)
-  if (isNaN(d.getTime())) return iso
-  d.setSeconds(0, 0)
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  const hh = String(d.getHours()).padStart(2, '0')
-  const mm = String(d.getMinutes()).padStart(2, '0')
-  return `${y}-${m}-${day}T${hh}:${mm}`
-}
-
-function formatDateTime(isoMinute: string) {
-  const d = new Date(isoMinute)
-  if (isNaN(d.getTime())) return isoMinute
-  return d.toLocaleString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
-}
 
 async function ensureProductName(productId: number): Promise<string> {
   if (productNameCache.has(productId)) return productNameCache.get(productId)!
   const { data, error } = await getProduct(productId)
-  if (error.value) {
-    const fallback = `Товар #${productId}`
-    productNameCache.set(productId, fallback)
-    return fallback
-  }
-  const p = data.value as any
-  const name = p?.name || `Товар #${productId}`
+  const name = error.value ? `Товар #${productId}` : (data.value as any)?.name || `Товар #${productId}`
   productNameCache.set(productId, name)
   return name
 }
@@ -91,13 +66,24 @@ async function buildGroups(items: ChzApiItem[]) {
     const pid = it.size?.product_id ?? 0
     const sizeVal = it.size?.value ?? ''
     const barcode = it.size?.barcode ?? ''
-    const minute = toMinuteISO(it.created_at)
-    const used = !!it.used
-    const name = productNameCache.get(pid) ?? `Товар #${pid}`
-    const key = `${pid}__${sizeVal}__${barcode}__${minute}__${used}`
-    const row = map.get(key)
-    if (row) row.count += 1
-    else map.set(key, { product_id: pid, product_name: name, size_value: sizeVal, barcode, created_minute: minute, used, count: 1 })
+    const key = `${pid}__${sizeVal}__${barcode}`
+
+    if (!map.has(key)) {
+      map.set(key, {
+        id: pid,
+        product_id: pid,
+        product_name: productNameCache.get(pid) ?? `Товар #${pid}`,
+        size_value: sizeVal,
+        barcode,
+        total: 0,
+        used: 0,
+        unused: 0,
+      })
+    }
+    const row = map.get(key)!
+    row.total += 1
+    if (it.used) row.used += 1
+    else row.unused += 1
   }
   grouped.value = [...map.values()]
 }
@@ -136,28 +122,18 @@ onMounted(fetchAllPages)
 const productOptions = computed(() =>
   [...new Map(grouped.value.map(r => [r.product_id, { title: productNameCache.get(r.product_id) ?? `Товар #${r.product_id}`, value: r.product_id }])).values()]
 )
-
 const sizeOptions = computed(() => {
-  const source = filters.productId ? grouped.value.filter(r => r.product_id === filters.productId) : grouped.value
-  const uniq = [...new Set(source.map(r => r.size_value).filter(Boolean))]
-  return uniq.map(v => ({ title: v, value: v }))
+  const src = filters.productId ? grouped.value.filter(r => r.product_id === filters.productId) : grouped.value
+  return [...new Set(src.map(r => r.size_value).filter(Boolean))].map(v => ({ title: v, value: v }))
 })
 
-const statusOptions = [
-  { title: 'Неиспользованные', value: false },
-  { title: 'Использованные', value: true },
-]
-
 const filteredRows = computed(() => {
-  const usedFilter = (filters.used == null) ? undefined : filters.used 
-  const barcodeQuery = debouncedBarcode.value.toLowerCase()
-
+  const bq = debouncedBarcode.value.toLowerCase()
   return grouped.value.filter(r => {
-    const okProduct = filters.productId ? r.product_id === filters.productId : true
+    const okProd = filters.productId ? r.product_id === filters.productId : true
     const okSize = filters.sizeValue ? r.size_value === filters.sizeValue : true
-    const okUsed = usedFilter === undefined ? true : r.used === usedFilter
-    const okBarcode = barcodeQuery ? (r.barcode?.toLowerCase().includes(barcodeQuery)) : true
-    return okProduct && okSize && okUsed && okBarcode
+    const okBarcode = bq ? (r.barcode?.toLowerCase().includes(bq)) : true
+    return okProd && okSize && okBarcode
   })
 })
 
@@ -174,17 +150,8 @@ const sortedRows = computed(() => {
   if (!sortBy.value) return rows
   const { key, order } = sortBy.value
   rows.sort((r1: any, r2: any) => {
-    let v1: any
-    let v2: any
-    switch (key) {
-      case 'product_name': v1 = r1.product_name; v2 = r2.product_name; break
-      case 'size_value': v1 = r1.size_value; v2 = r2.size_value; break
-      case 'barcode': v1 = r1.barcode; v2 = r2.barcode; break
-      case 'count': v1 = r1.count; v2 = r2.count; break
-      case 'created_minute': v1 = r1.created_minute; v2 = r2.created_minute; break
-      case 'used': v1 = r1.used ? 1 : 0; v2 = r2.used ? 1 : 0; break
-      default: v1 = (r1 as any)[key]; v2 = (r2 as any)[key]
-    }
+    const v1 = (r1 as any)[key]
+    const v2 = (r2 as any)[key]
     const res = compare(v1, v2)
     return order === 'desc' ? -res : res
   })
@@ -198,12 +165,12 @@ const pageRows = computed(() => {
 })
 
 const headers = [
-  { title: 'Товар',          key: 'product_name',   sortable: true },
-  { title: 'Размер',         key: 'size_value',     sortable: true },
-  { title: 'Баркод',         key: 'barcode',        sortable: true },
-  { title: 'Количество',     key: 'count',          sortable: true },
-  { title: 'Дата создания',  key: 'created_minute', sortable: true },
-  { title: 'Использована',   key: 'used',           sortable: true },
+  { title: 'Товар',      key: 'product_name', sortable: true },
+  { title: 'Размер',     key: 'size_value',   sortable: true },
+  { title: 'Баркод',     key: 'barcode',      sortable: true },
+  { title: 'Всего ЧЗ',   key: 'total',        sortable: true },
+  { title: 'Использ.',   key: 'used',         sortable: true },
+  { title: 'Неиспольз.', key: 'unused',       sortable: true },
 ]
 
 function onOptionsUpdate(options: any) {
@@ -215,9 +182,11 @@ function onOptionsUpdate(options: any) {
   }
 }
 
-watch(() => [filters.productId, filters.sizeValue, filters.used, debouncedBarcode.value], () => {
-  page.value = 1
-})
+function openLabels(productId: number, sizeValue: string, used: boolean) {
+  router.push({ path: '/marking/labels', query: { product_id: productId, size: sizeValue, used: used ? 1 : 0 } })
+}
+
+watch(() => [filters.productId, filters.sizeValue, debouncedBarcode.value], () => { page.value = 1 })
 </script>
 
 <template>
@@ -244,14 +213,6 @@ watch(() => [filters.productId, filters.sizeValue, filters.used, debouncedBarcod
           label="Размер"
           clearable
           style="inline-size: 180px;"
-          class="me-3"
-        />
-        <VSelect
-          v-model="filters.used"
-          :items="statusOptions"
-          label="Статус"
-          clearable
-          style="inline-size: 220px;"
           class="me-3"
         />
         <AppTextField
@@ -285,13 +246,13 @@ watch(() => [filters.productId, filters.sizeValue, filters.used, debouncedBarcod
         </template>
 
         <template #no-data>
-          <div class="text-medium-emphasis text-center py-8">
-            Данных не найдено
-          </div>
+          <div class="text-medium-emphasis text-center py-8">Данных не найдено</div>
         </template>
 
         <template #item.product_name="{ item }">
-          <span class="text-high-emphasis">{{ item.product_name }}</span>
+          <RouterLink :to="{ name: 'marking-details-id', params: { id: item.id } }" class="text-primary">
+            {{ item.product_name }}
+          </RouterLink>
         </template>
 
         <template #item.size_value="{ item }">
@@ -302,29 +263,26 @@ watch(() => [filters.productId, filters.sizeValue, filters.used, debouncedBarcod
           <span>{{ item.barcode || '—' }}</span>
         </template>
 
-        <template #item.count="{ item }">
-          <strong>{{ item.count }}</strong>
-        </template>
-
-        <template #item.created_minute="{ item }">
-          {{ formatDateTime(item.created_minute) }}
+        <template #item.total="{ item }">
+          <strong>{{ item.total }}</strong>
         </template>
 
         <template #item.used="{ item }">
-          <VChip :color="item.used ? 'error' : 'success'" size="small" variant="tonal">
-            {{ item.used ? 'Да' : 'Нет' }}
-          </VChip>
+          <span class="text-high-emphasis cursor-pointer" @click="openLabels(item.product_id, item.size_value, true)">
+            {{ item.used }}
+          </span>
+        </template>
+
+        <template #item.unused="{ item }">
+          <span class="text-high-emphasis cursor-pointer" @click="openLabels(item.product_id, item.size_value, false)">
+            {{ item.unused }}
+          </span>
         </template>
 
         <template #bottom>
-          <TablePagination
-            v-model:page="page"
-            :items-per-page="itemsPerPage"
-            :total-items="total"
-          />
+          <TablePagination v-model:page="page" :items-per-page="itemsPerPage" :total-items="total" />
         </template>
       </VDataTableServer>
     </VCardText>
   </VCard>
 </template>
-
