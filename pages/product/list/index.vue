@@ -10,10 +10,25 @@ import type { WbProduct } from '../../../types/product';
 
 const entityData = ref<WbProduct[]>([])
 
+type ProductSize = {
+  barcode?: string
+  value?: string
+  available_labels_count?: number
+  cz?: boolean
+  chestny_znak?: boolean
+}
+
+function hasChestnyZnak(p: any) {
+  const sizes: ProductSize[] = p?.sizes || []
+  return sizes.some(s =>
+    (typeof s.available_labels_count === 'number' && s.available_labels_count > 0) ||
+    s.cz === true || s.chestny_znak === true
+  )
+}
+
 const headers = [
   { title: 'Название', key: 'name' },
   { title: 'Категория', key: 'category' },
-  { title: 'Артикул', key: 'article' },
   { title: 'Цвет', key: 'color' },
   { title: 'Размеры', key: 'sizes', sortable: false },
   { title: 'Изменено', key: 'updated_at' },
@@ -296,14 +311,31 @@ function formatDate(date: string | Date) {
         </template>
         <!-- name  -->
         <template #item.name="{ item }">
-          <div
-            class="d-flex align-center gap-x-4"
-            style="cursor: pointer;"
-          >
-            <div class="d-flex flex-column">
-              <RouterLink :to="{ name: 'product-details-id', params: { id: item.id } }">
+          <div class="d-flex flex-column">
+            <div class="d-flex align-center gap-2">
+              <RouterLink :to="{ name: 'product-details-id', params: { id: item.id } }" class="text-high-emphasis">
                 {{ item.name }}
               </RouterLink>
+            
+              <VTooltip
+                v-if="hasChestnyZnak(item)"
+                location="top"
+                open-delay="120"
+              >
+                <template #activator="{ props }">
+                  <img
+                    v-bind="props"
+                    src="/icons/chz.svg"
+                    alt="Честный знак"
+                    class="chz-icon ms-2"
+                  />
+                </template>
+                <span>Есть «Честный знак» в размерах</span>
+              </VTooltip>
+            </div>
+          
+            <div v-if="item.article" class="text-caption text-medium-emphasis mt-1">
+              Артикул: {{ item.article }}
             </div>
           </div>
         </template>
@@ -428,4 +460,12 @@ function formatDate(date: string | Date) {
     padding: 0 !important;
     box-shadow: rgba(114, 103, 240, 0.17) 7px 6px 2px 1px;
   }
+.chz-icon {
+  inline-size: 16px;  
+  block-size: 16px;
+  display: inline-block;
+  vertical-align: middle;
+  cursor: default;    
+}
+
 </style>

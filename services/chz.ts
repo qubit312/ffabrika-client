@@ -63,3 +63,19 @@ export function markLabelsAsDefective(ids: number[], reason: string) {
     body: { ids, reason }
   })
 }
+
+export interface ChestnyZnakLabel {
+  id: number
+  size_id: number
+  code: string
+  used: boolean
+  created_at: string
+  updated_at: string
+}
+
+export function getChestnyZnakLabels(params?: { size_id?: number; used?: boolean; per_page?: number; page?: number }) {
+  return useApi<PaginatedResponse<ChestnyZnakLabel>>('/api/chestny-znak-labels', {
+    method: 'GET',
+    params,
+  })
+}

@@ -14,4 +14,5 @@ export default [
     to: { name: 'client-list' },
     icon: { icon: 'tabler-users' },
   },
+
 ];

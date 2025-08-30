@@ -40,7 +40,6 @@ onMounted(() => {
     >
       <VImg :src="avatar1" />
 
-      <!-- SECTION Menu -->
       <VMenu
         activator="parent"
         width="230"
@@ -48,7 +47,6 @@ onMounted(() => {
         offset="14px"
       >
         <VList>
-          <!-- 👉 User Avatar & Name -->
           <VListItem>
             <template #prepend>
               <VListItemAction start>
@@ -76,8 +74,14 @@ onMounted(() => {
           </VListItem>
 
           <VDivider class="my-2" />
+          <VListItem :to="{ path: '/account/personal' }">
+            <template #prepend>
+              <VIcon class="me-2" icon="tabler-user-circle" size="22" />
+            </template>
+            <VListItemTitle>Личный кабинет</VListItemTitle>
+          </VListItem>
+          <VDivider class="my-2" />
 
-          <!-- 👉 Logout -->
           <VListItem @click="handleLogout">
             <template #prepend>
               <VIcon
@@ -91,7 +95,6 @@ onMounted(() => {
           </VListItem>
         </VList>
       </VMenu>
-      <!-- !SECTION -->
     </VAvatar>
   </VBadge>
 </template>
