@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import type { FilterRequest } from '@/types/filter';
+import { computed, ref, watch } from 'vue';
 import { useLabelEvents } from '../../composables/useLabelBus';
 import { replaceProductSize } from '../../services/chz';
-import { getProducts } from '../../services/products';
+import { getProductMainImage } from '../../services/productImages';
+import { getProductsWithSizes } from '../../services/products';
 import { getProductSizes } from '../../services/productSizes';
 import type { WbProduct } from '../../types/product';
 import type { ProductSizeWithLabels } from '../../types/productSize';
@@ -18,38 +20,91 @@ const emit  = defineEmits<{
 const dialog = ref(props.modelValue)
 const { onLabelsUpdated } = useLabelEvents()
 
+const selectedSourceProduct = ref<WbProduct|null>(null)
+const currentClientId = ref<number|null>(null)
+const selectedTargetProduct = ref<number|null>(null)
 const sourceProducts = ref<WbProduct[]>([])
 const targetProducts = ref<WbProduct[]>([])
 const labelCount              = ref<number>(1)
-const selectedSourceProductId = ref<number>()
 const selectedSourceSizeId    = ref<number|null>(null)
-const selectedTargetProductId = ref<number|null>(null)
 const selectedTargetSizeId    = ref<number|null>(null)
 
 watch(() => props.modelValue, v => (dialog.value = v))
 watch(dialog, v => emit('update:modelValue', v))
 
-watch(selectedSourceProductId, async (id) => {
+
+watch(selectedSourceProduct, async (product) => {
+  const id = product?.id
+
   selectedSourceSizeId.value = null
-  selectedTargetProductId.value = null
+  selectedTargetProduct.value = null
   sourceSizes.value = []
-
-  if (id != null) {
+  if (id) {
+    sourceProductImage.value = ''
     await fetchSizes(id, 'source')
+    await fetchProductImage(id, 'source')
 
-    const product = sourceProducts.value.find(p => p.id === id)
     const clientId = product?.client_id
-
+    currentClientId.value = clientId || null
     if (clientId) {
-      await fetchTargetProducts(clientId)
+      await fetchTargetProducts()
     } else {
       targetProducts.value = []
     }
   }
 })
 
-async function fetchTargetProducts(clientId: number) {
-  const { data, error } = await getProducts(clientId, selectedSourceProductId.value)
+const searchQueryTP = ref<string>('')
+const searchQuerySP = ref<string>('')
+let debounceTimer: number | null = null
+
+watch(searchQuerySP, (val) => {
+  if (!val || val == '') {
+    return
+  }
+  handleSourceProductChange()
+})
+
+watch(searchQueryTP, (val) => {
+  if (!val || val == '') {
+    return
+  }
+  handleTargetProductChange()
+})
+
+async function fetchTargetProducts() {
+  const clientId = currentClientId.value
+  const payload: FilterRequest = {
+    filters: [],
+    sort_by: 'name',
+    sort_dir: 'asc',
+  }
+
+  if(clientId) {
+    payload.filters?.push({ field: 'client_id', op: 'eq', value: clientId })
+  }
+
+  if(selectedSourceProduct.value?.id) {
+    payload.filters?.push({ field: 'id', op: 'ne', value: selectedSourceProduct.value?.id })
+  }
+
+  if(selectedSourceProduct.value?.color) {
+    payload.filters?.push({ field: 'color', op: 'eq', value: selectedSourceProduct.value?.color })
+  }
+  
+  if (searchQueryTP.value) {
+    payload.filters?.push({
+      group: 'or',
+      filters: [
+        { field: 'name', op: 'like', value: searchQueryTP.value },
+        { field: 'article', op: 'like', value: searchQueryTP.value },
+        { field: 'vendor_code', op: 'like', value: searchQueryTP.value }
+      ]
+    })
+  }
+
+  // const { data, error } = await getProducts(clientId, selectedSourceProductId.value)
+  const { data, error } = await getProductsWithSizes(payload)
   if (error.value) {
     console.error('Ошибка при загрузке целевых товаров:', error.value)
     return
@@ -58,11 +113,16 @@ async function fetchTargetProducts(clientId: number) {
   targetProducts.value = data.value || []
 }
 
-watch(selectedTargetProductId, id => {
+watch(selectedTargetProduct, async (id) => {
   selectedTargetSizeId.value = null
   targetSizes.value = []
-  if (id != null) fetchSizes(id, 'target')
+  if (id) {
+    targetProductImage.value = ''
+    await fetchSizes(id, 'target')
+    await fetchProductImage(id, 'target')
+  }
 })
+
 const availableSourceQuantity = computed(() => {
   const size = sourceSizes.value.find(s => s.id === selectedSourceSizeId.value)
   return size?.available_labels_count ?? 0
@@ -71,13 +131,68 @@ const availableSourceQuantity = computed(() => {
 const sourceSizes = ref<ProductSizeWithLabels[]>([])
 const targetSizes = ref<ProductSizeWithLabels[]>([])
 
+async function handleTargetProductChange() {
+  if (debounceTimer) {
+    clearTimeout(debounceTimer)
+  }
+
+  debounceTimer = window.setTimeout(() => {
+    fetchTargetProducts()
+  }, 400)
+}
+
+async function handleSourceProductChange() {
+  if (debounceTimer) {
+    clearTimeout(debounceTimer)
+  }
+
+  debounceTimer = window.setTimeout(() => {
+    fetchProducts()
+  }, 400)
+}
+
+
 async function fetchProducts() {
-  const { data, error } = await getProducts()
+  const payload: FilterRequest = {
+    filters: [],
+    sort_by: 'name',
+    sort_dir: 'asc',
+  }
+  
+  if (!searchQuerySP.value) {
+    return
+  }
+  
+  payload.filters?.push({
+      group: 'or',
+      filters: [
+        { field: 'name', op: 'like', value: searchQuerySP.value },
+        { field: 'article', op: 'like', value: searchQuerySP.value },
+        { field: 'vendor_code', op: 'like', value: searchQuerySP.value }
+      ]
+    })
+  
+  const { data, error } = await getProductsWithSizes(payload)
+  
   if (error.value) {
     console.error('Ошибка при загрузке товаров:', error.value)
     return
   }
   sourceProducts.value = data.value || []
+}
+
+const sourceProductImage = ref<string>('')
+const targetProductImage = ref<string>('')
+
+async function fetchProductImage(productId: number, productType: 'target' | 'source') {
+  const { data, error } = await getProductMainImage(productId)
+    if (!error.value && data.value?.data) {
+      if (productType === 'source') {
+        sourceProductImage.value = data.value.data.url
+      } else if (productType === 'target'){
+        targetProductImage.value = data.value.data.url
+      }
+    }
 }
 
 async function fetchSizes(productId: number, target: 'source' | 'target') {
@@ -120,8 +235,6 @@ async function onReplaceSize() {
   onLabelsUpdated()
   dialog.value = false
 }
-
-onMounted(fetchProducts)
 </script>
 
 <template>
@@ -135,57 +248,75 @@ onMounted(fetchProducts)
             <div class="font-weight-medium mb-2">Откуда берём этикетки</div>
             <VLabel class="text-body-2 mb-1" style="color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity))">Товар</VLabel>
             <VAutocomplete
-              v-model="selectedSourceProductId"
+              v-model="selectedSourceProduct"
+              v-model:search="searchQuerySP"
               :items="sourceProducts"
+              :no-filter="true"
+              :item-value="p => p"
               item-title="name"
-              item-value="id"
-              :density="selectedSourceProductId ? 'compact' : 'comfortable'"
-              :variant="selectedSourceProductId ? 'plain' : 'outlined'"  
-              :menu-icon="null"
+              :density="selectedSourceProduct ? 'compact' : 'comfortable'"
+              :variant="selectedSourceProduct ? 'plain' : 'outlined'"  
+              menu-icon=""
               :clearable="false"
-              placeholder="Поиск по артикулу WB или названию"
+              placeholder="Поиск по артикулу или названию"
               class="mb-6"
             >
               <template #selection="{ item }">
-                <template v-if="item && item.raw">
-                  <div class="mt-4 d-flex align-center" style="min-width: 0; overflow: hidden;">
-                    <div class="mr-2 d-flex">
-                      <img
-                        style="border-radius: 5px; max-height: 48px;"
-                        width="36"
-                        src="https://placehold.co/36x48"
-                      />
+                <div class="mt-8 d-flex align-center" style="min-width: 0; overflow: hidden;">
+                  <div class="mr-2 d-flex">
+                    <img
+                      style="border-radius: 5px; max-height: 60px;"
+                      width="48"
+                      :src="sourceProductImage"
+                    />
+                  </div>
+                  <div class="d-flex flex-column" style="min-width: 0; overflow: hidden;">
+                    <div
+                      style="
+                        font-size: 14px;
+                        font-weight: 600;
+                        white-space: nowrap;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                      "
+                    >
+                      {{ item.title }}
                     </div>
-                    <div class="d-flex flex-column" style="min-width: 0; overflow: hidden;">
-                      <div
-                        style="
-                          font-size: 14px;
-                          font-weight: 600;
-                          white-space: nowrap;
-                          overflow: hidden;
-                          text-overflow: ellipsis;
-                        "
-                      >
-                        {{ item.title }}
-                      </div>
-
-                      <div
-                        style="
-                          font-size: 13px;
-                          font-weight: 600;
-                          color: rgba(0, 0, 0, 0.55);
-                          white-space: nowrap;
-                          overflow: hidden;
-                          text-overflow: ellipsis;
-                        "
-                      >
-                        <span>{{ item.raw.article }}</span>
-                        <span class="mx-1">•</span>
-                        <span>{{ 'long-sliv-black' }}</span>
-                      </div>
+                    
+                    <div 
+                      style="
+                        font-size: 13px;
+                        font-weight: 600;
+                        color: rgba(0, 0, 0, 0.55);
+                        white-space: nowrap;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                      "
+                    >
+                      <span>{{ item.raw.color }}</span>
+                    </div>
+                  
+                    <div
+                      style="
+                        font-size: 13px;
+                        font-weight: 600;
+                        color: rgba(0, 0, 0, 0.55);
+                        white-space: nowrap;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                      "
+                    >
+                      <span>{{ item.raw.article }}</span>
+                      <span class="mx-1">•</span>
+                      <span>{{ item.raw.vendor_code }}</span>
                     </div>
                   </div>
-                </template>
+                </div>
+              </template>
+              <template #no-data>
+                <div class="pa-4 text-grey">
+                  Начните вводить
+                </div>
               </template>
             </VAutocomplete>
 
@@ -194,8 +325,8 @@ onMounted(fetchProducts)
               :items="sourceSizes"
               item-title="value"
               item-value="id"
-              :disabled="!selectedSourceProductId"
-              class="mt-2"
+              :disabled="!selectedSourceProduct"
+              class="mt-4"
               label="Размер"
               outlined
             />
@@ -215,24 +346,26 @@ onMounted(fetchProducts)
             <div class="font-weight-medium mb-2">Куда переносим</div>
             <VLabel class="text-body-2 mb-1" style="color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity))">Товар</VLabel>
             <VAutocomplete
-              v-model="selectedTargetProductId"
+              v-model="selectedTargetProduct"
+              v-model:search="searchQueryTP"
               :items="targetProducts"
+              :no-filter="true"
               item-title="name"
               item-value="id"
-              :density="selectedTargetProductId ? 'compact' : 'comfortable'"
-              :variant="selectedTargetProductId ? 'plain' : 'outlined'"
-              placeholder="Поиск по артикулу WB или названию"
-              :menu-icon="null"
+              :density="selectedTargetProduct ? 'compact' : 'comfortable'"
+              :variant="selectedTargetProduct ? 'plain' : 'outlined'"
+              placeholder="Поиск по артикулу или названию"
+              menu-icon=""
               :clearable="false"
               class="mb-6"
             >
               <template #selection="{ item }">
-                <div class="mt-4 d-flex align-center" style="min-width: 0; overflow: hidden;">
+                <div class="mt-8 d-flex align-center" style="min-width: 0; overflow: hidden;">
                   <div class="mr-2 d-flex">
                     <img 
-                      style="border-radius: 5px; max-height: 48px;" 
-                      width="36"
-                      src="https://placehold.co/36x48"
+                      style="border-radius: 5px; max-height: 60px;" 
+                      width="48"
+                      :src="targetProductImage"
                     />
                   </div>
                   <div class="d-flex flex-column" style="min-width: 0; overflow: hidden;">
@@ -258,11 +391,28 @@ onMounted(fetchProducts)
                         text-overflow: ellipsis;
                       "
                     >
+                      <span>{{ item.raw.color }}</span>
+                    </div>
+                    <div 
+                      style="
+                        font-size: 13px;
+                        font-weight: 600;
+                        color: rgba(0, 0, 0, 0.55);
+                        white-space: nowrap;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                      "
+                    >
                       <span>{{ item.raw.article }}</span>
                       <span class="mx-1">•</span>
-                      <span>{{ 'long-sliv-black' }}</span>
+                      <span>{{ item.raw.vendor_code }}</span>
                     </div>
                   </div>
+                </div>
+              </template>
+              <template #no-data>
+                <div class="pa-4 text-grey">
+                  Начните вводить
                 </div>
               </template>
             </VAutocomplete>
@@ -271,9 +421,9 @@ onMounted(fetchProducts)
               :items="targetSizes"
               item-title="value"
               item-value="id"
-              :disabled="!selectedTargetProductId"
+              :disabled="!selectedTargetProduct"
               label="Размер"
-              class="mt-2"
+              class="mt-4"
               outlined
             />
             <AppTextField

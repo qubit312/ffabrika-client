@@ -75,6 +75,10 @@ const previewData = computed(() => {
   return {
     name: form.value.name,
     brand: 'BRAND',
+    number: 1,
+    userId: 3,
+    gtin: '0123456789012',
+    serial: 'A1B2C3D4E5',
     client: form.value.client_name,
     size: size.value,
     article: form.value.product?.article,
@@ -121,7 +125,10 @@ onMounted(() => {
             class="mb-4"
           >
             <template #label>
-              <LabelPreview :schema="JSON.parse(tpl.content)" :data="previewData" />
+              <div>
+                <LabelPreview :schema="JSON.parse(tpl.content)" :data="previewData" />
+                <div class="mt-1" style="text-align: center">{{tpl.name}}</div>
+              </div>
             </template>
           </VRadio>
         </VRadioGroup>
@@ -155,7 +162,7 @@ onMounted(() => {
 
             <VCol cols="12" class="pt-0 pb-0">
               <VSwitch
-                v-if="selectedTemplate === 2"
+                v-if="selectedTemplate === 2 || selectedTemplate === 3"
                 label="Печать 1 ШК"
                 v-model="printSingleEAN"
               />
@@ -169,7 +176,7 @@ onMounted(() => {
 
             <VCol cols="12" class="pt-0 pb-0">
               <VSwitch
-                v-if="selectedTemplate === 2"
+                v-if="selectedTemplate === 2 || selectedTemplate === 3"
                 label="Печать 2 ШК"
                 v-model="printDoubleEAN"
               />
@@ -183,7 +190,7 @@ onMounted(() => {
 
             <VCol cols="12" class="pt-0 pb-0">
               <VSwitch
-                v-if="selectedTemplate === 2"
+                v-if="selectedTemplate === 2 || selectedTemplate === 3"
                 v-model="duplicateDM"
                 label="Дублировать ЧЗ"
               />

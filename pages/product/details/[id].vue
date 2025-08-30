@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
 import { useBreadcrumbs } from '@/composables/useBreadcrumbs'
+import { getProductMainImage } from '@/services/productImages'
 import { computed, onMounted, reactive, ref, toRaw, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '../../../composables/useApi'
@@ -18,7 +19,7 @@ const primaryId = Number(idParam)
 const mode = ref<'create' | 'edit' | 'view' >('create')
 const isFormInitialized = ref(false)
 const originalForm = ref<WbProduct | null>(null)
-
+const mainImage = ref<string | null>(null)
 
 const isCreate = computed(() => mode.value === 'create')
 const currentTitle = computed(() => form.name)
@@ -230,6 +231,10 @@ onMounted(async () => {
   await fetchClients()
   if (primaryId > 0) {
     await fetchProduct(primaryId)
+    const { data, error } = await getProductMainImage(primaryId)
+    if (!error.value && data.value?.data) {
+      mainImage.value = data.value.data.url
+    }
   }
 })
 
@@ -332,12 +337,23 @@ const handleChildCall = (params: ProductSizeWithLabels) => {
       <VCol md="3">
         <VCard
           class="d-flex flex-column align-center justify-center"
-          style="height: 390px; border: 2px dashed #ccc; cursor: pointer;"
+          style="height: 430px; width: 100%; overflow: hidden;"
           @click="handlePlaceholderClick"
         >
-          <VIcon size="40" color="grey">tabler-files</VIcon>
-          <div class="text-h6 mt-2" style="color: grey;">
-            Место под фотографию
+          <div v-if="mainImage" style="width: 100%;">
+            <img 
+              :src="mainImage" 
+              alt="Фото товара" 
+              style="width: 100%; height: auto; object-fit: contain;" 
+            />
+            <a v-if="form.article || null" :href="`https://www.wildberries.ru/catalog/${form.article}/detail.aspx`">Открыть на WB</a>
+          </div>
+          
+          <div v-else class="d-flex flex-column align-center justify-center" style="height: 100%;">
+            <VIcon size="40" color="grey">tabler-files</VIcon>
+            <div class="text-h6 mt-2" style="color: grey;">
+              Место под фотографию
+            </div>
           </div>
         </VCard>
       </VCol>
@@ -358,60 +374,37 @@ const handleChildCall = (params: ProductSizeWithLabels) => {
                   outlined
                 />
               </VCol>
-              <VCol cols="6">
-                <AppSelect
-                  v-model="form.category"
-                  :items="categoryOptions"
-                  item-title="label"
-                  item-value="value"
-                  label="Категория"
-                  placeholder="Выберите категорию"
-                  clearable
-                />
-              </VCol>
+              
             </VRow>
           </VCardText>
         </VCard>
         <VCard class="mb-6">
           <VCardText>
             <VRow>
-              <VCol cols="12" md="8">
+              <VCol cols="12" md="6">
                 <AppTextField v-model="form.name" label="Название" outlined />
               </VCol>
-              <VCol cols="12" md="4">
+
+              <VCol cols="12" md="6">
                 <AppTextField v-model="form.color" label="Цвет" outlined />
               </VCol>
-              <VCol cols="4">
+
+              <VCol cols="6">
                 <AppTextField
                   label="Артикул товара"
                   placeholder=""
                   v-model="form.article"
                 />
               </VCol>
-              
-              <VCol cols="12" md="4">
-                <AppTextField
-                  label="Состав"
-                  placeholder="Хлопок 95%"
-                  v-model="form.composition"
-                />
-              </VCol>
-              <VCol cols="12" md="4">
-                <AppTextField
-                  v-if="form.category != 'CLOTHES'"
-                  label="Баркод"
-                  placeholder=""
-                  v-model="productSize.barcode"
-                />
-              </VCol>
-              <VCol cols="12" md="4">
+
+              <VCol cols="12" md="6">
                 <AppTextField
                   label="Артикул продавца"
                   placeholder="112233445"
                   v-model="form.vendor_code"
                 />
               </VCol>
-              <VCol cols="12" md="4">
+              <VCol cols="12" md="6">
                 <AppSelect
                   v-model="form.brand_id"
                   :items="brandOptions"
@@ -422,7 +415,7 @@ const handleChildCall = (params: ProductSizeWithLabels) => {
                   clearable
                 />
               </VCol>
-              <VCol cols="12" md="4">
+              <VCol cols="6" md="6">
               </VCol>
               <VCol cols="6" md="6">
                 <VSwitch
@@ -433,10 +426,41 @@ const handleChildCall = (params: ProductSizeWithLabels) => {
             </VRow>
           </VCardText>
         </VCard>
-        <VCard class="mb-6" v-if="form.id && form.category == 'CLOTHES'">
+        <!-- <VCard class="mb-6" v-if="form.id && form.category == 'CLOTHES'"> -->
+        <VCard class="mb-6 pa-6">
+          <VRow>
+            <VCol cols="6">
+                <AppSelect
+                  v-model="form.category"
+                  :items="categoryOptions"
+                  item-title="label"
+                  item-value="value"
+                  label="Категория"
+                  placeholder="Выберите категорию"
+                  clearable
+                />
+              </VCol>
+               <VCol cols="6">
+                <AppTextField
+                  v-if="form.category == 'CLOTHES'"
+                  label="Состав"
+                  placeholder="Хлопок 95%"
+                  v-model="form.composition"
+                />
+              </VCol>
+              <VCol cols="6">
+                <AppTextField
+                  v-if="form.category != 'CLOTHES'"
+                  label="Баркод"
+                  placeholder=""
+                  v-model="productSize.barcode"
+                />
+              </VCol>
+          </VRow>
+             
           <VCardText>
             <LabelVariantDetails
-              v-if="form.id"
+              v-if="form.id && form.category == 'CLOTHES'"
               :product="form"
               :name="form.name"
               labelId="0"

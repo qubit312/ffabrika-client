@@ -215,7 +215,7 @@ function handleDownloadStarted(callback: (result: boolean) => void) {
       <div class="d-flex gap-1">
         <VTooltip open-delay="600">
           <template #activator="{ props }"> 
-            <IconBtn v-bind="props" @click="editItem(item)">
+            <IconBtn v-if="!isLabelParent" v-bind="props" @click="editItem(item)">
               <VIcon icon="tabler-edit" />
             </IconBtn>
           </template>
@@ -244,7 +244,7 @@ function handleDownloadStarted(callback: (result: boolean) => void) {
         </VTooltip>
         <VTooltip open-delay="600">
           <template #activator="{ props }"> 
-            <IconBtn v-bind="props" @click="deleteItem(item)">
+            <IconBtn v-if="!isLabelParent" v-bind="props" @click="deleteItem(item)">
               <VIcon icon="tabler-trash" />
             </IconBtn>
           </template>
@@ -253,7 +253,7 @@ function handleDownloadStarted(callback: (result: boolean) => void) {
       </div>
     </template>
   </VDataTable>
-  <VBtn color="primary" class="mb-4 me-4 mt-4" @click="addItem">
+  <VBtn v-if="!isLabelParent" color="primary" class="mb-4 me-4 mt-4" @click="addItem">
     Добавить размер
   </VBtn>
   

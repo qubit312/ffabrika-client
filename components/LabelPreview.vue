@@ -52,6 +52,6 @@ function resolve(str) {
       <template v-else-if="b.type === 'datamatrix'">
         <img :src="datamatrix" style="width:100%;height:100%;object-fit:contain;" />
       </template>
-    </div>
+    </div>          
   </div>
 </template>

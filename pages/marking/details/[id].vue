@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useBreadcrumbs } from '@/composables/useBreadcrumbs'
+import { getProductMainImage } from '@/services/productImages'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CustomLoading from '../../../components/CustomLoading.vue'
@@ -34,7 +35,7 @@ const useDropZone = (_el: any, _fn: any) => { }
 const isCreate = computed(() => mode.value === 'create')
 const currentTitle = computed(() => form.name)
 const productColor = computed(() => form.product?.color || '')
-
+const mainImage = ref<string | null>(null)
 const { items: markingCrumbs, fullTitle: markingTitle } = useBreadcrumbs(
   'Маркировка',
   { name: 'marking-list' },
@@ -170,7 +171,7 @@ async function onSubmit() {
       labelId = data.value.id
     }
 
-    showSnackbar(mode.value === 'edit' ? 'Этикетка успешно обновлена!' : 'Этикетка успешно создана!', false)
+    // showSnackbar(mode.value === 'edit' ? 'Этикетка успешно обновлена!' : 'Этикетка успешно создана!', false)
     if (mode.value === 'create' && labelId) {
       await router.push({
         name: 'marking-details-id',
@@ -201,7 +202,12 @@ onMounted(async () => {
   loading.value = true
   if (entityId > 0) {
     await fetchLabel(entityId)
+    const { data, error } = await getProductMainImage(entityId)
+    if (!error.value && data.value?.data) {
+      mainImage.value = data.value.data.url
+    }
   }
+  
   loading.value = false
 })
 
@@ -245,8 +251,6 @@ function handleDownloadStarted(callback: (result: boolean) => void) {
               : form.name
           }}
         </h4>
-
-        <div class="text-body-1">Этикетки используемые для маркировки товаров</div>
       </div>
 
       <div class="d-flex gap-4 align-center flex-wrap">
@@ -257,8 +261,29 @@ function handleDownloadStarted(callback: (result: boolean) => void) {
     </div>
 
     <VRow>
-      <VCol md="8">
-        <VCard class="mb-6">
+      <VCol md="3">
+        <VCard
+          class="d-flex flex-column align-center justify-center"
+          style="height: 430px; width: 100%; overflow: hidden;"
+        >
+          <div v-if="mainImage" style="width: 100%;">
+            <img 
+              :src="mainImage" 
+              alt="Фото товара" 
+              style="width: 100%; height: auto; object-fit: contain;" 
+            />
+          </div>
+
+          <div v-else class="d-flex flex-column align-center justify-center" style="height: 100%;">
+            <VIcon size="40" color="grey">tabler-files</VIcon>
+            <div class="text-h6 mt-2" style="color: grey;">
+              Место под фотографию
+            </div>
+          </div>
+        </VCard>
+      </VCol>
+      <VCol md="9">
+        <VCard style="min-height: 430px;">
           <VCardText>
             <VRow class="mb-4">
               <VCol cols="12" md="6">
@@ -280,6 +305,7 @@ function handleDownloadStarted(callback: (result: boolean) => void) {
                   />
                   <AppTextField
                     class="flex-grow-1"
+                    variant="plain"
                     readonly
                     v-model="productColor"
                   />
@@ -294,6 +320,9 @@ function handleDownloadStarted(callback: (result: boolean) => void) {
             />
           </VCardText>
         </VCard>
+      </VCol>
+
+      <VCol cols="8">
         <PrintCardModule
           :labelId="entityId"
           v-model="form"

@@ -291,24 +291,32 @@ async function previewLabel() {
         </VCol>
       </VCardText>
 
-      <VCardText class="d-flex justify-end flex-wrap gap-3">
-        <VBtn variant="tonal" color="secondary" @click="close">Отменить</VBtn>
-        <VBtn
-          color="primary"
-          :loading="loadingPreview"
-          :disabled="loadingPreview"
-          @click="previewLabel"
-        >
-          Предпросмотр
-        </VBtn>
-        <VBtn
-          color="primary"
-          :loading="loading"
-          :disabled="loading"
-          @click="saveAndeDownloadFile"
-        >
-          Скачать этикетку
-        </VBtn>
+      <VCardText class="d-flex justify-space-between align-center">
+        <div>
+          <VBtn
+            
+            variant="outlined"
+            color="grey"
+            :loading="loadingPreview"
+            :disabled="loadingPreview"
+            @click="previewLabel"
+          >
+            Предпросмотр <VIcon class="ms-1" size="18" icon="tabler-eye" />
+          </VBtn>
+        </div>
+
+        <div>
+          <VBtn variant="tonal" class="me-3" color="secondary" @click="close">Отменить</VBtn>
+        
+          <VBtn
+            color="primary"
+            :loading="loading"
+            :disabled="loading"
+            @click="saveAndeDownloadFile"
+          >
+            Скачать этикетку
+          </VBtn>
+        </div>
       </VCardText>
     </VCard>
   </VDialog>
