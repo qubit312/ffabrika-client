@@ -11,10 +11,15 @@ import { themeConfig } from '@themeConfig'
 import { useRouter } from 'vue-router'
 import { apiLogin, apiRegister, setAuthSession, type RegisterDto } from '~/services/auth'
 
-definePageMeta({
-  layout: 'blank',
-  public: true,
-})
+import {
+  checkPassword,
+  email as emailRule,
+  passwordRule,
+  required,
+  type PasswordPolicy,
+} from '~/utils/validators'
+
+definePageMeta({ layout: 'blank', public: true })
 
 const router = useRouter()
 
@@ -29,7 +34,14 @@ const isPwd1 = ref(false)
 const isPwd2 = ref(false)
 const loading = ref(false)
 const errorMessage = ref('')
-const successMessage = ref('')
+const successMessage = ref('') 
+
+const snackbar = ref({
+  visible: false,
+  text: '',
+  color: 'success',
+  timeout: 2500,
+})
 
 const authThemeImg = useGenerateImageVariant(
   authV2IllustrationLight,
@@ -40,37 +52,70 @@ const authThemeImg = useGenerateImageVariant(
 )
 const authThemeMask = useGenerateImageVariant(authV2MaskLight, authV2MaskDark)
 
-const MIN_PASSWORD = 11
+const PWD_POLICY: PasswordPolicy = { min: 6, requireLower: true, requireDigit: true }
+
 const rules = {
-  required: (v: any) => (!!v || v === false) || 'Обязательное поле',
-  email: (v: string) => /.+@.+\..+/.test(v) || 'Неверный email',
-  minLen: (v: string) => (v?.length ?? 0) >= MIN_PASSWORD || `Минимум ${MIN_PASSWORD} символов`,
-  samePwd: () => form.password === form.password_repeat || 'Пароли не совпадают',
+  required,
+  email: emailRule,
+  password: passwordRule(PWD_POLICY),
+  repeat: (v: string) => String(v ?? '') === String(form.password ?? '') || 'Пароли не совпадают',
 }
 
+const submitted = ref(false)
+const pwdCheck = computed(() => checkPassword(form.password, PWD_POLICY))
+const showPwdHelp = computed(() => {
+  const typed = (form.password?.length ?? 0) > 0
+  const valid = rules.password(form.password) === true
+  return (!valid && (typed || submitted.value))
+})
+
+function sleep(ms: number) {
+  return new Promise(res => setTimeout(res, ms))
+}
 
 async function onSubmit() {
   errorMessage.value = ''
   successMessage.value = ''
+  submitted.value = true
 
-  if (!form.name || !rules.email(form.email) || !rules.minLen(form.password) || !rules.samePwd()) {
+  const localOk =
+    rules.required(form.name) === true &&
+    rules.required(form.email) === true &&
+    rules.email(form.email) === true &&
+    rules.password(form.password) === true &&
+    rules.repeat(form.password_repeat) === true
+
+  if (!localOk) {
     errorMessage.value = 'Проверьте правильность заполнения полей'
     return
   }
 
   loading.value = true
   try {
-    const { data: regData, error: regErr } = await apiRegister(form)
+    const { data: regData, error: regErr } = await apiRegister({
+      name: form.name,
+      email: form.email,
+      password: form.password,
+      password_repeat: form.password_repeat, 
+    } as any)
+
     const reg = regData.value
-    if (!reg || !reg.success === false) {
+    if (!reg || reg.success === false) {
       throw new Error((regErr.value as any)?.data?.message || reg?.message || 'Ошибка регистрации')
     }
+
+    snackbar.value.text = 'Регистрация успешна! Выполняем вход…'
+    snackbar.value.color = 'success'
+    snackbar.value.visible = true
+
+    await sleep(900)
 
     const { data: loginData, error: loginErr } = await apiLogin({
       email: form.email,
       password: form.password,
       remember: true,
     })
+
     const login = loginData.value
     if (!login || !login.success || !login.data?.access_token) {
       throw new Error((loginErr.value as any)?.data?.message || login?.message || 'Ошибка авторизации после регистрации')
@@ -128,9 +173,24 @@ async function onSubmit() {
                   placeholder="············"
                   :type="isPwd1 ? 'text' : 'password'"
                   :append-inner-icon="isPwd1 ? 'tabler-eye-off' : 'tabler-eye'"
-                  :rules="[rules.required, rules.min6]"
+                  :rules="[rules.required, rules.password]"
                   @click:append-inner="isPwd1 = !isPwd1"
                 />
+
+                <div v-if="showPwdHelp" class="text-caption mt-2 d-flex flex-column gap-1">
+                  <div class="d-flex align-center gap-2">
+                    <VIcon :color="pwdCheck.len ? 'success' : 'error'" :icon="pwdCheck.len ? 'tabler-check' : 'tabler-x'" size="16" />
+                    <span>Не менее {{ PWD_POLICY.min }} символов</span>
+                  </div>
+                  <div class="d-flex align-center gap-2">
+                    <VIcon :color="pwdCheck.digit ? 'success' : 'error'" :icon="pwdCheck.digit ? 'tabler-check' : 'tabler-x'" size="16" />
+                    <span>Хотя бы одна цифра</span>
+                  </div>
+                  <div class="d-flex align-center gap-2">
+                    <VIcon :color="pwdCheck.lower ? 'success' : 'error'" :icon="pwdCheck.lower ? 'tabler-check' : 'tabler-x'" size="16" />
+                    <span>Хотя бы одна буква</span>
+                  </div>
+                </div>
               </VCol>
 
               <VCol cols="12">
@@ -140,7 +200,7 @@ async function onSubmit() {
                   placeholder="············"
                   :type="isPwd2 ? 'text' : 'password'"
                   :append-inner-icon="isPwd2 ? 'tabler-eye-off' : 'tabler-eye'"
-                  :rules="[rules.required, rules.min6, rules.samePwd]"
+                  :rules="[rules.required, rules.repeat]"
                   @click:append-inner="isPwd2 = !isPwd2"
                 />
               </VCol>
@@ -162,6 +222,10 @@ async function onSubmit() {
       </VCard>
     </VCol>
   </VRow>
+
+  <VSnackbar v-model="snackbar.visible" :timeout="snackbar.timeout" :color="snackbar.color" location="top right">
+    {{ snackbar.text }}
+  </VSnackbar>
 </template>
 
 <style lang="scss">

@@ -21,17 +21,37 @@ const save = async () => {
     <VCardTitle class="text-h6">Реквизиты</VCardTitle>
     <VDivider />
     <VCardText>
-      <VRow>
-        <VCol cols="12" md="6"><VTextField v-model="org.companyName" label="Наименование организации" /></VCol>
-        <VCol cols="12" md="3"><VTextField v-model="org.inn" label="ИНН" /></VCol>
-        <VCol cols="12" md="3"><VTextField v-model="org.kpp" label="КПП" /></VCol>
-        <VCol cols="12" md="6"><VTextField v-model="org.ogrn" label="ОГРН/ОГРНИП" /></VCol>
-        <VCol cols="12" md="6"><VTextField v-model="org.address" label="Юр. адрес" /></VCol>
-        <VCol cols="12" md="4"><VTextField v-model="org.bank" label="Банк" /></VCol>
-        <VCol cols="12" md="4"><VTextField v-model="org.bik" label="БИК" /></VCol>
-        <VCol cols="12" md="4"><VTextField v-model="org.account" label="Р/с" /></VCol>
-      </VRow>
-    </VCardText>
+            <VRow>
+              <VCol cols="12" md="6">
+                <AppTextField v-model="org.tin" label="ИНН" outlined />
+              </VCol>
+              <VCol cols="12" md="6">
+                <AppTextField v-model="org.psrn" label="ОГРНИП" outlined />
+              </VCol>
+              <VCol cols="12" md="6">
+                <AppTextField v-model="org.account" label="Счёт" outlined />
+              </VCol>
+              <VCol cols="12" md="6">
+                <AppTextField v-model="org.bank" label="Банк" outlined />
+              </VCol>
+              <VCol cols="12" md="6">
+                <AppTextField v-model="org.correspondent_account" label="Корр. счёт" outlined />
+              </VCol>
+              <VCol cols="12" md="6">
+                <AppTextField v-model="org.bic" label="БИК" outlined />
+              </VCol>
+              <VCol cols="12" md="6">
+                <AppTextField v-model="org.vat" label="НДС" outlined />
+              </VCol>
+              <VCol cols="12" md="6">
+                <AppTextField v-model="org.legal_address" label="Юридический адрес" outlined />
+              </VCol>
+              <VCol cols="12" md="6">
+                <AppTextField v-model="org.wb_api_token" label="Токен WB API" outlined />
+              </VCol>
+            </VRow>
+          </VCardText>
+   
     <VCardActions>
       <VBtn color="primary" @click="save">Сохранить</VBtn>
     </VCardActions>

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, defineExpose, defineProps, onMounted, onUnmounted, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { useLabelEvents } from '../composables/useLabelBus';
+import { getChestnyZnakLabels } from '../services/chz';
 import { createProductSize, deleteProductSize, getProductSizes, updateProductSize } from '../services/productSizes';
 import type { NewLabelInterface } from '../types/label';
 import type { Printer } from '../types/printer';
@@ -16,41 +18,45 @@ interface Props {
 }
 
 const emit = defineEmits<{
-  (e: 'printer-updated', v: number | null): void;
-  (e: 'download-started', callback: (result: boolean) => void): void;
-  (e: 'callParentMethod', v: ProductSizeWithLabels | null): void;
+  (e: 'printer-updated', v: number | null): void
+  (e: 'download-started', callback: (result: boolean) => void): void
+  (e: 'callParentMethod', v: ProductSizeWithLabels | null): void
 }>()
 
 const headers = [
   { title: 'Баркод', key: 'barcode', sortable: false },
   { title: 'Размер', key: 'value', sortable: false },
   { title: 'Рос. Размер', key: 'tech_size', sortable: false },
-  { title: 'ЧЗ', key: 'available_labels_count', sortable: false },
+  { title: 'ЧЗ', key: 'labels', sortable: false },
   { title: 'Действия', key: 'actions', sortable: false },
-];
+]
 
 const { registerLabelUpdateListener, unregisterLabelUpdateListener } = useLabelEvents()
 const props = defineProps<Props>()
+const router = useRouter()
+
 const productSizeList = ref<ProductSizeWithLabels[]>([])
 const editDialog = ref(false)
 const deleteDialog = ref(false)
 const currentItem = ref<ProductSizeWithLabels | null>(null)
 const editedIndex = ref<number | null>(null)
-const editedItem = ref<ProductSizeWithLabels>({ id: 0, value: '', barcode: '', tech_size: '', available_labels_count: 0, product_id: 0 })
-
-const deleteConfirmationQuestion = computed(() => {
-  let question  = `Удалить размер ${editedItem.value.value}?`
-  return question;
+const editedItem = ref<ProductSizeWithLabels>({
+  id: 0,
+  value: '',
+  barcode: '',
+  tech_size: '',
+  available_labels_count: 0,
+  product_id: 0,
 })
+
+const deleteConfirmationQuestion = computed(() => `Удалить размер ${editedItem.value.value}?`)
 const showLabelDialog = ref(false)
-const isDialogVisible = ref(false);
+const isDialogVisible = ref(false)
 
-const isLabelParent = computed(() => {
-  if (!props.label || !props.label.id) {
-    return false
-  }
-  return true
-})
+const isLabelParent = computed(() => !!(props.label && props.label.id))
+
+const sizeCounts = ref<Record<number, { total: number; used: number; unused: number }>>({})
+const loadingCounts = ref<Record<number, boolean>>({})
 
 const mapPS = (ps: ProductSizeWithLabels): ProductSizeWithLabels => ({
   id: ps.id,
@@ -77,7 +83,36 @@ const fetchSizes = async (productId: number) => {
     return
   }
 
-  productSizeList.value = data.value.data.map(mapPS)  
+  productSizeList.value = data.value.data.map(mapPS)
+
+  await loadSizeCountsForAll()
+}
+
+async function loadSizeCountsForAll() {
+  const sizes = productSizeList.value.slice()
+  await Promise.all(sizes.map(s => loadSizeCount(s)))
+}
+
+async function loadSizeCount(s: ProductSizeWithLabels) {
+  try {
+    loadingCounts.value[s.id] = true
+
+    const { data, error } = await getChestnyZnakLabels({ size_id: s.id, per_page: 1, page: 1 })
+    if (error.value) throw error.value
+
+    const total = Number(data.value?.total ?? 0)
+    const unused = Number(s.available_labels_count ?? 0)
+    const safeTotal = Math.max(total, unused) 
+    const used = Math.max(safeTotal - unused, 0)
+
+    sizeCounts.value[s.id] = { total: safeTotal, used, unused }
+  } catch (e) {
+    console.error('Не удалось получить total для size_id=', s.id, e)
+    const unused = Number(s.available_labels_count ?? 0)
+    sizeCounts.value[s.id] = { total: unused, used: 0, unused }
+  } finally {
+    loadingCounts.value[s.id] = false
+  }
 }
 
 const saveVariant = async () => {
@@ -96,18 +131,22 @@ const saveVariant = async () => {
 
     if (editedIndex.value !== null && editedIndex.value > -1) {
       const { data: resp, error } = await updateProductSize(editedItem.value.id, payload)
-      if (error.value || !resp.value.success) {
+      if (error.value || !resp.value.success)
         throw new Error('Не удалось обновить вариант')
-      }
+
       productSizeList.value[editedIndex.value] = mapPS(resp.value.data)
       emit('callParentMethod', resp.value.data)
+
+      await loadSizeCount(resp.value.data)
     } else {
       const { data: resp, error } = await createProductSize(payload)
-      if (error.value) {
+      if (error.value)
         throw new Error('Не удалось создать вариант. Ошибка: ' + resp.value)
-      }
+
       productSizeList.value.push(mapPS(resp.value))
       emit('callParentMethod', resp.value)
+
+      await loadSizeCount(resp.value)
     }
   } catch (e: any) {
     console.error('Ошибка сохранения:', e)
@@ -125,6 +164,9 @@ const deleteSize = async () => {
     if (editedIndex.value !== null && editedIndex.value > -1) {
       productSizeList.value.splice(editedIndex.value, 1)
     }
+
+    delete sizeCounts.value[editedItem.value.id]
+    delete loadingCounts.value[editedItem.value.id]
   } catch (e: any) {
     console.error('Ошибка удаления:', e)
   } finally {
@@ -132,16 +174,17 @@ const deleteSize = async () => {
     editedIndex.value = null
   }
 }
+
 const openPrintDialog = (item: ProductSizeWithLabels) => {
   currentItem.value = item
   isDialogVisible.value = true
 }
 
 const editItem = (item: ProductSizeWithLabels) => {
-  editedIndex.value = productSizeList.value.indexOf(item);
-  editedItem.value = { ...item };
-  editDialog.value = true;
-};
+  editedIndex.value = productSizeList.value.indexOf(item)
+  editedItem.value = { ...item }
+  editDialog.value = true
+}
 
 const addItem = () => {
   editedIndex.value = null
@@ -194,6 +237,17 @@ function handleDownloadStarted(callback: (result: boolean) => void) {
   emit('download-started', callback)
 }
 
+function goToLabels(size: ProductSizeWithLabels, used: boolean) {
+  router.push({
+    name: 'marking-labels',
+    query: {
+      product_id: size.product_id,     
+      size: String(size.value || ''),  
+      used: used ? 1 : 0,               
+    },
+  })
+}
+
 </script>
 
 <template>
@@ -201,26 +255,59 @@ function handleDownloadStarted(callback: (result: boolean) => void) {
     :headers="headers"
     :items="productSizeList"
   >
-    <template #no-data></template>
-    <template #bottom></template>
-    <template #header.available_labels_count="{ column }">
+    <template #no-data />
+    <template #bottom />
+
+    <template #header.labels="{ column }">
       <VTooltip open-delay="400">
         <template #activator="{ props }">
           <span v-bind="props" class="text-truncate">{{ column.title }}</span>
         </template>
-        <span>Кол-во честных знаков</span>
+        <span>Всего / использовано / неиспользовано</span>
       </VTooltip>
     </template>
+
+    <template #item.labels="{ item }">
+      <div class="d-flex align-center">
+        <VProgressCircular
+          v-if="loadingCounts[item.id]"
+          indeterminate
+          size="18"
+          class="me-2"
+        />
+        <span v-else class="text-high-emphasis">
+          {{ sizeCounts[item.id]?.total ?? item.available_labels_count ?? 0 }}
+          /
+          <span
+            class="text-primary cursor-pointer"
+            @click="goToLabels(item, true)"
+            title="Показать использованные метки"
+          >
+            {{ sizeCounts[item.id]?.used ?? 0 }}
+          </span>
+          /
+          <span
+            class="text-primary cursor-pointer"
+            @click="goToLabels(item, false)"
+            title="Показать неиспользованные метки"
+          >
+            {{ sizeCounts[item.id]?.unused ?? (item.available_labels_count ?? 0) }}
+          </span>
+        </span>
+      </div>
+    </template>
+
     <template #item.actions="{ item }">
       <div class="d-flex gap-1">
         <VTooltip open-delay="600">
-          <template #activator="{ props }"> 
+          <template #activator="{ props }">
             <IconBtn v-if="!isLabelParent" v-bind="props" @click="editItem(item)">
               <VIcon icon="tabler-edit" />
             </IconBtn>
           </template>
           <span>Редактировать</span>
         </VTooltip>
+
         <VTooltip open-delay="600" v-if="parentComponent === 'marking'">
           <template #activator="{ props }">
             <IconBtn
@@ -234,16 +321,18 @@ function handleDownloadStarted(callback: (result: boolean) => void) {
           </template>
           <span>Распечать этикетку</span>
         </VTooltip>
+
         <VTooltip open-delay="600">
-          <template #activator="{ props }"> 
+          <template #activator="{ props }">
             <IconBtn v-if="isLabelParent" v-bind="props" @click="showLabelDialog = true">
               <VIcon icon="tabler-arrows-shuffle" />
             </IconBtn>
           </template>
           <span>Перенести на другой товар</span>
         </VTooltip>
+
         <VTooltip open-delay="600">
-          <template #activator="{ props }"> 
+          <template #activator="{ props }">
             <IconBtn v-if="!isLabelParent" v-bind="props" @click="deleteItem(item)">
               <VIcon icon="tabler-trash" />
             </IconBtn>
@@ -253,11 +342,12 @@ function handleDownloadStarted(callback: (result: boolean) => void) {
       </div>
     </template>
   </VDataTable>
+
   <VBtn v-if="!isLabelParent" color="primary" class="mb-4 me-4 mt-4" @click="addItem">
     Добавить размер
   </VBtn>
-  
-  <VDialog v-model="editDialog" max-width="500px" >
+
+  <VDialog v-model="editDialog" max-width="500px">
     <VCard>
       <VCardTitle>
         <span class="headline">Редактирование</span>
@@ -266,25 +356,14 @@ function handleDownloadStarted(callback: (result: boolean) => void) {
       <VCardText>
         <VContainer>
           <VRow>
-            <VCol cols="12" >
-              <VTextField
-                v-model="editedItem.barcode"
-                label="Баркод"
-              />
+            <VCol cols="12">
+              <VTextField v-model="editedItem.barcode" label="Баркод" />
             </VCol>
-
-            <VCol cols="12" >
-              <VTextField
-                v-model="editedItem.value"
-                label="Размер"
-              />
+            <VCol cols="12">
+              <VTextField v-model="editedItem.value" label="Размер" />
             </VCol>
-
-            <VCol cols="12" >
-              <VTextField
-                v-model="editedItem.tech_size"
-                label="Рос. Размер"
-              />
+            <VCol cols="12">
+              <VTextField v-model="editedItem.tech_size" label="Рос. Размер" />
             </VCol>
           </VRow>
         </VContainer>
@@ -292,53 +371,33 @@ function handleDownloadStarted(callback: (result: boolean) => void) {
 
       <VCardActions>
         <VSpacer />
-        <VBtn
-          color="secondary"
-          variant="outlined"
-          @click="closeEdit"
-        >
+        <VBtn color="secondary" variant="outlined" @click="closeEdit">
           Закрыть
         </VBtn>
-
-        <VBtn
-          color="primary"
-          variant="elevated"
-          @click="saveVariant"
-        >
+        <VBtn color="primary" variant="elevated" @click="saveVariant">
           Сохранить
         </VBtn>
       </VCardActions>
     </VCard>
   </VDialog>
 
-  <VDialog
-    v-model="deleteDialog"
-    max-width="350px"
-  >
+  <VDialog v-model="deleteDialog" max-width="350px">
     <VCard>
       <VCardText class="pt-6 pb-4 text-h6">
         {{ deleteConfirmationQuestion }}
       </VCardText>
       <VCardActions>
         <VSpacer />
-        <VBtn
-          color="secondary"
-          variant="elevated"
-          @click="closeDelete"
-        >
+        <VBtn color="secondary" variant="elevated" @click="closeDelete">
           Отменить
         </VBtn>
-
-        <VBtn
-          color="primary"
-          variant="elevated"
-          @click="deleteItemConfirm"
-        >
+        <VBtn color="primary" variant="elevated" @click="deleteItemConfirm">
           ОК
         </VBtn>
       </VCardActions>
     </VCard>
   </VDialog>
+
   <PrintLabelDialog
     v-model:visible="isDialogVisible"
     :label="props.label"
@@ -347,9 +406,14 @@ function handleDownloadStarted(callback: (result: boolean) => void) {
     @printer-updated="emit('printer-updated', $event)"
     @download-started="handleDownloadStarted"
   />
+
   <UpdateChzLabel
     v-if="isLabelParent && props.product && props.product.id"
     v-model="showLabelDialog"
     :product="props.product"
   />
 </template>
+
+<style scoped>
+.cursor-pointer { cursor: pointer; }
+</style>
