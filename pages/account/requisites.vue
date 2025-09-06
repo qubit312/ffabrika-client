@@ -1,7 +1,15 @@
 <script setup lang="ts">
 
+const isEdit = ref(false)
+const isSaving = ref(false)
+const startEdit = () => {  isEdit.value = true }
+const cancel = () => {
 
+  isEdit.value = false
+}
 const org = reactive({
+  shortname:'',
+  type: '',
   companyName: '',
   inn: '',
   kpp: '',
@@ -9,9 +17,11 @@ const org = reactive({
   address: '',
   bank: '',
   bik: '',
-  account: '',
 })
-
+const typeOptions = [
+  { label: 'Юридическое лицо', value: 'LEGAL_ENTITY' },
+  { label: 'Индивидуальный предприниматель', value: 'INDIVIDUAL' },
+]
 const save = async () => {
 }
 </script>
@@ -23,6 +33,21 @@ const save = async () => {
     <VCardText>
             <VRow>
               <VCol cols="12" md="6">
+                <AppTextField v-model="org.shortname" label="Краткое название" outlined />
+              </VCol>
+              <VCol cols="12" md="6">
+                <AppSelect
+                  v-model="org.type"
+                  :items="typeOptions"
+                  item-title="label"
+                  item-value="value"
+                  label="Тип клиента"
+                  placeholder="Выберите тип"
+                  clearable
+                  outlined
+                />
+              </VCol>
+              <VCol cols="12" md="6">
                 <AppTextField v-model="org.tin" label="ИНН" outlined />
               </VCol>
               <VCol cols="12" md="6">
@@ -32,10 +57,10 @@ const save = async () => {
                 <AppTextField v-model="org.account" label="Счёт" outlined />
               </VCol>
               <VCol cols="12" md="6">
-                <AppTextField v-model="org.bank" label="Банк" outlined />
+                <AppTextField v-model="org.correspondent_account" label="Корр. счёт" outlined />
               </VCol>
               <VCol cols="12" md="6">
-                <AppTextField v-model="org.correspondent_account" label="Корр. счёт" outlined />
+                <AppTextField v-model="org.bank" label="Банк" outlined />
               </VCol>
               <VCol cols="12" md="6">
                 <AppTextField v-model="org.bic" label="БИК" outlined />
@@ -46,14 +71,16 @@ const save = async () => {
               <VCol cols="12" md="6">
                 <AppTextField v-model="org.legal_address" label="Юридический адрес" outlined />
               </VCol>
-              <VCol cols="12" md="6">
-                <AppTextField v-model="org.wb_api_token" label="Токен WB API" outlined />
+              <VCol cols="12" class="d-flex flex-wrap gap-4">
+                <VBtn v-if="!isEdit" color="primary" @click="startEdit">Редактировать</VBtn>
+                <template v-else>
+                  <VBtn type="submit" color="primary" :loading="isSaving">Сохранить изменения</VBtn>
+                  <VBtn variant="tonal" color="secondary" @click="cancel">Отмена</VBtn>
+                </template>
               </VCol>
             </VRow>
           </VCardText>
    
-    <VCardActions>
-      <VBtn color="primary" @click="save">Сохранить</VBtn>
-    </VCardActions>
+
   </VCard>
 </template>
