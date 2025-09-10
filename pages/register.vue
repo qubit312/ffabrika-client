@@ -10,14 +10,7 @@ import { VNodeRenderer } from '@layouts/components/VNodeRenderer'
 import { themeConfig } from '@themeConfig'
 import { useRouter } from 'vue-router'
 import { apiLogin, apiRegister, setAuthSession, type RegisterDto } from '~/services/auth'
-
-import {
-  checkPassword,
-  email as emailRule,
-  passwordRule,
-  required,
-  type PasswordPolicy,
-} from '~/utils/validators'
+import { checkPassword, email as emailRule, passwordRule, required, type PasswordPolicy } from '~/utils/validators'
 
 definePageMeta({ layout: 'blank', public: true })
 
@@ -34,26 +27,18 @@ const isPwd1 = ref(false)
 const isPwd2 = ref(false)
 const loading = ref(false)
 const errorMessage = ref('')
-const successMessage = ref('') 
+const successMessage = ref('')
+const submitted = ref(false)
 
-const snackbar = ref({
-  visible: false,
-  text: '',
-  color: 'success',
-  timeout: 2500,
-})
+const snackbar = ref({ visible: false, text: '', color: 'success', timeout: 2500 })
 
 const authThemeImg = useGenerateImageVariant(
-  authV2IllustrationLight,
-  authV2IllustrationDark,
-  authV2IllustrationBorderedLight,
-  authV2IllustrationBorderedDark,
-  true,
+  authV2IllustrationLight, authV2IllustrationDark,
+  authV2IllustrationBorderedLight, authV2IllustrationBorderedDark, true,
 )
 const authThemeMask = useGenerateImageVariant(authV2MaskLight, authV2MaskDark)
 
 const PWD_POLICY: PasswordPolicy = { min: 6, requireLower: true, requireDigit: true }
-
 const rules = {
   required,
   email: emailRule,
@@ -61,7 +46,12 @@ const rules = {
   repeat: (v: string) => String(v ?? '') === String(form.password ?? '') || 'Пароли не совпадают',
 }
 
-const submitted = ref(false)
+// ❗ правила подставляем только после сабмита
+const nameRules = computed(() => (submitted.value ? [rules.required] : []))
+const emailRules = computed(() => (submitted.value ? [rules.required, rules.email] : []))
+const passRules = computed(() => (submitted.value ? [rules.required, rules.password] : []))
+const repeatRules = computed(() => (submitted.value ? [rules.required, rules.repeat] : []))
+
 const pwdCheck = computed(() => checkPassword(form.password, PWD_POLICY))
 const showPwdHelp = computed(() => {
   const typed = (form.password?.length ?? 0) > 0
@@ -69,9 +59,7 @@ const showPwdHelp = computed(() => {
   return (!valid && (typed || submitted.value))
 })
 
-function sleep(ms: number) {
-  return new Promise(res => setTimeout(res, ms))
-}
+function sleep(ms: number) { return new Promise(res => setTimeout(res, ms)) }
 
 async function onSubmit() {
   errorMessage.value = ''
@@ -93,10 +81,7 @@ async function onSubmit() {
   loading.value = true
   try {
     const { data: regData, error: regErr } = await apiRegister({
-      name: form.name,
-      email: form.email,
-      password: form.password,
-      password_repeat: form.password_repeat, 
+      name: form.name, email: form.email, password: form.password, password_repeat: form.password_repeat,
     } as any)
 
     const reg = regData.value
@@ -104,18 +89,10 @@ async function onSubmit() {
       throw new Error((regErr.value as any)?.data?.message || reg?.message || 'Ошибка регистрации')
     }
 
-    snackbar.value.text = 'Регистрация успешна! Выполняем вход…'
-    snackbar.value.color = 'success'
-    snackbar.value.visible = true
-
+    snackbar.value = { visible: true, text: 'Регистрация успешна! Выполняем вход…', color: 'success', timeout: 2500 }
     await sleep(900)
 
-    const { data: loginData, error: loginErr } = await apiLogin({
-      email: form.email,
-      password: form.password,
-      remember: true,
-    })
-
+    const { data: loginData, error: loginErr } = await apiLogin({ email: form.email, password: form.password, remember: true })
     const login = loginData.value
     if (!login || !login.success || !login.data?.access_token) {
       throw new Error((loginErr.value as any)?.data?.message || login?.message || 'Ошибка авторизации после регистрации')
@@ -156,14 +133,32 @@ async function onSubmit() {
         </VCardText>
 
         <VCardText>
-          <VForm @submit.prevent="onSubmit">
+          <!-- отключаем автофилл и валидируем только при сабмите -->
+          <VForm autocomplete="off" validate-on="submit" @submit.prevent="onSubmit">
             <VRow>
               <VCol cols="12">
-                <AppTextField v-model="form.name" label="Имя" :rules="[rules.required]" />
+                <AppTextField
+                  v-model="form.name"
+                  label="Имя"
+                  :rules="nameRules"
+                  autocomplete="off"
+                  autocapitalize="off"
+                  autocorrect="off"
+                  spellcheck="false"
+                />
               </VCol>
 
               <VCol cols="12">
-                <AppTextField v-model="form.email" label="Email" type="email" :rules="[rules.required, rules.email]" />
+                <AppTextField
+                  v-model="form.email"
+                  label="Email"
+                  type="email"
+                  :rules="emailRules"
+                  autocomplete="off"
+                  autocapitalize="off"
+                  autocorrect="off"
+                  spellcheck="false"
+                />
               </VCol>
 
               <VCol cols="12">
@@ -173,10 +168,10 @@ async function onSubmit() {
                   placeholder="············"
                   :type="isPwd1 ? 'text' : 'password'"
                   :append-inner-icon="isPwd1 ? 'tabler-eye-off' : 'tabler-eye'"
-                  :rules="[rules.required, rules.password]"
+                  :rules="passRules"
+                  autocomplete="new-password"
                   @click:append-inner="isPwd1 = !isPwd1"
                 />
-
                 <div v-if="showPwdHelp" class="text-caption mt-2 d-flex flex-column gap-1">
                   <div class="d-flex align-center gap-2">
                     <VIcon :color="pwdCheck.len ? 'success' : 'error'" :icon="pwdCheck.len ? 'tabler-check' : 'tabler-x'" size="16" />
@@ -200,7 +195,8 @@ async function onSubmit() {
                   placeholder="············"
                   :type="isPwd2 ? 'text' : 'password'"
                   :append-inner-icon="isPwd2 ? 'tabler-eye-off' : 'tabler-eye'"
-                  :rules="[rules.required, rules.repeat]"
+                  :rules="repeatRules"
+                  autocomplete="new-password"
                   @click:append-inner="isPwd2 = !isPwd2"
                 />
               </VCol>
@@ -231,7 +227,6 @@ async function onSubmit() {
 <style lang="scss">
 @use "@core/scss/template/pages/page-auth.scss";
 .auth-wrapper { min-height: 100vh; }
-
 @media (min-width: 960px) {
   html, body { height: 100%; }
   .auth-wrapper { height: 100vh; overflow: hidden; }

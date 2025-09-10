@@ -19,17 +19,41 @@ export type LoginDto = { email: string; password: string; remember?: boolean }
 export type RegisterDto = { name: string; email: string; password: string; password_repeat: string }
 export type ResetPasswordDto = { email: string }
 
+// ――― helpers
+const jsonHeaders = { 'Content-Type': 'application/json' }
+const trim = (s?: string | null) => String(s ?? '').trim()
+
 export function apiLogin(dto: LoginDto) {
-  return useApi<ApiResponse<LoginPayload>>('/api/auth/login', { method: 'POST', body: dto })
-}
-export function apiRegister(dto: RegisterDto) {
-  return useApi<ApiResponse<{ access_token?: string; token_type?: string }>>('/api/auth/register', {
+  // нормализуем email на всякий случай
+  const payload = { ...dto, email: trim(dto.email).toLowerCase() }
+  return useApi<ApiResponse<LoginPayload>>('/api/auth/login', {
     method: 'POST',
-    body: { name: dto.name, email: dto.email, password: dto.password },
+    body: payload,
+    headers: jsonHeaders,
   })
 }
+
+export function apiRegister(dto: RegisterDto) {
+  // ВАЖНО: отправляем строго JSON и без «мусора»
+  const payload = {
+    name: trim(dto.name),
+    email: trim(dto.email).toLowerCase(),
+    password: dto.password, // сервер сам валидирует
+  }
+  return useApi<ApiResponse<{ access_token?: string; token_type?: string }>>('/api/auth/register', {
+    method: 'POST',
+    body: payload,
+    headers: jsonHeaders,
+  })
+}
+
 export function apiResetPassword(dto: ResetPasswordDto) {
-  return useApi<ApiResponse<null>>('/api/auth/reset-password', { method: 'POST', body: dto })
+  const payload = { email: trim(dto.email).toLowerCase() }
+  return useApi<ApiResponse<null>>('/api/auth/request-password', {
+    method: 'POST',
+    body: payload,
+    headers: jsonHeaders,
+  })
 }
 
 function toStorageUrl(path?: string | null) {
@@ -47,7 +71,6 @@ export function saveProfileToStorage(u: Partial<LoginPayload>) {
   if (u.email) localStorage.setItem('user_email', u.email)
   if (u.phone) localStorage.setItem('user_phone', u.phone)
   if (u.address) localStorage.setItem('user_address', u.address)
-
   if (u.role?.visible_name) localStorage.setItem('role_visible_name', u.role.visible_name)
 
   if (u.avatar) {
@@ -63,6 +86,5 @@ export function setAuthSession(payload: LoginPayload) {
     const token = useCookie('access_token', { maxAge: 60 * 60 * 24 })
     token.value = payload.access_token
   }
-
   saveProfileToStorage(payload)
 }

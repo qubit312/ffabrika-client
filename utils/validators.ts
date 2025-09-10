@@ -28,19 +28,21 @@ export const numberInRange = (min: number, max: number): Rule => v => {
 }
 
 // === Telegram ===
-export const telegramUsername: Rule = v =>
-  !v || /^[A-Za-z0-9_]+$/.test(String(v)) || 'Только латиница, цифры и _'
+export const telegramAtUsername: Rule = v =>
+  !v || /^@[A-Za-z0-9_]+$/.test(String(v)) || 'Ник должен начинаться с @; латиница, цифры и _'
 
 // === Телефон РФ (+7) ===
 export const stripDigits = (s: string) => String(s || '').replace(/\D+/g, '')
+
 export const ruPhoneRule: Rule = v => {
   const d = stripDigits(String(v || ''))
-  return (d.length === 11 && (d.startsWith('7') || d.startsWith('8'))) || 'Телефон в формате +7XXXXXXXXXX'
+  return (d.length === 11 && d.startsWith('7')) || 'Телефон в формате +7 (XXX) XXX-XX-XX'
 }
 
-// Форматирование для поля ввода (по желанию можно вызывать по input)
 export const formatRuPhone = (s: string) => {
-  const d = stripDigits(s)
+  let d = stripDigits(s).slice(0, 11) 
+  if (d === '') return ''
+  if (d[0] !== '7') d = '7' + d.slice(1, 10) 
   const a = d.slice(1, 4)
   const b = d.slice(4, 7)
   const c = d.slice(7, 9)
@@ -85,3 +87,54 @@ export const passwordRule = (p: PasswordPolicy): Rule => v => {
   const r = checkPassword(String(v || ''), p)
   return r.ok || `Пароль: ${r.fails.join(', ')}`
 }
+
+// === Условная обязательность ===
+export const requiredIf = (cond: () => boolean, msg = 'Обязательное поле'): Rule => v =>
+  (cond() ? required(v) === true : true) || msg
+
+// === INN (10 для юрлиц, 12 для ИП) ===
+export const innRule = (typeGetter?: () => string): Rule => v => {
+  const s = stripDigits(String(v || ''))
+  const isInd = typeGetter && typeGetter() === 'INDIVIDUAL'
+  const len = isInd ? 12 : 10
+  return (!s || s.length === len) || `ИНН должен содержать ${len} цифр`
+}
+
+// === ОГРНИП (15 цифр) ===
+export const ogrnipRule: Rule = v => {
+  const s = stripDigits(String(v || ''))
+  return (!s || s.length === 15) || 'ОГРНИП должен содержать 15 цифр'
+}
+
+// === Расчётный счёт (20 цифр) ===
+export const account20Rule: Rule = v => {
+  const s = stripDigits(String(v || ''))
+  return (!s || s.length === 20) || 'Счёт должен содержать 20 цифр'
+}
+
+// === Корр. счёт (20 цифр) ===
+export const corrAccount20Rule: Rule = v => {
+  const s = stripDigits(String(v || ''))
+  return (!s || s.length === 20) || 'Корр. счёт должен содержать 20 цифр'
+}
+
+// === БИК (9 цифр) ===
+export const bicRule: Rule = v => {
+  const s = stripDigits(String(v || ''))
+  return (!s || s.length === 9) || 'БИК должен содержать 9 цифр'
+}
+
+// === НДС (0–20, только цифры) ===
+export const vatPercentRule: Rule = v => {
+  if (!v) return true
+  const num = Number(stripDigits(String(v)))
+  return (Number.isFinite(num) && num >= 0 && num <= 20) || 'НДС должен быть от 0 до 20'
+}
+
+// === Опциональный телефон РФ ===
+export const optionalRuPhone: Rule = v =>
+  !v || ruPhoneRule(v) === true || 'Телефон в формате +7 (XXX) XXX-XX-XX'
+
+// === Название банка (только буквы и пробелы) ===
+export const bankNameRule: Rule = v =>
+  !v || /^[A-Za-zА-Яа-я\s]+$/.test(String(v)) || 'Только буквы и пробелы'
