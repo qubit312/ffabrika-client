@@ -1,5 +1,46 @@
 <script setup lang="ts">
 
+import { useCurrentClient } from '@/composables/useCurrentClient';
+import { getClient } from '@/services/clients';
+import { stripDigits } from '@/utils/validators';
+import { reactive, ref, watch } from 'vue';
+
+const { currentClient } = useCurrentClient()
+async function fetchClient(id: number) {
+  const { data, error } = await getClient(id)
+  if (error.value) {
+    console.error('Ошибка при загрузке клиента:', error.value)
+  } else {
+    mapServerResponseToForm(data.value.data)
+  }
+}
+
+watch(() => currentClient.value?.id, (newId, oldId) => {
+  if (newId && newId !== oldId) {
+    fetchClient(Number(newId))
+  }
+})
+
+watch(() => currentClient.value?.id, (newId) => {
+  if (newId) {
+    fetchClient(Number(newId))
+  }
+}, { immediate: true })
+
+function mapServerResponseToForm(serverData: any): void {
+  org.name = serverData.name || ''
+  org.type = serverData.type || ''
+  org.phone = serverData.phone || ''
+  org.tin = serverData.tin || ''
+  org.psrn = serverData.psrn || ''
+  org.account = serverData.account || ''
+  org.bank = serverData.bank || ''
+  org.correspondent_account = serverData.correspondent_account || ''
+  org.bic = serverData.bic || ''
+  org.legal_address = serverData.legal_address || ''
+  org.vat = stripDigits(String(serverData.vat ?? ''))
+}
+
 const isEdit = ref(false)
 const isSaving = ref(false)
 const startEdit = () => {  isEdit.value = true }
@@ -8,15 +49,19 @@ const cancel = () => {
   isEdit.value = false
 }
 const org = reactive({
-  shortname:'',
+  name: '',
   type: '',
-  companyName: '',
-  inn: '',
-  kpp: '',
-  ogrn: '',
-  address: '',
+  phone: '',
+  email: '',
+  telegram: '',
+  tin: '',
+  psrn: '',
+  account: '',
   bank: '',
-  bik: '',
+  correspondent_account: '',
+  bic: '',
+  legal_address: '',
+  vat: '',
 })
 const typeOptions = [
   { label: 'Юридическое лицо', value: 'LEGAL_ENTITY' },
@@ -33,7 +78,7 @@ const save = async () => {
     <VCardText>
             <VRow>
               <VCol cols="12" md="6">
-                <AppTextField v-model="org.shortname" label="Краткое название" outlined />
+                <AppTextField v-model="org.name" label="Краткое название" outlined />
               </VCol>
               <VCol cols="12" md="6">
                 <AppSelect
@@ -41,7 +86,7 @@ const save = async () => {
                   :items="typeOptions"
                   item-title="label"
                   item-value="value"
-                  label="Тип клиента"
+                  label="Тип"
                   placeholder="Выберите тип"
                   clearable
                   outlined

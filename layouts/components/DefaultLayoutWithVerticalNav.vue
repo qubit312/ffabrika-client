@@ -3,6 +3,7 @@ import navItems from '@/navigation/vertical'
 import { themeConfig } from '@themeConfig'
 
 // Components
+import ClientSelector from '@/layouts/components/ClientSelector.vue'
 import Footer from '@/layouts/components/Footer.vue'
 import NavbarThemeSwitcher from '@/layouts/components/NavbarThemeSwitcher.vue'
 import UserProfile from '@/layouts/components/UserProfile.vue'
@@ -32,6 +33,7 @@ import { VerticalNavLayout } from '@layouts'
 
         <VSpacer />
 
+        <ClientSelector class="me-6" />
         <NavBarI18n
           v-if="themeConfig.app.i18n.enable && themeConfig.app.i18n.langConfig?.length"
           :languages="themeConfig.app.i18n.langConfig"

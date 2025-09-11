@@ -7,10 +7,9 @@ export function getBrand(id: number) {
   })
 }
 
-export function getBrands(clientId: number | null) {
+export function getBrands() {
   return useApi<{ data: Brand[] }>(`/api/brands`, {
     method: 'GET',
-    params: clientId ? { client_id: clientId } : {}
   })
 }
 

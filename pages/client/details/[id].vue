@@ -78,7 +78,6 @@ const form = reactive<Client>({
   tin: '',
   psrn: '',
   account: '',
-  wb_api_token: '',
   bank: '',
   correspondent_account: '',
   bic: '',
@@ -174,7 +173,6 @@ function mapServerResponseToForm(serverData: any): void {
   form.tin = serverData.tin || ''
   form.psrn = serverData.psrn || ''
   form.account = serverData.account || ''
-  form.wb_api_token = serverData.wb_api_token || ''
   form.bank = serverData.bank || ''
   form.correspondent_account = serverData.correspondent_account || ''
   form.bic = serverData.bic || ''
@@ -222,7 +220,6 @@ function buildSubmitPayload(form: Client): CreateClientDto {
     psrn: form.psrn,
     account: form.account,
     bank: form.bank,
-    wb_api_token: form.wb_api_token,
     correspondent_account: form.correspondent_account,
     bic: form.bic,
     legal_address: form.legal_address,
@@ -735,14 +732,6 @@ const editedBrand = reactive({
                   <AppTextField
                     v-model="form.legal_address"
                     label="Юридический адрес"
-                    outlined
-                    :error="submitted"
-                  />
-                </VCol>
-                <VCol cols="12" md="6">
-                  <AppTextField
-                    v-model="form.wb_api_token"
-                    label="Токен WB API"
                     outlined
                     :error="submitted"
                   />

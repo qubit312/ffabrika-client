@@ -1,18 +1,25 @@
+// composables/useApi.ts
 import { defu } from 'defu'
 import type { UseFetchOptions } from 'nuxt/app'
+import { toValue, type MaybeRefOrGetter } from 'vue'
 
 export const useApi: typeof useFetch = <T>(url: MaybeRefOrGetter<string>, options: UseFetchOptions<T> = {}) => {
   const config = useRuntimeConfig()
-  const accessToken = localStorage.getItem('access_token') || ''
+  const { currentClientId } = useCurrentClient()
+
+  // токен только на клиенте
+  const accessToken = process.client ? (localStorage.getItem('access_token') || '') : ''
 
   const defaults: UseFetchOptions<T> = {
     baseURL: config.public.apiBaseUrl,
-    key: toValue(url),
-    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+    // ключ включает clientId, чтобы данные обновлялись при его смене
+    key: `${toValue(url)}::client=${currentClientId.value ?? 'none'}`,
+    headers: {
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...(currentClientId.value ? { 'X-Client-Id': String(currentClientId.value) } : {}),
+    },
   }
 
-  // for nice deep defaults, please use unjs/defu
   const params = defu(options, defaults)
-
   return useFetch(url, params)
 }
