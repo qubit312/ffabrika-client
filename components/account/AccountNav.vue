@@ -9,7 +9,6 @@ const items = computed(() => [
   { to: '/account/personal',       icon: 'tabler-user',             text: 'Мои данные' },
   { to: '/account/requisites',     icon: 'tabler-building-bank',    text: 'Реквизиты' },
   { to: '/account/users',          icon: 'tabler-user-cog',         text: 'Участники'},
-  { to: '/account/all-users',      icon: 'tabler-users-group',      text: 'Пользователи'},
   { to: '/account/products',       icon: 'tabler-package',          text: 'Товары' },
   { to: '/account/shops',          icon: 'tabler-building-store',   text: 'Магазины' },
   { to: '/account/notifications',  icon: 'tabler-bell',             text: 'Уведомления' },
@@ -17,6 +16,7 @@ const items = computed(() => [
 
 const adminItems = [
   { to: '/account/legal', icon: 'tabler-file-description', text: 'Юридические документы' },
+  { to: '/account/all-users', icon: 'tabler-users-group', text: 'Пользователи'},
 ]
 
 const emit = defineEmits<{ (e: 'navigated'): void }>()
