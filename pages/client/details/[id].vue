@@ -13,6 +13,7 @@ import type { Client, CreateClientDto } from '../../../types/client'
 import type { CreateWbProductDto, WbProduct } from '../../../types/product'
 import type { CreateProductSizeDto, ProductSize } from '../../../types/productSize'
 
+import { useApi } from '@/composables/useApi'
 import {
   account20Rule,
   bankNameRule,
@@ -71,14 +72,9 @@ const form = reactive<Client>({
   phone: '',
   email: '',
   telegram: '',
-  details: {
-    notes: '',
-    preferred_contact: ''
-  },
   tin: '',
   psrn: '',
   account: '',
-  wb_api_token: '',
   bank: '',
   correspondent_account: '',
   bic: '',
@@ -188,14 +184,9 @@ function mapServerResponseToForm(serverData: any): void {
   form.phone = serverData.phone || ''
   form.email = serverData.email || ''
   form.telegram = serverData.telegram || ''
-  form.details = {
-    notes: serverData.details?.notes || '',
-    preferred_contact: serverData.details?.preferred_contact || ''
-  }
   form.tin = serverData.tin || ''
   form.psrn = serverData.psrn || ''
   form.account = serverData.account || ''
-  form.wb_api_token = serverData.wb_api_token || ''
   form.bank = serverData.bank || ''
   form.correspondent_account = serverData.correspondent_account || ''
   form.bic = serverData.bic || ''
@@ -235,15 +226,10 @@ function buildSubmitPayload(form: Client): CreateClientDto {
     email: form.email,
     phone: form.phone,
     telegram: form.telegram,
-    details: {
-      notes: form.details.notes,
-      preferred_contact: form.details.preferred_contact,
-    },
     tin: form.tin,
     psrn: form.psrn,
     account: form.account,
     bank: form.bank,
-    wb_api_token: form.wb_api_token,
     correspondent_account: form.correspondent_account,
     bic: form.bic,
     legal_address: form.legal_address,
@@ -480,7 +466,7 @@ const importProductsFromWb = async () => {
 
 async function fetchBrands(clientId: number) {
   loading.value = true
-  const { data, error } = await getBrands(clientId)
+  const { data, error } = await getBrands()
   if (error.value) {
     console.error('Ошибка при загрузке брендов:', error.value)
   } else {
@@ -773,16 +759,6 @@ const editedBrand = reactive({
                     :rules="legalAddressRules"
                     v-bind="fieldState(legalAddressRules, form.legal_address, submitted)"
                     :error="fieldState(legalAddressRules, form.legal_address, submitted).hasError"
-                  />
-                </VCol>
-                <VCol cols="12" md="6">
-                  <AppTextField
-                    v-model="form.wb_api_token"
-                    label="Токен WB API"
-                    outlined
-                    :rules="wbApiTokenRules"
-                    v-bind="fieldState(wbApiTokenRules, form.wb_api_token, submitted)"
-                    :error="fieldState(wbApiTokenRules, form.wb_api_token, submitted).hasError"
                   />
                 </VCol>
               </VRow>

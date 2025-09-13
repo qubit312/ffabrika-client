@@ -17,7 +17,7 @@ const emit = defineEmits<{
 }>()
 
 const form = computed({
-  get: () => {console.log(props.modelValue)
+  get: () => {
     return props.modelValue
   },
   set: v => emit('update:modelValue', v),
