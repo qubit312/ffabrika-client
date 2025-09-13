@@ -40,9 +40,9 @@ export const ruPhoneRule: Rule = v => {
 }
 
 export const formatRuPhone = (s: string) => {
-  let d = stripDigits(s).slice(0, 11) 
+  let d = stripDigits(s).slice(0, 11) // Limit to 11 digits
   if (d === '') return ''
-  if (d[0] !== '7') d = '7' + d.slice(1, 10) 
+  if (d[0] !== '7') d = '7' + d.slice(1, 10) // Ensure starts with 7 and max 11 digits
   const a = d.slice(1, 4)
   const b = d.slice(4, 7)
   const c = d.slice(7, 9)

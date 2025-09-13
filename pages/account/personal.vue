@@ -4,12 +4,11 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getProfile, updateProfile } from '~/services/profile'
 import {
-  email as emailRule,
   formatRuPhone,
   match,
   minLen,
   required,
-  ruPhoneRule, stripDigits
+  stripDigits
 } from '~/utils/validators'
 
 const router = useRouter()
@@ -19,6 +18,7 @@ const notify = (t: string, c: 'success' | 'error' = 'success') => { snack.text =
 
 const isEdit = ref(false)
 const isSaving = ref(false)
+const submitted = ref(false)
 const formRef = ref<any>(null)
 
 const defaultAvatar = avatarFallback as string
@@ -64,23 +64,56 @@ const form = reactive({
   telegram:   localStorage.getItem('user_telegram')    || '',
 })
 
-const telegramWithAt: (v:any)=>true|string = v =>
-  !v || /^@[A-Za-z0-9_]+$/.test(String(v)) || 'Укажите в формате @username (латиница, цифры, _)'
+type Rule = (v: any) => true | string
+function evalRules(rules: Rule[] | { value: Rule[] }, v: any): string[] {
+  const arr = Array.isArray(rules) ? rules : rules.value
+  return arr.map(r => r(v)).filter(r => r !== true) as string[]
+}
+
+function fieldState(rules: Rule[] | { value: Rule[] }, v: any, submitted: boolean) {
+  const errs = evalRules(rules, v)
+  return {
+    hasError: submitted && errs.length > 0,
+    errors: submitted ? errs : [],
+    messages: !submitted && errs.length ? errs : [],
+  }
+}
+
+const optionalEmail: Rule = v =>
+  !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v)) || 'Некорректный формат email'
+
+const telegramWithAt: Rule = v =>
+  !v || /^@[A-Za-z0-9_]{1,32}$/.test(String(v)) || 'Укажите в формате @username (латиница, цифры, _, до 32 символов)'
+
+const optionalRuPhone: Rule = v => {
+  if (!v) return true
+  const digits = stripDigits(String(v))
+  return digits.length === 11 && /^[78]\d{10}$/.test(digits) ? true : 'Телефон в формате +7XXXXXXXXXX'
+}
 
 const rules = {
   name: [required],
   lastName: [],
-  email: [required, emailRule],
-  phone: [(v: any) => !v || ruPhoneRule(v) === true || 'Телефон в формате +7XXXXXXXXXX'],
+  email: [optionalEmail],
+  phone: [optionalRuPhone],
   address: [],
   telegram: [telegramWithAt],
 }
 
 function onPhoneInput(v: string) {
-  if (!v) { form.phone = ''; return }
-  const d = stripDigits(v)
-  const norm = d.startsWith('8') ? `7${d.slice(1)}` : d
-  form.phone = formatRuPhone(norm)
+  let d = stripDigits(String(v || '')).slice(0, 11)
+  if (d === '') { form.phone = ''; return }
+  if (d[0] === '8') d = '7' + d.slice(1, 10)
+  if (d[0] !== '7') d = '7' + d.slice(1, 10)
+  form.phone = formatRuPhone(d)
+}
+
+function onTelegramInput(v: string) {
+  let value = String(v || '').trim()
+  if (value && !value.startsWith('@')) {
+    value = '@' + value.replace(/^@+/, '')
+  }
+  form.telegram = value
 }
 
 async function loadProfile() {
@@ -92,7 +125,7 @@ async function loadProfile() {
       form.email = u.email || ''
       form.address = u.address || ''
       form.phone = u.phone ? formatRuPhone(stripDigits(u.phone)) : ''
-
+      form.telegram = u.telegram || ''
 
       if (u.avatar) {
         const base = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
@@ -112,9 +145,11 @@ const cancel = () => {
   avatarBase64.value = null
   if (fileInput.value) fileInput.value.value = ''
   isEdit.value = false
+  submitted.value = false
 }
 
 async function saveProfile() {
+  submitted.value = true
   const res = await formRef.value?.validate?.()
   if (res && res.valid === false) return notify('Проверьте правильность заполнения полей', 'error')
 
@@ -125,6 +160,7 @@ async function saveProfile() {
       email: form.email,
       address: form.address || null,
       phone: form.phone ? stripDigits(form.phone) : null,
+      telegram: form.telegram || null,
       change_password: false,
     }
     if (avatarBase64.value) payload.avatar = avatarBase64.value
@@ -149,6 +185,7 @@ async function saveProfile() {
     avatarBase64.value = null
     if (fileInput.value) fileInput.value.value = ''
     isEdit.value = false
+    submitted.value = false
     notify('Изменения сохранены')
   } catch (e: any) {
     notify(e?.message || 'Ошибка сохранения', 'error')
@@ -238,26 +275,60 @@ async function doDeleteAccount() {
     </VCardText>
 
     <VCardText class="pt-2">
-      <VForm ref="formRef" class="mt-3" @submit.prevent="saveProfile">
+      <VForm ref="formRef" class="mt-3" :validate-on="submitted ? 'input' : 'blur'" @submit.prevent="saveProfile">
         <VRow>
           <VCol cols="12" md="6">
             <label class="v-label mb-1 text-body-2">Имя</label>
-            <VTextField v-model="form.name" placeholder="Ваше имя" variant="outlined" :disabled="!isEdit" :rules="rules.name" />
+            <VTextField
+              v-model="form.name"
+              placeholder="Ваше имя"
+              variant="outlined"
+              :disabled="!isEdit"
+              :rules="rules.name"
+              v-bind="fieldState(rules.name, form.name, submitted)"
+              :error="fieldState(rules.name, form.name, submitted).hasError"
+            />
           </VCol>
 
           <VCol cols="12" md="6">
             <label class="v-label mb-1 text-body-2">Фамилия</label>
-            <VTextField v-model="form.lastName" placeholder="Ваша фамилия" variant="outlined" :disabled="!isEdit" :rules="rules.lastName" />
+            <VTextField
+              v-model="form.lastName"
+              placeholder="Ваша фамилия"
+              variant="outlined"
+              :disabled="!isEdit"
+              :rules="rules.lastName"
+              v-bind="fieldState(rules.lastName, form.lastName, submitted)"
+              :error="fieldState(rules.lastName, form.lastName, submitted).hasError"
+            />
           </VCol>
 
           <VCol cols="12" md="6">
             <label class="v-label mb-1 text-body-2">E-mail</label>
-            <VTextField v-model="form.email" type="email" placeholder="you@example.com" variant="outlined" :disabled="!isEdit" :rules="rules.email" />
+            <VTextField
+              v-model="form.email"
+              type="email"
+              placeholder="you@example.com"
+              variant="outlined"
+              :disabled="!isEdit"
+              :rules="rules.email"
+              v-bind="fieldState(rules.email, form.email, submitted)"
+              :error="fieldState(rules.email, form.email, submitted).hasError"
+            />
           </VCol>
 
           <VCol cols="12" md="6">
             <label class="v-label mb-1 text-body-2">Telegram</label>
-            <VTextField v-model="form.telegram" placeholder="@username" variant="outlined" :disabled="!isEdit" :rules="rules.telegram" />
+            <VTextField
+              :model-value="form.telegram"
+              placeholder="@username"
+              variant="outlined"
+              :disabled="!isEdit"
+              :rules="rules.telegram"
+              v-bind="fieldState(rules.telegram, form.telegram, submitted)"
+              :error="fieldState(rules.telegram, form.telegram, submitted).hasError"
+              @update:model-value="onTelegramInput"
+            />
           </VCol>
 
           <VCol cols="12" md="6">
@@ -268,13 +339,25 @@ async function doDeleteAccount() {
               variant="outlined"
               :disabled="!isEdit"
               :rules="rules.phone"
+              inputmode="tel"
+              maxlength="18"
+              v-bind="fieldState(rules.phone, form.phone, submitted)"
+              :error="fieldState(rules.phone, form.phone, submitted).hasError"
               @update:model-value="onPhoneInput"
             />
           </VCol>
 
           <VCol cols="12" md="6">
             <label class="v-label mb-1 text-body-2">Адрес</label>
-            <VTextField v-model="form.address" placeholder="Город, улица, дом" variant="outlined" :disabled="!isEdit" />
+            <VTextField
+              v-model="form.address"
+              placeholder="Город, улица, дом"
+              variant="outlined"
+              :disabled="!isEdit"
+              :rules="rules.address"
+              v-bind="fieldState(rules.address, form.address, submitted)"
+              :error="fieldState(rules.address, form.address, submitted).hasError"
+            />
           </VCol>
 
           <VCol cols="12" class="d-flex flex-wrap gap-4">
@@ -294,12 +377,11 @@ async function doDeleteAccount() {
     <VCardText>
       <div class="d-flex align-center justify-between mb-4">
         <h3 class="text-h5 mb-0">Изменить пароль</h3>
-
       </div>
 
       <VForm ref="pwdFormRef" @submit.prevent="savePassword">
         <VRow>
-          <VCol  cols="12" md="6">
+          <VCol cols="12" md="6">
             <label class="v-label mb-1 text-body-2">Текущий пароль</label>
             <VTextField
               v-model="pwd.current"
@@ -310,9 +392,7 @@ async function doDeleteAccount() {
               @click:append-inner="show.current = !show.current"
             />
           </VCol>
-          <VCol  cols="12" md="6">
-
-          </VCol>
+          <VCol cols="12" md="6"></VCol>
           <VCol cols="12" md="6">
             <label class="v-label mb-1 text-body-2">Новый пароль</label>
             <VTextField
@@ -418,5 +498,13 @@ async function doDeleteAccount() {
 }
 .requirements li.ok {
   color: rgba(var(--v-theme-primary));
+}
+/* Обычные сообщения (messages) — чёрные */
+:deep(.v-messages__message) {
+  color: #000; /* или var(--v-theme-on-surface) */
+}
+/* Когда инпут в ошибке — оставляем красный от темы */
+:deep(.v-input--error .v-messages__message) {
+  color: var(--v-theme-error);
 }
 </style>

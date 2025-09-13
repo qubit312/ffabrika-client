@@ -24,7 +24,6 @@ const jsonHeaders = { 'Content-Type': 'application/json' }
 const trim = (s?: string | null) => String(s ?? '').trim()
 
 export function apiLogin(dto: LoginDto) {
-  // нормализуем email на всякий случай
   const payload = { ...dto, email: trim(dto.email).toLowerCase() }
   return useApi<ApiResponse<LoginPayload>>('/api/auth/login', {
     method: 'POST',
@@ -34,11 +33,10 @@ export function apiLogin(dto: LoginDto) {
 }
 
 export function apiRegister(dto: RegisterDto) {
-  // ВАЖНО: отправляем строго JSON и без «мусора»
   const payload = {
     name: trim(dto.name),
     email: trim(dto.email).toLowerCase(),
-    password: dto.password, // сервер сам валидирует
+    password: dto.password, 
   }
   return useApi<ApiResponse<{ access_token?: string; token_type?: string }>>('/api/auth/register', {
     method: 'POST',
@@ -55,6 +53,28 @@ export function apiResetPassword(dto: ResetPasswordDto) {
     headers: jsonHeaders,
   })
 }
+
+export type ConfirmResetDto = {
+  token: string
+  email: string
+  password: string
+  password_confirmation: string
+}
+
+export function apiConfirmReset(dto: ConfirmResetDto) {
+  const payload = {
+    token: dto.token,
+    email: String(dto.email ?? '').trim().toLowerCase(),
+    password: dto.password,
+    password_confirmation: dto.password_confirmation,
+  }
+  return useApi<ApiResponse<null>>('/api/auth/reset-password', {
+    method: 'POST',
+    body: payload,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
 
 function toStorageUrl(path?: string | null) {
   if (!path) return null

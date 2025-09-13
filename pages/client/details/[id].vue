@@ -93,6 +93,22 @@ type Rule = (v: any) => true | string
 const submitted = ref(false)
 const formRef = ref<InstanceType<typeof VForm> | null>(null)
 
+// Validation helpers
+function evalRules(rules: Rule[] | { value: Rule[] }, v: any): string[] {
+  const arr = Array.isArray(rules) ? rules : rules.value
+  return arr.map(r => r(v)).filter(r => r !== true) as string[]
+}
+
+function fieldState(rules: Rule[] | { value: Rule[] }, v: any, submitted: boolean) {
+  const errs = evalRules(rules, v)
+  return {
+    hasError: submitted && errs.length > 0,
+    errors: submitted ? errs : [],
+    messages: !submitted && errs.length ? errs : [],
+  }
+}
+
+// Input handlers with real-time filtering
 const onlyDigitsLen = (val: string, len: number) => stripDigits(String(val || '')).slice(0, len)
 
 const onInnInput = (v: string) => {
@@ -135,7 +151,7 @@ const onVatInput = (v: string) => {
   let num = stripDigits(String(v || '')).slice(0, 2)
   const parsed = Number(num)
   if (Number.isFinite(parsed) && parsed > 20) {
-    num = '20' 
+    num = '20' // Cap at 20
   }
   form.vat = num
 }
@@ -144,6 +160,7 @@ const onBankInput = (v: string) => {
   form.bank = String(v || '').replace(/[^A-Za-zА-Яа-я\s]/g, '')
 }
 
+// Validation rules
 const tinRules = computed(() => [required, innRule(() => form.type)])
 const psrnRules = computed(() => [
   requiredIf(() => form.type === 'INDIVIDUAL'),
@@ -159,6 +176,10 @@ const phoneRules = [optionalRuPhone]
 const bankRules = [bankNameRule]
 const nameRules = [required]
 const typeRules = [required]
+const legalAddressRules = [] // No validation rules for legal_address
+const wbApiTokenRules = [] // No validation rules for wb_api_token
+const notesRules = [] // No validation rules for notes
+const preferredContactRules = [] // No validation rules for preferred_contact
 
 function mapServerResponseToForm(serverData: any): void {
   form.id = serverData.id || 0
@@ -413,7 +434,7 @@ const addSize = () => {
 }
 
 const removeSize = (idx: number) => {
-  if (sizeItems.value.length > 1) {
+  if (sizeItems.length > 1) {
     sizeItems.value.splice(idx, 1)
   }
 }
@@ -517,7 +538,7 @@ const editedBrand = reactive({
   <div>
     <AppBreadcrumbs :items="clientCrumbs" class="mb-2" />
 
-    <VForm ref="formRef" :validate-on="submitted ? 'submit' : 'input'">
+    <VForm ref="formRef" :validate-on="submitted ? 'input' : 'blur'">
       <div class="d-flex flex-wrap justify-start justify-sm-space-between gap-y-4 gap-x-6 mb-6">
         <div class="d-flex flex-column justify-center">
           <h4 class="text-h4 font-weight-medium">
@@ -553,7 +574,8 @@ const editedBrand = reactive({
                     placeholder="Введите название клиента"
                     outlined
                     :rules="nameRules"
-                    :error="submitted"
+                    v-bind="fieldState(nameRules, form.name, submitted)"
+                    :error="fieldState(nameRules, form.name, submitted).hasError"
                   />
                 </VCol>
                 <VCol cols="12" md="12">
@@ -567,7 +589,8 @@ const editedBrand = reactive({
                     clearable
                     outlined
                     :rules="typeRules"
-                    :error="submitted"
+                    v-bind="fieldState(typeRules, form.type, submitted)"
+                    :error="fieldState(typeRules, form.type, submitted).hasError"
                   />
                 </VCol>
                 <VCol cols="12" md="12">
@@ -578,7 +601,8 @@ const editedBrand = reactive({
                     :rules="phoneRules"
                     inputmode="tel"
                     maxlength="18"
-                    :error="submitted"
+                    v-bind="fieldState(phoneRules, form.phone, submitted)"
+                    :error="fieldState(phoneRules, form.phone, submitted).hasError"
                     @update:modelValue="onPhoneInput"
                   />
                 </VCol>
@@ -588,7 +612,8 @@ const editedBrand = reactive({
                     label="Email"
                     outlined
                     :rules="emailRules"
-                    :error="submitted"
+                    v-bind="fieldState(emailRules, form.email, submitted)"
+                    :error="fieldState(emailRules, form.email, submitted).hasError"
                   />
                 </VCol>
                 <VCol cols="12" md="12">
@@ -598,10 +623,12 @@ const editedBrand = reactive({
                     placeholder="@username"
                     outlined
                     :rules="telegramRules"
-                    :error="submitted"
+                    v-bind="fieldState(telegramRules, form.telegram, submitted)"
+                    :error="fieldState(telegramRules, form.telegram, submitted).hasError"
                     @update:modelValue="onTelegramInput"
                   />
                 </VCol>
+                
               </VRow>
             </VCardText>
           </VCard>
@@ -649,7 +676,8 @@ const editedBrand = reactive({
                     :rules="tinRules"
                     :maxlength="form.type === 'INDIVIDUAL' ? 12 : 10"
                     inputmode="numeric"
-                    :error="submitted"
+                    v-bind="fieldState(tinRules, form.tin, submitted)"
+                    :error="fieldState(tinRules, form.tin, submitted).hasError"
                     @update:modelValue="onInnInput"
                     @keypress="e => /[0-9]/.test(e.key) || e.preventDefault()"
                   />
@@ -662,7 +690,8 @@ const editedBrand = reactive({
                     :rules="psrnRules"
                     maxlength="15"
                     inputmode="numeric"
-                    :error="submitted"
+                    v-bind="fieldState(psrnRules, form.psrn, submitted)"
+                    :error="fieldState(psrnRules, form.psrn, submitted).hasError"
                     @update:modelValue="onOgrnipInput"
                     @keypress="e => /[0-9]/.test(e.key) || e.preventDefault()"
                   />
@@ -675,7 +704,8 @@ const editedBrand = reactive({
                     :rules="accountRules"
                     maxlength="20"
                     inputmode="numeric"
-                    :error="submitted"
+                    v-bind="fieldState(accountRules, form.account, submitted)"
+                    :error="fieldState(accountRules, form.account, submitted).hasError"
                     @update:modelValue="onAccountInput"
                     @keypress="e => /[0-9]/.test(e.key) || e.preventDefault()"
                   />
@@ -686,7 +716,8 @@ const editedBrand = reactive({
                     label="Банк"
                     outlined
                     :rules="bankRules"
-                    :error="submitted"
+                    v-bind="fieldState(bankRules, form.bank, submitted)"
+                    :error="fieldState(bankRules, form.bank, submitted).hasError"
                     @update:modelValue="onBankInput"
                     @keypress="e => /[A-Za-zА-Яа-я\s]/.test(e.key) || e.preventDefault()"
                   />
@@ -699,7 +730,8 @@ const editedBrand = reactive({
                     :rules="corrAccountRules"
                     maxlength="20"
                     inputmode="numeric"
-                    :error="submitted"
+                    v-bind="fieldState(corrAccountRules, form.correspondent_account, submitted)"
+                    :error="fieldState(corrAccountRules, form.correspondent_account, submitted).hasError"
                     @update:modelValue="onCorrAccountInput"
                     @keypress="e => /[0-9]/.test(e.key) || e.preventDefault()"
                   />
@@ -712,7 +744,8 @@ const editedBrand = reactive({
                     :rules="bicRules"
                     maxlength="9"
                     inputmode="numeric"
-                    :error="submitted"
+                    v-bind="fieldState(bicRules, form.bic, submitted)"
+                    :error="fieldState(bicRules, form.bic, submitted).hasError"
                     @update:modelValue="onBicInput"
                     @keypress="e => /[0-9]/.test(e.key) || e.preventDefault()"
                   />
@@ -720,12 +753,13 @@ const editedBrand = reactive({
                 <VCol cols="12" md="6">
                   <AppTextField
                     :model-value="form.vat"
-                    label="НДС"
+                    label="НДС(%)"
                     outlined
                     :rules="vatRules"
                     inputmode="numeric"
                     maxlength="2"
-                    :error="submitted"
+                    v-bind="fieldState(vatRules, form.vat, submitted)"
+                    :error="fieldState(vatRules, form.vat, submitted).hasError"
                     @update:modelValue="onVatInput"
                     @keypress="e => /[0-9]/.test(e.key) || e.preventDefault()"
                   >
@@ -736,7 +770,9 @@ const editedBrand = reactive({
                     v-model="form.legal_address"
                     label="Юридический адрес"
                     outlined
-                    :error="submitted"
+                    :rules="legalAddressRules"
+                    v-bind="fieldState(legalAddressRules, form.legal_address, submitted)"
+                    :error="fieldState(legalAddressRules, form.legal_address, submitted).hasError"
                   />
                 </VCol>
                 <VCol cols="12" md="6">
@@ -744,7 +780,9 @@ const editedBrand = reactive({
                     v-model="form.wb_api_token"
                     label="Токен WB API"
                     outlined
-                    :error="submitted"
+                    :rules="wbApiTokenRules"
+                    v-bind="fieldState(wbApiTokenRules, form.wb_api_token, submitted)"
+                    :error="fieldState(wbApiTokenRules, form.wb_api_token, submitted).hasError"
                   />
                 </VCol>
               </VRow>
@@ -875,3 +913,15 @@ const editedBrand = reactive({
     <CustomLoading :loading="loading" />
   </div>
 </template>
+
+<style scoped>
+/* Обычные сообщения (messages) — чёрные */
+:deep(.v-messages__message) {
+  color: #000; /* или var(--v-theme-on-surface) */
+}
+
+/* Когда инпут в ошибке — оставляем красный от темы */
+:deep(.v-input--error .v-messages__message) {
+  color: var(--v-theme-error);
+}
+</style>
