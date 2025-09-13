@@ -8,7 +8,8 @@ import { useRouter } from 'vue-router';
 const router = useRouter()
 
 const handleLogout = () => {
-  const { setClient } = useCurrentClient()
+  const { setClient, clearClient } = useCurrentClient()
+  clearClient()
   setClient(null)
 
   localStorage.clear()

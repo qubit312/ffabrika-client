@@ -13,6 +13,7 @@ import type { Client, CreateClientDto } from '../../../types/client'
 import type { CreateWbProductDto, WbProduct } from '../../../types/product'
 import type { CreateProductSizeDto, ProductSize } from '../../../types/productSize'
 
+import { useApi } from '@/composables/useApi'
 import {
   account20Rule,
   bankNameRule,
@@ -71,10 +72,6 @@ const form = reactive<Client>({
   phone: '',
   email: '',
   telegram: '',
-  details: {
-    notes: '',
-    preferred_contact: ''
-  },
   tin: '',
   psrn: '',
   account: '',
@@ -166,10 +163,6 @@ function mapServerResponseToForm(serverData: any): void {
   form.phone = serverData.phone || ''
   form.email = serverData.email || ''
   form.telegram = serverData.telegram || ''
-  form.details = {
-    notes: serverData.details?.notes || '',
-    preferred_contact: serverData.details?.preferred_contact || ''
-  }
   form.tin = serverData.tin || ''
   form.psrn = serverData.psrn || ''
   form.account = serverData.account || ''
@@ -212,10 +205,6 @@ function buildSubmitPayload(form: Client): CreateClientDto {
     email: form.email,
     phone: form.phone,
     telegram: form.telegram,
-    details: {
-      notes: form.details.notes,
-      preferred_contact: form.details.preferred_contact,
-    },
     tin: form.tin,
     psrn: form.psrn,
     account: form.account,
@@ -456,7 +445,7 @@ const importProductsFromWb = async () => {
 
 async function fetchBrands(clientId: number) {
   loading.value = true
-  const { data, error } = await getBrands(clientId)
+  const { data, error } = await getBrands()
   if (error.value) {
     console.error('Ошибка при загрузке брендов:', error.value)
   } else {

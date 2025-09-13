@@ -10,10 +10,12 @@ const sections = computed(() => ([
   { value: '/account/personal',      label: 'Мои данные',            icon: 'tabler-users' },
   { value: '/account/requisites',    label: 'Реквизиты',             icon: 'tabler-file-text' },
   { value: '/account/users',         label: 'Участники',             icon: 'tabler-users-group' },
-  { value: '/account/all-users',     label: 'Пользователи',          icon: 'tabler-user-cog' },
   { value: '/account/shops',         label: 'Магазины',              icon: 'tabler-building-store' },
   { value: '/account/notifications', label: 'Уведомления',           icon: 'tabler-bell' },
-  ...(isAdmin.value ? [{ value: '/account/legal', label: 'Юридические документы', icon: 'tabler-file-description' }] : []),
+  ...(isAdmin.value ? [
+    { value: '/account/legal', label: 'Юридические документы', icon: 'tabler-file-description' },
+    { value: '/account/all-users', label: 'Пользователи', icon: 'tabler-user-cog' }
+  ] : []),
 ]))
 
 const go = (path: string) => { if (route.path !== path) router.push(path) }

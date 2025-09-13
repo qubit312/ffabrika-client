@@ -16,6 +16,10 @@ import {
 } from '~/services/users'
 import { email as emailRule, formatRuPhone, required, ruPhoneRule, stripDigits } from '~/utils/validators'
 
+definePageMeta({
+  requiresAdmin: true,
+  middleware: ['super-admin-only']
+})
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
 
 const snack = reactive({ show: false, text: '', color: 'success' as 'success' | 'error' })
@@ -311,11 +315,8 @@ async function confirmDeleteRole() {
       <thead>
         <tr>
           <th class="text-subtitle-2">ПОЛЬЗОВАТЕЛЬ</th>
-          <th style="inline-size:24px;">|</th>
           <th class="text-subtitle-2">ДОСТУП</th>
-          <th style="inline-size:24px;">|</th>
           <th class="text-subtitle-2">ДАТА И ВРЕМЯ</th>
-          <th style="inline-size:24px;">|</th>
           <th class="text-subtitle-2 text-right">ДЕЙСТВИЯ</th>
         </tr>
       </thead>
@@ -336,14 +337,11 @@ async function confirmDeleteRole() {
               </div>
             </div>
           </td>
-          <td></td>
           <td>
             <VChip v-if="u.role?.visible_name" size="small" class="me-2" variant="tonal" color="primary">{{ u.role.visible_name }}</VChip>
             <span v-else class="text-medium-emphasis">—</span>
           </td>
-          <td></td>
           <td><span class="text-medium-emphasis">{{ u.created_at ? new Date(u.created_at).toLocaleString() : '—' }}</span></td>
-          <td></td>
           <td class="text-right">
             <IconBtn @click="openEditUser(u)"><VIcon icon="tabler-edit" /></IconBtn>
             <IconBtn @click="askDelete(u)"><VIcon icon="tabler-trash" /></IconBtn>

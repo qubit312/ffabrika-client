@@ -5,7 +5,6 @@ export interface Client {
   phone: string
   email: string
   telegram: string
-  details: ClientDetails
   tin: string
   psrn: string
   account: string
@@ -19,18 +18,12 @@ export interface Client {
   deleted_at: string | null
 }
 
-export interface ClientDetails {
-  notes: string;
-  preferred_contact: string;
-}
-
 export interface CreateClientDto {
   name: string;
   type: string;
   email: string;
   phone: string;
   telegram: string;
-  details: ClientDetails;
   tin: string;
   psrn: string;
   account: string;
