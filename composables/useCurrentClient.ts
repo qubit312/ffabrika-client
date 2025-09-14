@@ -18,7 +18,6 @@ export function useCurrentClient() {
     const { data, error } = await useApi<Client[]>('/api/client-users/clients', {
       method: 'GET'
     })
-    console.log(error.value)
     if (!error.value && data.value) {
       clients.value = data.value
       

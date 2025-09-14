@@ -175,7 +175,6 @@ async function onSubmit() {
   }
   
   if (form.category === 'COMMON') {
-    console.log(data.value.id)
     const result = await saveSingleSize(data.value.id)
     showSnackbar(result.message, result.success)
 

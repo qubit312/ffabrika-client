@@ -17,7 +17,7 @@ export type SaveUserDto = {
   email: string
   phone?: string | null
   address?: string | null
-  role: number               
+  role_id: number               
 }
 
 export function getUsers() {
@@ -26,6 +26,10 @@ export function getUsers() {
 
 export function createUser(dto: SaveUserDto) {
   return useApi<{ success: boolean; data: User }>('/api/users', { method: 'POST', body: dto })
+}
+
+export function inviteUser(dto: SaveUserDto) {
+  return useApi<{ success: boolean; data: User }>('/api/invitations', { method: 'POST', body: dto })
 }
 
 export function updateUser(id: number, dto: SaveUserDto) {

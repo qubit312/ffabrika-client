@@ -1,28 +1,19 @@
 <script setup lang="ts">
 import laptopGirl from '@/assets/images/illustrations/laptop-girl.png'
+import { checkConnection, createMarketplaceAccount, deleteMarketplaceAccount, getMarketplaceAccounts, updateMarketplaceAccount } from '@/services/marketplaceAccounts'
+import { MarketplaceAccountStatus, type CreateMarketplaceAccountDto, type MarketplaceAccount, type UpdateMarketplaceAccountDto } from '@/types/marketplaceAccount'
+import { getStatusColor, getStatusLabel } from '@/utils/marketplace-account-status'
 import { onMounted, reactive, ref } from 'vue'
 
-type StoreItem = {
-  id: number
-  platform: 'Wildberries'
-  name: string
-  token: string
-  active: boolean
-  created_at: string
-  updated_at: string
-}
-
-const LS_KEY = 'demo_stores'
-
-const platforms = [{ title: 'Wildberries', value: 'Wildberries' as const }]
+const platforms = [{ title: 'Wildberries', value: 'WB' as const }]
 
 const formRef = ref<any>(null)
 const saving = ref(false)
 const showToken = ref(false)
-const form = reactive({
-  platform: 'Wildberries' as StoreItem['platform'],
+const form = reactive<CreateMarketplaceAccountDto>({
+  platform: 'WB' as MarketplaceAccount['platform'],
   name: '',
-  token: '',
+  api_token_enc: '',
 })
 
 const rules = {
@@ -30,16 +21,14 @@ const rules = {
   tokenMin: (v: string) => String(v || '').length >= 10 || 'Минимум 10 символов',
 }
 
-const rows = ref<StoreItem[]>([])
+const rows = ref<MarketplaceAccount[]>([])
 const loadingCheckId = ref<number | null>(null)
 
-function load() {
+async function load() {
   try {
-    rows.value = JSON.parse(localStorage.getItem(LS_KEY) || '[]')
+    const { data, error } = await getMarketplaceAccounts();
+    rows.value = data.value
   } catch { rows.value = [] }
-}
-function persist() {
-  localStorage.setItem(LS_KEY, JSON.stringify(rows.value))
 }
 
 async function onSubmit() {
@@ -47,66 +36,161 @@ async function onSubmit() {
   if (res && res.valid === false) return
 
   saving.value = true
+  
   try {
-    const now = new Date().toISOString()
-    rows.value.unshift({
-      id: Date.now(),
+    const createDto: CreateMarketplaceAccountDto = {
       platform: form.platform,
       name: form.name.trim() || 'Без названия',
-      token: form.token,
-      active: true,
-      created_at: now,
-      updated_at: now,
-    })
-    persist()
-    form.name = ''
-    form.token = ''
-    showToken.value = false
-    formRef.value?.resetValidation?.()
-  } finally { saving.value = false }
+      api_token_enc: form.api_token_enc,
+      status: MarketplaceAccountStatus.NOT_CONFIGURED,
+    }
+
+    const { data, error: apiError } = await createMarketplaceAccount(createDto)
+    if (apiError.value) {
+      console.error('Ошибка создания аккаунта:', apiError.value)
+      return
+    }
+
+    if (data.value) {
+      const newAccount = data.value
+      rows.value.unshift(newAccount)
+
+      form.name = ''
+      form.api_token_enc = ''
+      showToken.value = false
+      formRef.value?.resetValidation?.()
+    } else {
+      // error.value = 'Сервер вернул пустой ответ'
+    }
+  } catch (err: any) {
+    // error.value = err.message || 'Неизвестная ошибка при создании аккаунта'
+    console.error('Неожиданная ошибка:', err)
+  } finally {
+    saving.value = false
+  }
 }
 
-function fmt(s?: string) {
+function fmt(s?: string | null) {
   return s ? new Date(s).toLocaleString() : '—'
 }
 
-function simulateCheck(row: StoreItem) {
-  loadingCheckId.value = row.id
-  setTimeout(() => {
-    row.active = true
-    row.updated_at = new Date().toISOString()
-    persist()
-    loadingCheckId.value = null
-  }, 800)
+async function simulateCheck(id: number) {
+  loadingCheckId.value = id;
+
+  try {
+    const { data, error: apiError } = await checkConnection(id);
+    if (apiError.value) {
+      console.error('Ошибка API при проверке подключения:', apiError.value);
+      return;
+    }
+    
+    if (data.value) {
+      const result = data.value;
+      
+      const index = rows.value.findIndex(r => r.id === id);
+      if (index !== -1) {
+        rows.value[index] = {
+          ...rows.value[index],
+          status: result.account?.status || rows.value[index].status,
+          error_message: result.account?.error_message,
+          last_checked_at: result.account?.last_checked_at || new Date().toISOString()
+        };
+      }
+    } else {
+      console.warn('Пустой ответ от сервера');
+    }
+  } catch (error: any) {
+    console.error('Неожиданная ошибка при проверке подключения:', error);   
+  } finally {
+    loadingCheckId.value = null;
+  }
 }
 
-function toggleActive(row: StoreItem) {
-  row.active = !row.active
-  row.updated_at = new Date().toISOString()
-  persist()
-}
+// function toggleActive(row: MarketplaceAccount) {
+//   row.active = !row.active
+//   row.updated_at = new Date().toISOString()
+// }
+const deletingId = ref<number | null>(null)
+const error = ref<string | null>(null)
 
-function removeRow(id: number) {
-  rows.value = rows.value.filter(r => r.id !== id)
-  persist()
+async function removeRow(id: number) {
+  deletingId.value = id
+  error.value = null
+  
+  try {
+    const { error: apiError } = await deleteMarketplaceAccount(id)
+    
+    if (apiError.value) {
+      error.value = apiError.value.message || 'Ошибка при удалении аккаунта'
+      console.error('Ошибка удаления аккаунта:', apiError.value)    
+      return
+    }
+    
+    rows.value = rows.value.filter(r => r.id !== id)
+  } catch (err: any) {
+    error.value = err.message || 'Неизвестная ошибка при удалении'
+    console.error('Неожиданная ошибка:', err)   
+  } finally {
+    deletingId.value = null
+  }
 }
 
 const renameDialog = ref(false)
 const renameValue = ref('')
-let renameTarget: StoreItem | null = null
-function openRename(row: StoreItem) {
+let renameTarget: MarketplaceAccount | null = null
+function openRename(row: MarketplaceAccount) {
   renameTarget = row
   renameValue.value = row.name
   renameDialog.value = true
 }
-function saveRename() {
-  if (renameTarget) {
-    renameTarget.name = renameValue.value.trim() || renameTarget.platform
-    renameTarget.updated_at = new Date().toISOString()
-    persist()
+
+// function saveRename() {
+//   if (renameTarget) {
+//     renameTarget.name = renameValue.value.trim() || renameTarget.platform
+//     renameTarget.updated_at = new Date().toISOString()
+//   }
+//   renameDialog.value = false
+//   renameTarget = null
+// }
+
+async function saveRename() {
+  if (!renameTarget) return
+
+  saving.value = true
+  error.value = null
+
+  try {
+    const updateDto: UpdateMarketplaceAccountDto = {
+      name: renameValue.value.trim() || renameTarget.platform,
+    }
+
+    const { data, error: apiError } = await updateMarketplaceAccount(renameTarget.id, updateDto)
+    
+    if (apiError.value) {
+      error.value = apiError.value.message || 'Ошибка при сохранении изменений'
+      console.error('Ошибка обновления аккаунта:', apiError.value)      
+      return
+    }
+
+    if (data.value) {
+      const updatedAccount = data.value
+      
+      const index = rows.value.findIndex(r => r.id === renameTarget?.id)
+      if (index !== -1) {
+        rows.value[index] = { ...rows.value[index], ...updatedAccount }
+      }
+    } else {
+      error.value = 'Сервер вернул пустой ответ'
+    }
+    
+  } catch (err: any) {
+    error.value = err.message || 'Неизвестная ошибка при сохранении'
+    console.error('Неожиданная ошибка:', err)   
+  } finally {
+    saving.value = false
+    renameDialog.value = false
+    renameTarget = null
   }
-  renameDialog.value = false
-  renameTarget = null
 }
 
 onMounted(load)
@@ -142,7 +226,7 @@ onMounted(load)
 
               <VCol cols="12">
                 <VTextField
-                  v-model="form.token"
+                  v-model="form.api_token_enc"
                   :type="showToken ? 'text' : 'password'"
                   label="Создайте токен и укажите его в этом поле"
                   placeholder="Введите API-токен"
@@ -186,12 +270,12 @@ onMounted(load)
               <span class="text-subtitle-1 font-weight-medium">
                 Название магазина : {{ row.name || row.platform }}
               </span>
-              <VChip :color="row.active ? 'success' : 'secondary'" size="small" variant="tonal">
-                {{ row.active ? 'Активный' : 'Выключен' }}
+              <VChip :color="getStatusColor(row.status)" size="small" variant="tonal">
+                {{ getStatusLabel(row.status) }}
               </VChip>
             </div>
             <div class="text-body-2 text-medium-emphasis mt-1">
-              Создан: {{ fmt(row.created_at) }} · Обновлён: {{ fmt(row.updated_at) }}
+              Создан: {{ fmt(row.created_at) }} · Обновлён: {{ fmt(row.last_checked_at) }}
             </div>
           </div>
 
@@ -202,7 +286,7 @@ onMounted(load)
               variant="tonal"
               class="me-2"
               :loading="loadingCheckId === row.id"
-              @click="simulateCheck(row)"
+              @click="simulateCheck(row.id)"
             >
               Проверить Подключение
             </VBtn>
@@ -220,7 +304,7 @@ onMounted(load)
                 <IconBtn v-bind="props"><VIcon icon="tabler-dots-vertical" /></IconBtn>
               </template>
               <VList>
-                <VListItem @click="simulateCheck(row)">
+                <VListItem @click="simulateCheck(row.id)">
                   <template #prepend><VIcon icon="tabler-activity" class="me-2" /></template>
                   <VListItemTitle>Проверить</VListItemTitle>
                 </VListItem>

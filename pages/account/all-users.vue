@@ -67,7 +67,7 @@ const savingUser = ref(false)
 const editedUserId = ref<number | null>(null)
 
 const roles = ref<RoleItem[]>([])
-const form = reactive<SaveUserDto>({ name: '', email: '', phone: '', address: '', role: 0 })
+const form = reactive<SaveUserDto>({ name: '', email: '', phone: '', address: '', role_id: 0 })
 const userRules = {
   name: [required],
   email: [required, emailRule],
@@ -94,7 +94,7 @@ function openEditUser(u: User) {
     email: u.email || '',
     phone: u.phone ? formatRuPhone(stripDigits(u.phone)) : '',
     address: u.address || '',
-    role: u.role?.id || 0,
+    role_id: u.role?.id || 0,
   })
   userDialog.value = true
 }
@@ -108,7 +108,7 @@ async function saveUser() {
       email: form.email,
       phone: form.phone ? stripDigits(form.phone) : null,
       address: form.address || null,
-      role: Number(form.role),
+      role_id: Number(form.role_id),
     }
     if (editedUserId.value == null) {
       const { data, error } = await createUser(payload)
@@ -357,7 +357,7 @@ async function confirmDeleteRole() {
     <VDivider />
     <div class="d-flex align-center justify-space-between pa-4">
       <div class="text-body-2 text-medium-emphasis">
-        Showing {{ Math.min((page-1)*itemsPerPage+1, total) }} to {{ Math.min(page*itemsPerPage, total) }} of {{ total }} entries
+        Показано c {{ Math.min((page-1)*itemsPerPage+1, total) }} по {{ Math.min(page*itemsPerPage, total) }} из {{ total }}
       </div>
       <VPagination v-model="page" :length="Math.max(Math.ceil(total / itemsPerPage), 1)" density="comfortable" rounded="lg" show-first-last-page />
     </div>
@@ -447,9 +447,9 @@ async function confirmDeleteRole() {
     <VDivider />
     <div class="d-flex align-center justify-space-between pa-4">
       <div class="text-body-2 text-medium-emphasis">
-        Showing {{ Math.min((rolesPage-1)*rolesPerPage+1, rolesTotal) }}
-        to {{ Math.min(rolesPage*rolesPerPage, rolesTotal) }}
-        of {{ rolesTotal }} entries
+        Показано с {{ Math.min((rolesPage-1)*rolesPerPage+1, rolesTotal) }}
+        по {{ Math.min(rolesPage*rolesPerPage, rolesTotal) }}
+        из {{ rolesTotal }}
       </div>
       <VPagination v-model="rolesPage" :length="Math.max(Math.ceil(rolesTotal / rolesPerPage), 1)" density="comfortable" rounded="lg" show-first-last-page />
     </div>

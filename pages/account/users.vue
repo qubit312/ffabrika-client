@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { getUsersByClient } from '@/services/clientUsers'
+import { deleteClientUser, getUsersByClient } from '@/services/clientUsers'
 import avatarFallback from '@images/avatars/avatar-1.png'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import {
   type RoleItem
 } from '~/services/roles'
 import {
-  createUser, deleteUser,
+  inviteUser,
   updateUser,
   type SaveUserDto, type User
 } from '~/services/users'
@@ -45,10 +45,8 @@ async function fetchUsers() {
   loading.value = true
   try {
     const { data, error } = await getUsersByClient()
-    console.log(data.value)
     if (error.value) throw error.value
     rows.value = data.value || []
-    console.log(rows.value)
   } catch (e: any) {
     notify(e?.message || 'Не удалось загрузить пользователей', 'error')
   } finally { loading.value = false }
@@ -60,8 +58,14 @@ const formRef = ref<any>(null)
 const savingUser = ref(false)
 const editedUserId = ref<number | null>(null)
 
-const roles = ref<RoleItem[]>([])
-const form = reactive<SaveUserDto>({ name: '', email: '', phone: '', address: '', role: 0 })
+// const roles = ref<RoleItem[]>([])
+const roles = ref<RoleItem[]>([
+  { id: 3, name: 'admin', visible_name: 'Администратор' },
+  { id: 4, name: 'manager', visible_name: 'Менеджер' },
+  { id: 5, name: 'logistics', visible_name: 'Логист' }
+])
+
+const form = reactive<SaveUserDto>({ name: '', email: '', phone: '', address: '', role_id: 0 })
 const userRules = {
   name: [required],
   email: [required, emailRule],
@@ -74,12 +78,14 @@ function onPhoneInput(v: string) {
   const norm = d.startsWith('8') ? `7${d.slice(1)}` : d
   form.phone = formatRuPhone(norm)
 }
+
 function openCreateUser() {
   userDialogTitle.value = 'Новый пользователь'
   editedUserId.value = null
-  Object.assign(form, { name: '', email: '', phone: '', address: '', role: 0 })
+  Object.assign(form, { name: '', email: '', phone: '', address: '', role_id: 5})
   userDialog.value = true
 }
+
 function openEditUser(u: User) {
   userDialogTitle.value = 'Редактировать пользователя'
   editedUserId.value = u.id
@@ -88,7 +94,7 @@ function openEditUser(u: User) {
     email: u.email || '',
     phone: u.phone ? formatRuPhone(stripDigits(u.phone)) : '',
     address: u.address || '',
-    role: u.role?.id || 0,
+    role_id: u.role?.id || 0,
   })
   userDialog.value = true
 }
@@ -102,13 +108,13 @@ async function saveUser() {
       email: form.email,
       phone: form.phone ? stripDigits(form.phone) : null,
       address: form.address || null,
-      role: Number(form.role),
+      role_id: Number(form.role_id),
     }
     if (editedUserId.value == null) {
-      const { data, error } = await createUser(payload)
-      if (error.value || !data.value?.success) throw new Error(data.value?.message || 'Не удалось создать')
-      rows.value.unshift(data.value.data)
-      notify('Пользователь создан')
+      const { data, error } = await inviteUser(payload)
+      if (error.value || !data.value?.mail_sent) throw new Error(data.value?.message || 'Не удалось пригласить')
+      // rows.value.unshift(data.value.data)
+      notify('Пользователь приглашен')
     } else {
       const { data, error } = await updateUser(editedUserId.value, payload)
       if (error.value || !data.value?.success) throw new Error(data.value?.message || 'Не удалось сохранить')
@@ -126,11 +132,12 @@ const deleteDialog = ref(false)
 const deletingId = ref<number | null>(null)
 const deleteTarget = ref<User | null>(null)
 function askDelete(u: User) { deleteTarget.value = u; deleteDialog.value = true }
+
 async function confirmDelete() {
   if (!deleteTarget.value) return
   deletingId.value = deleteTarget.value.id
   try {
-    const { data, error } = await deleteUser(deleteTarget.value.id)
+    const { data, error } = await deleteClientUser(deleteTarget.value.id)
     if (error.value || !data.value?.success) throw new Error(data.value?.message || 'Не удалось удалить')
     rows.value = rows.value.filter(r => r.id !== deleteTarget.value!.id)
     notify('Пользователь удалён')
@@ -209,7 +216,7 @@ onMounted(async () => {
     <VDivider />
     <div class="d-flex align-center justify-space-between pa-4">
       <div class="text-body-2 text-medium-emphasis">
-        Showing {{ Math.min((page-1)*itemsPerPage+1, total) }} to {{ Math.min(page*itemsPerPage, total) }} of {{ total }} entries
+        Показано с {{ Math.min((page-1)*itemsPerPage+1, total) }} по {{ Math.min(page*itemsPerPage, total) }} из {{ total }}
       </div>
       <VPagination v-model="page" :length="Math.max(Math.ceil(total / itemsPerPage), 1)" density="comfortable" rounded="lg" show-first-last-page />
     </div>
@@ -230,7 +237,7 @@ onMounted(async () => {
             </VCol>
             <VCol cols="12" md="6"><VTextField v-model="form.address" label="Адрес" /></VCol>
             <VCol cols="12">
-              <VSelect v-model="form.role" :items="roles" item-title="visible_name" item-value="id" label="Роль" :rules="userRules.role" />
+              <VSelect v-model="form.role_id" :items="roles" item-title="visible_name" item-value="id" label="Роль" :rules="userRules.role" />
             </VCol>
           </VRow>
         </VForm>
@@ -244,13 +251,13 @@ onMounted(async () => {
   </VDialog>
 
   <!-- Пользователь -->
-  <VDialog v-model="deleteDialog" max-width="460">
+  <VDialog v-model="deleteDialog" max-width="500">
     <VCard>
       <VCardTitle class="text-h6">Удалить пользователя?</VCardTitle>
       <VCardText>
-        Это действие необратимо. Пользователь
+        Вы действительно хотите исключить пользователя 
         <strong v-if="deleteTarget">{{ deleteTarget.name }}</strong>
-        будет удалён.
+        из организации?
       </VCardText>
       <VCardActions>
         <VSpacer />

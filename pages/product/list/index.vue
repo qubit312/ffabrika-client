@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useCurrentClient } from '@/composables/useCurrentClient';
 import { useDebounce } from '@vueuse/core';
 import { computed, onMounted, ref, watch } from 'vue';
 import { categoryOptions, getCategoryLabel } from '../../../constants/productCategories';
@@ -87,6 +88,11 @@ watch(debouncedArticle, () => {
 // }
 
 const fetchProducts = async () => {
+  const { currentClientId } = useCurrentClient()
+  if (!currentClientId.value) {
+    return;
+  }
+
   isLoading.value = true
 
   const payload: FilterRequest = {
