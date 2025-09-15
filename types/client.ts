@@ -5,11 +5,9 @@ export interface Client {
   phone: string
   email: string
   telegram: string
-  details: ClientDetails
   tin: string
   psrn: string
   account: string
-  wb_api_token: string
   bank: string
   correspondent_account: string
   bic: string
@@ -20,18 +18,12 @@ export interface Client {
   deleted_at: string | null
 }
 
-export interface ClientDetails {
-  notes: string;
-  preferred_contact: string;
-}
-
 export interface CreateClientDto {
   name: string;
   type: string;
   email: string;
   phone: string;
   telegram: string;
-  details: ClientDetails;
   tin: string;
   psrn: string;
   account: string;
@@ -39,7 +31,6 @@ export interface CreateClientDto {
   correspondent_account: string;
   bic: string;
   legal_address: string;
-  wb_api_token: string;
   vat: string;
 }
 

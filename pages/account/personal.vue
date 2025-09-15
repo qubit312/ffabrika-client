@@ -2,7 +2,7 @@
 import avatarFallback from '@images/avatars/avatar-1.png'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { getProfile, updateProfile } from '~/services/profile'
+import { changePassword, getProfile, updateProfile } from '~/services/profile'
 import {
   formatRuPhone,
   match,
@@ -221,7 +221,8 @@ async function savePassword() {
   if (!c.len || !c.lower || !c.complex) return notify('Новый пароль не соответствует требованиям', 'error')
 
   try {
-    const { data, error } = await updateProfile({ change_password: true, password: pwd.p1 })
+    // const { data, error } = await updateProfile({ change_password: true, password: pwd.p1 })
+    const { data, error } = await changePassword({ current_password: pwd.current, new_password: pwd.p1, new_password_confirmation: pwd.p2 })
     if (error.value || !data.value?.success) throw new Error(data.value?.message || 'Не удалось сменить пароль')
     resetPwdForm()
     pwdEdit.value = false

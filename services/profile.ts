@@ -1,9 +1,20 @@
-import { useApi } from '~/composables/useApi'
-import type { ApiResponse, LoginPayload } from './auth'
-import { saveProfileToStorage } from './auth'
+import { useApi } from '~/composables/useApi';
+import type { ApiResponse, LoginPayload } from './auth';
+import { saveProfileToStorage } from './auth';
 
 export type ProfileApi = LoginPayload
 
+export interface ChangePasswordResponse {
+  success: boolean;
+  message: string;
+  errors?: Record<string, string[]>;
+}
+
+export interface ChangePasswordRequest {
+  current_password: string;
+  new_password: string;
+  new_password_confirmation: string;
+}
 export function getProfile() {
   return useApi<ApiResponse<ProfileApi>>('/api/profile', {
     method: 'GET',
@@ -12,6 +23,13 @@ export function getProfile() {
       if (body?.success && body.data) saveProfileToStorage(body.data)
     },
   })
+}
+
+export function changePassword(payload: ChangePasswordRequest) {
+  return useApi<ChangePasswordResponse>('/api/change-password', {
+    method: 'POST',
+    body: payload,
+  });
 }
 
 export async function updateProfile(payload: Partial<ProfileApi>) {

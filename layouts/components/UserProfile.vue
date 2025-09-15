@@ -1,14 +1,22 @@
 <script setup lang="ts">
+import { useCurrentClient } from '@/composables/useCurrentClient';
 import avatar1 from '@images/avatars/avatar-1.png';
+import { useCookie, useRuntimeConfig } from 'nuxt/app';
 import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 const router = useRouter()
 
 const handleLogout = () => {
+  const { setClient, clearClient } = useCurrentClient()
+  clearClient()
+  setClient(null)
+
   localStorage.clear()
+
   const token = useCookie('access_token')
   token.value = null
+
   router.push('/login')
 }
 

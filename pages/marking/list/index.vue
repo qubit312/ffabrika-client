@@ -111,7 +111,6 @@ onMounted(async () => {
 
 const handleClientChange = (newValue) => {
   localStorage.setItem('selectedClientId', JSON.stringify(newValue));
-  console.log(JSON.stringify(newValue))
   fetchLabels();
 };
 

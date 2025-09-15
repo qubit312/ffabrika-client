@@ -78,7 +78,9 @@ function mapServerResponseToForm(serverData: any): void {
   const sizes = serverData.sizes;
   if (sizes) {
     form.productSizes = sizes
-    productSize.value = Array.isArray(sizes) && sizes.length > 0 ? sizes[0] : null
+    productSize.value = Array.isArray(sizes) && sizes.length > 0 
+      ? sizes[0]
+      : { id: 0, product_id: 0, value: '', tech_size: '', barcode: '' }
   }
   originalForm.value = structuredClone(toRaw(form))
 }
@@ -139,7 +141,7 @@ async function fetchProduct(id: number) {
 async function onSubmit() {
   loading.value = true
 
-  if (!form.client_id || !form.category) {
+  if (!form.category) {
     showSnackbar('Выберите клиента и категорию', false)
     loading.value = false
     return
@@ -192,6 +194,10 @@ async function onSubmit() {
 
 async function saveSingleSize(productId: number): Promise<{ success: boolean, message: string }> {
   const size = productSize.value 
+  if (!size) {
+    return { success: true, message: '' };
+  }
+  
   if (form.category !== 'COMMON' || (!size.id && !size.barcode)) {
     return { success: true, message: '' }
   }
@@ -228,7 +234,7 @@ async function saveSingleSize(productId: number): Promise<{ success: boolean, me
 }
 
 onMounted(async () => {
-  await fetchClients()
+  // await fetchClients()
   if (primaryId > 0) {
     await fetchProduct(primaryId)
     const { data, error } = await getProductMainImage(primaryId)
@@ -236,6 +242,7 @@ onMounted(async () => {
       mainImage.value = data.value.data.url
     }
   }
+  loading.value = false
 })
 
 function showSnackbar(message: string, isSuccess: boolean) {
@@ -278,12 +285,8 @@ watch(
 
 async function fetchBrands() {
   loading.value = true
-  const clientId = form.client_id
-  if (!clientId) {
-    return
-  }
 
-  const { data, error } = await getBrands(clientId)
+  const { data, error } = await getBrands()
   if (error.value) {
     console.error('Ошибка при загрузке брендов:', error.value)
     loading.value = false
@@ -359,7 +362,7 @@ const handleChildCall = (params: ProductSizeWithLabels) => {
       </VCol>
 
       <VCol md="9">
-        <VCard class="mb-6">
+        <!-- <VCard class="mb-6">
           <VCardText>
             <VRow>
               <VCol cols="12" md="6">
@@ -377,7 +380,7 @@ const handleChildCall = (params: ProductSizeWithLabels) => {
               
             </VRow>
           </VCardText>
-        </VCard>
+        </VCard> -->
         <VCard class="mb-6">
           <VCardText>
             <VRow>

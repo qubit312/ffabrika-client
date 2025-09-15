@@ -1,11 +1,10 @@
 <script setup lang="ts">
+import { useCurrentClient } from '@/composables/useCurrentClient';
 import { useDebounce } from '@vueuse/core';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { categoryOptions, getCategoryLabel } from '../../../constants/productCategories';
-import { getClients } from '../../../services/clients';
 import { deleteProduct, getProductsWithSizes } from '../../../services/products';
-import type { Client } from '../../../types/client';
 import type { FilterRequest } from '../../../types/filter';
 import type { WbProduct } from '../../../types/product';
 
@@ -44,7 +43,7 @@ const searchQuery = ref<string>('')
 const debouncedQuery = useDebounce(searchQuery, 400)
 const searchArticle = ref<string>('')
 const debouncedArticle = useDebounce(searchArticle, 400) 
-const clients = ref<Client[]>([])
+// const clients = ref<Client[]>([])
 const selectedClientId = ref<number>()
 const selectedCategory = ref<string>()
 
@@ -88,18 +87,23 @@ watch(debouncedArticle, () => {
   fetchProducts()
 })
 
-const fetchClients = async () => {
-  const { data, error } = await getClients()
+// const fetchClients = async () => {
+//   const { data, error } = await getClients()
   
-  if (error.value) {
-    console.error('Ошибка при загрузке клиентов:', error.value)
-    return
-  }
+//   if (error.value) {
+//     console.error('Ошибка при загрузке клиентов:', error.value)
+//     return
+//   }
 
-  clients.value = data.value || []
-}
+//   clients.value = data.value || []
+// }
 
 const fetchProducts = async () => {
+  const { currentClientId } = useCurrentClient()
+  if (!currentClientId.value) {
+    return;
+  }
+
   isLoading.value = true
 
   const payload: FilterRequest = {
@@ -174,16 +178,16 @@ const onOptionsUpdate = (options: any) => {
 
 const entities = computed<WbProduct[]>(() => entityData.value)
 const totalEntities = computed<number>(() => entities.value.length)
-const displayedClientId = computed({
-  get() {
-    const id = selectedClientId.value;
-    const exists = clients.value.some(c => c.id === id);
-    return exists ? id : undefined;
-  },
-  set(value) {
-    selectedClientId.value = value;
-  }
-});
+// const displayedClientId = computed({
+//   get() {
+//     const id = selectedClientId.value;
+//     const exists = clients.value.some(c => c.id === id);
+//     return exists ? id : undefined;
+//   },
+//   set(value) {
+//     selectedClientId.value = value;
+//   }
+// });
 
 const displayedCategory = computed({
   get() {
@@ -208,13 +212,13 @@ onMounted(async () => {
   }
 
   fetchProducts();
-  await fetchClients();
+  // await fetchClients();
 });
 
-const handleClientChange = (newValue) => {
-  localStorage.setItem('selectedProductClientId', JSON.stringify(newValue));
-  fetchProducts();
-};
+// const handleClientChange = (newValue) => {
+//   localStorage.setItem('selectedProductClientId', JSON.stringify(newValue));
+//   fetchProducts();
+// };
 
 const handleCategoryChange = (newValue) => {
   localStorage.setItem('selectedProductCategoryId', JSON.stringify(newValue));
@@ -257,7 +261,7 @@ function formatDate(date: string | Date) {
             class="me-3"
             clearable
           />
-          <VSelect
+          <!-- <VSelect
             v-model="displayedClientId"
             :items="clients"
             item-title="name"
@@ -267,7 +271,7 @@ function formatDate(date: string | Date) {
             style="inline-size: 200px;"
             class="me-3"
             @update:modelValue="handleClientChange"
-          />
+          /> -->
           <VSelect
             v-model="displayedCategory"
             :items="categoryOptions"
