@@ -126,10 +126,11 @@ export const bicRule: Rule = v => {
 
 // === НДС (0–20, только цифры) ===
 export const vatPercentRule: Rule = v => {
-  if (!v) return true
-  const num = Number(stripDigits(String(v)))
+  if (v === '' || v === null || v === undefined) return true
+  const num = Number(String(v).replace(',', '.'))
   return (Number.isFinite(num) && num >= 0 && num <= 20) || 'НДС должен быть от 0 до 20'
 }
+
 
 // === Опциональный телефон РФ ===
 export const optionalRuPhone: Rule = v =>
@@ -137,4 +138,4 @@ export const optionalRuPhone: Rule = v =>
 
 // === Название банка (только буквы и пробелы) ===
 export const bankNameRule: Rule = v =>
-  !v || /^[A-Za-zА-Яа-я\s]+$/.test(String(v)) || 'Только буквы и пробелы'
+  !v || /^[A-Za-zА-Яа-я\s"'\-«»]+$/.test(String(v)) || 'Только буквы и пробелы'

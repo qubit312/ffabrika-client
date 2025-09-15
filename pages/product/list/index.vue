@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { useDebounce } from '@vueuse/core';
 import { computed, onMounted, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { categoryOptions, getCategoryLabel } from '../../../constants/productCategories';
 import { getClients } from '../../../services/clients';
 import { deleteProduct, getProductsWithSizes } from '../../../services/products';
 import type { Client } from '../../../types/client';
 import type { FilterRequest } from '../../../types/filter';
 import type { WbProduct } from '../../../types/product';
+
+const router = useRouter()
 
 const entityData = ref<WbProduct[]>([])
 
@@ -27,10 +30,11 @@ function hasChestnyZnak(p: any) {
 }
 
 const headers = [
-  { title: 'Название', key: 'name' },
+  { title: 'Товар', key: 'name' },
   { title: 'Категория', key: 'category' },
   { title: 'Цвет', key: 'color' },
   { title: 'Размеры', key: 'sizes', sortable: false },
+  { title: 'Ярлыки', key: 'badges', sortable: false },
   { title: 'Изменено', key: 'updated_at' },
   { title: 'Действия', key: 'actions', sortable: false },
 ]
@@ -68,6 +72,13 @@ const deleteItemConfirm = async () => {
 
 const itemsPerPage = ref<number>(10)
 const page = ref<number>(1)
+
+const getLabelId = (item: any) => Number(item?.labels?.[0]?.id ?? 0)
+
+const goToMarking = (item: any) => {
+  const labelId = getLabelId(item)
+  router.push({ name: 'product-marking-id', params: { id: labelId } })
+}
 
 watch(debouncedQuery, () => {
   fetchProducts()
@@ -296,10 +307,11 @@ function formatDate(date: string | Date) {
         show-select
         :items="entities"
         :items-length="totalEntities"
-        class="text-no-wrap"
+        class="text-no-wrap product-table"
         :loading="isLoading"
         @update:options="onOptionsUpdate"
       >
+
         <template #no-data>
           <!-- ничего не выводим -->
         </template>
@@ -309,43 +321,63 @@ function formatDate(date: string | Date) {
             <VProgressCircular indeterminate color="primary" />
           </div>
         </template>
-        <!-- name  -->
+    
         <template #item.name="{ item }">
-          <div class="d-flex flex-column">
-            <div class="d-flex align-center gap-2">
-              <RouterLink :to="{ name: 'product-details-id', params: { id: item.id } }" class="text-high-emphasis">
-                {{ item.name }}
-              </RouterLink>
-            
-              <VTooltip
-                v-if="hasChestnyZnak(item)"
-                location="top"
-                open-delay="120"
-              >
-                <template #activator="{ props }">
-                  <img
-                    v-bind="props"
-                    src="/icons/chz.svg"
-                    alt="Честный знак"
-                    class="chz-icon ms-2"
-                  />
-                </template>
-                <span>Есть «Честный знак» в размерах</span>
-              </VTooltip>
-            </div>
+          <div class="prodcell d-flex align-start gap-3">
           
-            <div v-if="item.article" class="text-caption text-medium-emphasis mt-1">
-              Артикул: {{ item.article }}
+            <img
+              v-if="item.main_image_url"
+              :src="item.main_image_url"
+              alt="Фото"
+              class="prodcell__img"
+            />
+          
+            <!-- текстовый блок -->
+            <div class="d-flex flex-column">
+              <div class="d-flex align-center gap-2">
+                <RouterLink :to="{ name: 'product-details-id', params: { id: item.id } }" class="text-high-emphasis">
+                  {{ item.name }}
+                </RouterLink>
+              </div>
+            
+          
+              <div v-if="item.article" class="text-caption text-medium-emphasis mt-1">
+                {{ item.article }}
+              </div>
+            
+              <div class="mt-2 d-flex align-center gap-2">
+                <VBtn
+                  size="x-small"
+                  density="compact"
+                  variant="flat"
+                  color="primary"
+                  prepend-icon="tabler-barcode"
+                  class="mark-btn"
+                  @click="goToMarking(item)"
+                >
+                  Маркировка
+                </VBtn>
+              
+                <VTooltip location="top" open-delay="120">
+                  <template #activator="{ props }">
+                    <img v-bind="props" src="/icons/wb-icon.svg" alt="WB" class="product-icon ms-2" />
+                  </template>
+                  <span>Товар с Wildberries</span>
+                </VTooltip>
+              
+                <VTooltip v-if="hasChestnyZnak(item)" location="top" open-delay="120">
+                  <template #activator="{ props }">
+                    <img v-bind="props" src="/icons/chz.svg" alt="Честный знак" class="product-icon ms-2" />
+                  </template>
+                  <span>Есть «Честный знак» в размерах</span>
+                </VTooltip>
+              </div>
             </div>
           </div>
         </template>
-
-        <!-- category -->
         <template #item.category="{ item }">
-          <div class="d-flex flex-column">
-              <span>{{ getCategoryLabel(item.category) }}</span>
-          </div>
-        </template>
+  <span>{{ getCategoryLabel(item.category) }}</span>
+</template>
 
         <!-- color -->
         <template #item.color="{ item }">
@@ -393,7 +425,21 @@ function formatDate(date: string | Date) {
             </VTooltip>
           </div>
         </template>
-
+        <!-- badges (ярлыки) -->
+        <template #item.badges="{ item }">
+          <div class="d-flex flex-wrap gap-2">
+            <VChip
+              v-for="tag in (item.tags || [])"
+              :key="String(tag)"
+              size="x-small"
+              variant="tonal"
+              class="italic-chip"
+            >
+              {{ tag }}
+            </VChip>
+            <!-- пока пусто, если нет item.tags -->
+          </div>
+        </template>
         <!-- actions -->
         <template #item.actions="{ item }">
           <RouterLink :to="{ name: 'product-details-id', params: { id: item.id } }">
@@ -447,25 +493,37 @@ function formatDate(date: string | Date) {
 </template>
 
 <style lang="scss">
-  .sizes-text {
-    max-width: 150px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    cursor: pointer;
-  }
-  .sizes-card > .v-overlay__content {
-    border: 2px solid rgb(115, 103, 240);
-    background: none;
-    padding: 0 !important;
-    box-shadow: rgba(114, 103, 240, 0.17) 7px 6px 2px 1px;
-  }
-.chz-icon {
-  inline-size: 16px;  
-  block-size: 16px;
+.product-icon {
+  inline-size: 22px;
+  block-size: 22px;
   display: inline-block;
   vertical-align: middle;
-  cursor: default;    
+  cursor: default;
 }
+
+.prodcell__img {
+  inline-size: 48px;
+  block-size: 48px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+/* компактная кнопка как иконки */
+.mark-btn {
+  min-height: 22px !important;
+  height: 22px !important;
+  padding: 0 8px !important;
+  line-height: 22px !important;
+  font-size: 12px !important;
+border-radius: 5px!important;
+}
+
+
+/* Внутренний вертикальный паддинг у ячеек (работает, в отличие от tr) */
+.product-table .v-data-table__td,
+.product-table .v-data-table__th {
+  padding-block: 10px !important; /* ↑ сверху и снизу */
+}
+
 
 </style>

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useBreadcrumbs } from '@/composables/useBreadcrumbs'
+import { useFieldState } from '@/composables/useFieldState'
 import { computed, onMounted, reactive, ref, toRaw, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { VForm } from 'vuetify/components'
@@ -8,6 +10,7 @@ import { createBrand, getBrands } from '../../../services/brands'
 import { createClient, getClient, updateClient } from '../../../services/clients'
 import { createProduct, deleteProduct, getProducts } from '../../../services/products'
 import { createProductSize } from '../../../services/productSizes'
+
 import type { Brand } from '../../../types/brand'
 import type { Client, CreateClientDto } from '../../../types/client'
 import type { CreateWbProductDto, WbProduct } from '../../../types/product'
@@ -53,16 +56,6 @@ const sizeItems = ref<ProductSize[]>([
   { id: 0, value: '', tech_size: '', barcode: '', product_id: 0 }
 ])
 
-const isCreate = computed(() => mode.value === 'create')
-const currentTitle = computed(() => form.name)
-
-const { items: clientCrumbs } = useBreadcrumbs(
-  'Клиенты',
-  { name: 'client-list' },
-  currentTitle,
-  isCreate,
-)
-
 const savedProducts = ref<WbProduct[]>([])
 const form = reactive<Client>({
   id: 0,
@@ -93,44 +86,31 @@ type Rule = (v: any) => true | string
 const submitted = ref(false)
 const formRef = ref<InstanceType<typeof VForm> | null>(null)
 
-// Validation helpers
-function evalRules(rules: Rule[] | { value: Rule[] }, v: any): string[] {
-  const arr = Array.isArray(rules) ? rules : rules.value
-  return arr.map(r => r(v)).filter(r => r !== true) as string[]
-}
+const isCreate = computed(() => mode.value === 'create')
+const currentTitle = computed(() => form.name)
+const { items: clientCrumbs } = useBreadcrumbs(
+  'Клиенты',
+  { name: 'client-list' },
+  currentTitle,
+  isCreate,
+)
 
-function fieldState(rules: Rule[] | { value: Rule[] }, v: any, submitted: boolean) {
-  const errs = evalRules(rules, v)
-  return {
-    hasError: submitted && errs.length > 0,
-    errors: submitted ? errs : [],
-    messages: !submitted && errs.length ? errs : [],
-  }
-}
-
-// Input handlers with real-time filtering
-const onlyDigitsLen = (val: string, len: number) => stripDigits(String(val || '')).slice(0, len)
-
+// === Input handlers ===
 const onInnInput = (v: string) => {
   form.tin = v.replace(/[^0-9]/g, '').slice(0, form.type === 'INDIVIDUAL' ? 12 : 10)
 }
-
 const onOgrnipInput = (v: string) => {
   form.psrn = v.replace(/[^0-9]/g, '').slice(0, 15)
 }
-
 const onAccountInput = (v: string) => {
   form.account = v.replace(/[^0-9]/g, '').slice(0, 20)
 }
-
 const onCorrAccountInput = (v: string) => {
   form.correspondent_account = v.replace(/[^0-9]/g, '').slice(0, 20)
 }
-
 const onBicInput = (v: string) => {
   form.bic = v.replace(/[^0-9]/g, '').slice(0, 9)
 }
-
 const onPhoneInput = (v: string) => {
   let d = stripDigits(String(v || '')).slice(0, 11)
   if (d === '') { form.phone = ''; return }
@@ -138,7 +118,6 @@ const onPhoneInput = (v: string) => {
   if (d[0] !== '7') d = '7' + d.slice(1, 10)
   form.phone = formatRuPhone(d)
 }
-
 const onTelegramInput = (v: string) => {
   let value = String(v || '').trim()
   if (value && !value.startsWith('@')) {
@@ -147,40 +126,44 @@ const onTelegramInput = (v: string) => {
   form.telegram = value
 }
 
+// 20.00/20,00 -> 20 (0-20)
+function toVatPercent(v: any): string {
+  if (v === null || v === undefined || v === '') return ''
+  const n = Number(String(v).replace(',', '.'))
+  if (!Number.isFinite(n)) return ''
+  const clamped = Math.max(0, Math.min(20, Math.floor(n)))
+  return String(clamped)
+}
 const onVatInput = (v: string) => {
-  let num = stripDigits(String(v || '')).slice(0, 2)
-  const parsed = Number(num)
-  if (Number.isFinite(parsed) && parsed > 20) {
-    num = '20' // Cap at 20
-  }
-  form.vat = num
+  form.vat = toVatPercent(v)
 }
 
 const onBankInput = (v: string) => {
-  form.bank = String(v || '').replace(/[^A-Za-zА-Яа-я\s]/g, '')
+  form.bank = String(v || '').replace(/[^A-Za-zА-Яа-я\s"'\-«»]/g, '')
 }
 
-// Validation rules
-const tinRules = computed(() => [required, innRule(() => form.type)])
-const psrnRules = computed(() => [
+// === Rules ===
+const tinRules = computed<Rule[]>(() => [required, innRule(() => form.type)])
+const psrnRules = computed<Rule[]>(() => [
   requiredIf(() => form.type === 'INDIVIDUAL'),
   ogrnipRule,
 ])
-const accountRules = [account20Rule]
-const corrAccountRules = [corrAccount20Rule]
-const bicRules = [bicRule]
-const vatRules = [vatPercentRule]
-const emailRules = [optionalEmail]
-const telegramRules = [telegramAtUsername]
-const phoneRules = [optionalRuPhone]
-const bankRules = [bankNameRule]
-const nameRules = [required]
-const typeRules = [required]
-const legalAddressRules = [] // No validation rules for legal_address
-const wbApiTokenRules = [] // No validation rules for wb_api_token
-const notesRules = [] // No validation rules for notes
-const preferredContactRules = [] // No validation rules for preferred_contact
+const accountRules: Rule[] = [account20Rule]
+const corrAccountRules: Rule[] = [corrAccount20Rule]
+const bicRules: Rule[] = [bicRule]
+const vatRules: Rule[] = [vatPercentRule]
+const emailRules: Rule[] = [optionalEmail]
+const telegramRules: Rule[] = [telegramAtUsername]
+const phoneRules: Rule[] = [optionalRuPhone]
+const bankRules: Rule[] = [bankNameRule]
+const nameRules: Rule[] = [required]
+const typeRules: Rule[] = [required]
+const legalAddressRules: Rule[] = []
+const wbApiTokenRules: Rule[] = []
+const notesRules: Rule[] = []
+const preferredContactRules: Rule[] = []
 
+// === Server → Form mapping ===
 function mapServerResponseToForm(serverData: any): void {
   form.id = serverData.id || 0
   form.name = serverData.name || ''
@@ -200,7 +183,7 @@ function mapServerResponseToForm(serverData: any): void {
   form.correspondent_account = serverData.correspondent_account || ''
   form.bic = serverData.bic || ''
   form.legal_address = serverData.legal_address || ''
-  form.vat = stripDigits(String(serverData.vat ?? ''))
+  form.vat = toVatPercent(serverData.vat)
   form.created_at = serverData.created_at || ''
   form.updated_at = serverData.updated_at || ''
   form.deleted_at = serverData.deleted_at || null
@@ -209,15 +192,23 @@ function mapServerResponseToForm(serverData: any): void {
   submitted.value = false
 }
 
-watch(form, (newVal, oldVal) => {
-  if (mode.value === 'view' && isFormInitialized.value && primaryId > 0) {
-    if (JSON.stringify(newVal) !== JSON.stringify(originalForm.value)) {
-      mode.value = 'edit'
-      submitted.value = false
-    }
+// === Dirty tracking (без deep-watch + JSON.stringify) ===
+const fieldsToTrack: (keyof Client)[] = [
+  'name','type','phone','email','telegram','tin','psrn','account',
+  'wb_api_token','bank','correspondent_account','bic','legal_address','vat'
+]
+const isDirty = computed(() => {
+  if (!originalForm.value) return false
+  return fieldsToTrack.some(k => form[k] !== originalForm.value![k])
+})
+watch(isDirty, (dirty) => {
+  if (mode.value === 'view' && isFormInitialized.value && primaryId > 0 && dirty) {
+    mode.value = 'edit'
+    submitted.value = false
   }
-}, { deep: true })
+})
 
+// === Products ===
 const productForm = reactive({
   name: '',
   color: '',
@@ -228,26 +219,26 @@ const productForm = reactive({
   hasChestnyZnak: false
 })
 
-function buildSubmitPayload(form: Client): CreateClientDto {
+function buildSubmitPayload(f: Client): CreateClientDto {
   return {
-    name: form.name,
-    type: form.type,
-    email: form.email,
-    phone: form.phone,
-    telegram: form.telegram,
+    name: f.name,
+    type: f.type,
+    email: f.email,
+    phone: f.phone,
+    telegram: f.telegram,
     details: {
-      notes: form.details.notes,
-      preferred_contact: form.details.preferred_contact,
+      notes: f.details.notes,
+      preferred_contact: f.details.preferred_contact,
     },
-    tin: form.tin,
-    psrn: form.psrn,
-    account: form.account,
-    bank: form.bank,
-    wb_api_token: form.wb_api_token,
-    correspondent_account: form.correspondent_account,
-    bic: form.bic,
-    legal_address: form.legal_address,
-    vat: form.vat,
+    tin: f.tin,
+    psrn: f.psrn,
+    account: f.account,
+    bank: f.bank,
+    wb_api_token: f.wb_api_token,
+    correspondent_account: f.correspondent_account,
+    bic: f.bic,
+    legal_address: f.legal_address,
+    vat: f.vat,
   }
 }
 
@@ -265,7 +256,6 @@ async function saveProduct() {
     brand_id: null
   }
   const response = await createProduct(payload)
-
   const { data, error } = response
 
   if (error.value) {
@@ -418,7 +408,7 @@ function resetProductForm() {
   productForm.category = ''
   productForm.hasChestnyZnak = false
   productForm.size = []
-  sizeItems.value = []
+  sizeItems.value = [{ id: 0, value: '', tech_size: '', barcode: '', product_id: 0 }]
 }
 
 function cancelEdit() {
@@ -434,11 +424,12 @@ const addSize = () => {
 }
 
 const removeSize = (idx: number) => {
-  if (sizeItems.length > 1) {
+  if (sizeItems.value.length > 1) {
     sizeItems.value.splice(idx, 1)
   }
 }
 
+// === Brands ===
 const importResult = reactive({
   show: false,
   success: false,
@@ -490,6 +481,13 @@ async function fetchBrands(clientId: number) {
   loading.value = false
 }
 
+const editedBrandVisible = ref(false)
+const clientBrands = ref<Brand[]>([])
+const editedBrand = reactive({
+  name: '',
+  clientId: primaryId,
+})
+
 const submitBrand = async () => {
   if (!editedBrandVisible.value) {
     editedBrandVisible.value = true
@@ -526,12 +524,24 @@ const submitBrand = async () => {
   }
 }
 
-const editedBrandVisible = ref(false)
-const clientBrands = ref<Brand[]>([])
-const editedBrand = reactive({
-  name: '',
-  clientId: primaryId,
-})
+// === Field states (без повторных вычислений в шаблоне) ===
+const nameState  = useFieldState(nameRules,  computed(()=>form.name),  submitted)
+const typeState  = useFieldState(typeRules,  computed(()=>form.type),  submitted)
+const phoneState = useFieldState(phoneRules, computed(()=>form.phone), submitted)
+const emailState = useFieldState(emailRules, computed(()=>form.email), submitted)
+const tgState    = useFieldState(telegramRules, computed(()=>form.telegram), submitted)
+
+const tinState   = useFieldState(tinRules, computed(()=>form.tin), submitted)
+const psrnState  = useFieldState(psrnRules, computed(()=>form.psrn), submitted)
+const accState   = useFieldState(accountRules, computed(()=>form.account), submitted)
+const bankState  = useFieldState(bankRules, computed(()=>form.bank), submitted)
+const corrState  = useFieldState(corrAccountRules, computed(()=>form.correspondent_account), submitted)
+const bicState   = useFieldState(bicRules, computed(()=>form.bic), submitted)
+const vatState   = useFieldState(vatRules, computed(()=>form.vat), submitted)
+
+const legalState = useFieldState(legalAddressRules, computed(()=>form.legal_address), submitted)
+const wbTokenState = useFieldState(wbApiTokenRules, computed(()=>form.wb_api_token), submitted)
+
 </script>
 
 <template>
@@ -574,10 +584,10 @@ const editedBrand = reactive({
                     placeholder="Введите название клиента"
                     outlined
                     :rules="nameRules"
-                    v-bind="fieldState(nameRules, form.name, submitted)"
-                    :error="fieldState(nameRules, form.name, submitted).hasError"
+                    v-bind="nameState"
                   />
                 </VCol>
+
                 <VCol cols="12" md="12">
                   <AppSelect
                     v-model="form.type"
@@ -589,10 +599,10 @@ const editedBrand = reactive({
                     clearable
                     outlined
                     :rules="typeRules"
-                    v-bind="fieldState(typeRules, form.type, submitted)"
-                    :error="fieldState(typeRules, form.type, submitted).hasError"
+                    v-bind="typeState"
                   />
                 </VCol>
+
                 <VCol cols="12" md="12">
                   <AppTextField
                     :model-value="form.phone"
@@ -601,21 +611,21 @@ const editedBrand = reactive({
                     :rules="phoneRules"
                     inputmode="tel"
                     maxlength="18"
-                    v-bind="fieldState(phoneRules, form.phone, submitted)"
-                    :error="fieldState(phoneRules, form.phone, submitted).hasError"
+                    v-bind="phoneState"
                     @update:modelValue="onPhoneInput"
                   />
                 </VCol>
+
                 <VCol cols="12" md="12">
                   <AppTextField
                     v-model="form.email"
                     label="Email"
                     outlined
                     :rules="emailRules"
-                    v-bind="fieldState(emailRules, form.email, submitted)"
-                    :error="fieldState(emailRules, form.email, submitted).hasError"
+                    v-bind="emailState"
                   />
                 </VCol>
+
                 <VCol cols="12" md="12">
                   <AppTextField
                     :model-value="form.telegram"
@@ -623,12 +633,10 @@ const editedBrand = reactive({
                     placeholder="@username"
                     outlined
                     :rules="telegramRules"
-                    v-bind="fieldState(telegramRules, form.telegram, submitted)"
-                    :error="fieldState(telegramRules, form.telegram, submitted).hasError"
+                    v-bind="tgState"
                     @update:modelValue="onTelegramInput"
                   />
                 </VCol>
-                
               </VRow>
             </VCardText>
           </VCard>
@@ -654,7 +662,7 @@ const editedBrand = reactive({
                 </VCol>
 
                 <VCol md="12">
-                  <VBtn color="primary" :onclick="submitBrand">
+                  <VBtn color="primary" @click="submitBrand">
                     <VIcon start :icon="editedBrandVisible ? 'tabler-check' : 'tabler-plus'" />
                     {{ editedBrandVisible ? "Сохранить" : "Добавить" }}
                   </VBtn>
@@ -676,12 +684,11 @@ const editedBrand = reactive({
                     :rules="tinRules"
                     :maxlength="form.type === 'INDIVIDUAL' ? 12 : 10"
                     inputmode="numeric"
-                    v-bind="fieldState(tinRules, form.tin, submitted)"
-                    :error="fieldState(tinRules, form.tin, submitted).hasError"
+                    v-bind="tinState"
                     @update:modelValue="onInnInput"
-                    @keypress="e => /[0-9]/.test(e.key) || e.preventDefault()"
                   />
                 </VCol>
+
                 <VCol cols="12" md="6">
                   <AppTextField
                     :model-value="form.psrn"
@@ -690,12 +697,11 @@ const editedBrand = reactive({
                     :rules="psrnRules"
                     maxlength="15"
                     inputmode="numeric"
-                    v-bind="fieldState(psrnRules, form.psrn, submitted)"
-                    :error="fieldState(psrnRules, form.psrn, submitted).hasError"
+                    v-bind="psrnState"
                     @update:modelValue="onOgrnipInput"
-                    @keypress="e => /[0-9]/.test(e.key) || e.preventDefault()"
                   />
                 </VCol>
+
                 <VCol cols="12" md="6">
                   <AppTextField
                     :model-value="form.account"
@@ -704,24 +710,22 @@ const editedBrand = reactive({
                     :rules="accountRules"
                     maxlength="20"
                     inputmode="numeric"
-                    v-bind="fieldState(accountRules, form.account, submitted)"
-                    :error="fieldState(accountRules, form.account, submitted).hasError"
+                    v-bind="accState"
                     @update:modelValue="onAccountInput"
-                    @keypress="e => /[0-9]/.test(e.key) || e.preventDefault()"
                   />
                 </VCol>
+
                 <VCol cols="12" md="6">
                   <AppTextField
                     :model-value="form.bank"
                     label="Банк"
                     outlined
                     :rules="bankRules"
-                    v-bind="fieldState(bankRules, form.bank, submitted)"
-                    :error="fieldState(bankRules, form.bank, submitted).hasError"
+                    v-bind="bankState"
                     @update:modelValue="onBankInput"
-                    @keypress="e => /[A-Za-zА-Яа-я\s]/.test(e.key) || e.preventDefault()"
                   />
                 </VCol>
+
                 <VCol cols="12" md="6">
                   <AppTextField
                     :model-value="form.correspondent_account"
@@ -730,12 +734,11 @@ const editedBrand = reactive({
                     :rules="corrAccountRules"
                     maxlength="20"
                     inputmode="numeric"
-                    v-bind="fieldState(corrAccountRules, form.correspondent_account, submitted)"
-                    :error="fieldState(corrAccountRules, form.correspondent_account, submitted).hasError"
+                    v-bind="corrState"
                     @update:modelValue="onCorrAccountInput"
-                    @keypress="e => /[0-9]/.test(e.key) || e.preventDefault()"
                   />
                 </VCol>
+
                 <VCol cols="12" md="6">
                   <AppTextField
                     :model-value="form.bic"
@@ -744,12 +747,11 @@ const editedBrand = reactive({
                     :rules="bicRules"
                     maxlength="9"
                     inputmode="numeric"
-                    v-bind="fieldState(bicRules, form.bic, submitted)"
-                    :error="fieldState(bicRules, form.bic, submitted).hasError"
+                    v-bind="bicState"
                     @update:modelValue="onBicInput"
-                    @keypress="e => /[0-9]/.test(e.key) || e.preventDefault()"
                   />
                 </VCol>
+
                 <VCol cols="12" md="6">
                   <AppTextField
                     :model-value="form.vat"
@@ -758,31 +760,28 @@ const editedBrand = reactive({
                     :rules="vatRules"
                     inputmode="numeric"
                     maxlength="2"
-                    v-bind="fieldState(vatRules, form.vat, submitted)"
-                    :error="fieldState(vatRules, form.vat, submitted).hasError"
+                    v-bind="vatState"
                     @update:modelValue="onVatInput"
-                    @keypress="e => /[0-9]/.test(e.key) || e.preventDefault()"
-                  >
-                  </AppTextField>
+                  />
                 </VCol>
+
                 <VCol cols="12" md="6">
                   <AppTextField
                     v-model="form.legal_address"
                     label="Юридический адрес"
                     outlined
                     :rules="legalAddressRules"
-                    v-bind="fieldState(legalAddressRules, form.legal_address, submitted)"
-                    :error="fieldState(legalAddressRules, form.legal_address, submitted).hasError"
+                    v-bind="legalState"
                   />
                 </VCol>
+
                 <VCol cols="12" md="6">
                   <AppTextField
                     v-model="form.wb_api_token"
                     label="Токен WB API"
                     outlined
                     :rules="wbApiTokenRules"
-                    v-bind="fieldState(wbApiTokenRules, form.wb_api_token, submitted)"
-                    :error="fieldState(wbApiTokenRules, form.wb_api_token, submitted).hasError"
+                    v-bind="wbTokenState"
                   />
                 </VCol>
               </VRow>
