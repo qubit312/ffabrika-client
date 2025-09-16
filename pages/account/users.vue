@@ -80,7 +80,7 @@ function onPhoneInput(v: string) {
 }
 
 function openCreateUser() {
-  userDialogTitle.value = 'Новый пользователь'
+  userDialogTitle.value = 'Пригласить пользователя'
   editedUserId.value = null
   Object.assign(form, { name: '', email: '', phone: '', address: '', role_id: 5})
   userDialog.value = true
@@ -164,7 +164,7 @@ onMounted(async () => {
 
       <div class="d-flex align-center gap-3 ms-auto">
         <!-- <VTextField v-model="search" placeholder="Search Permissions" hide-details density="comfortable" style="inline-size:320px" prepend-inner-icon="tabler-search" /> -->
-        <VBtn color="primary" prepend-icon="tabler-user-plus" @click="openCreateUser">Добавить Пользователя</VBtn>
+        <VBtn color="primary" prepend-icon="tabler-user-plus" @click="openCreateUser">Пригласить пользователя</VBtn>
       </div>
     </VCardText>
 
@@ -230,12 +230,8 @@ onMounted(async () => {
       <VCardText>
         <VForm ref="formRef" @submit.prevent="saveUser">
           <VRow>
-            <VCol cols="12" md="6"><VTextField v-model="form.name" label="Имя" :rules="userRules.name" /></VCol>
-            <VCol cols="12" md="6"><VTextField v-model="form.email" type="email" label="Email" :rules="userRules.email" /></VCol>
-            <VCol cols="12" md="6">
-              <VTextField :model-value="form.phone" label="Телефон" placeholder="+7 (___) ___-__-__" :rules="userRules.phone" @update:model-value="onPhoneInput" />
-            </VCol>
-            <VCol cols="12" md="6"><VTextField v-model="form.address" label="Адрес" /></VCol>
+            <VCol cols="12"><VTextField v-model="form.email" type="email" label="Email" :rules="userRules.email" /></VCol>
+
             <VCol cols="12">
               <VSelect v-model="form.role_id" :items="roles" item-title="visible_name" item-value="id" label="Роль" :rules="userRules.role" />
             </VCol>

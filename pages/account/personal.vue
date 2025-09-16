@@ -501,7 +501,7 @@ async function doDeleteAccount() {
   color: rgba(var(--v-theme-primary));
 }
 :deep(.v-messages__message) {
-  color: #000; /* или var(--v-theme-on-surface) */
+  color: #000;
 }
 :deep(.v-input--error .v-messages__message) {
   color: var(--v-theme-error);

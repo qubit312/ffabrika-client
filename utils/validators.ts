@@ -40,9 +40,9 @@ export const ruPhoneRule: Rule = v => {
 }
 
 export const formatRuPhone = (s: string) => {
-  let d = stripDigits(s).slice(0, 11) // Limit to 11 digits
+  let d = stripDigits(s).slice(0, 11)
   if (d === '') return ''
-  if (d[0] !== '7') d = '7' + d.slice(1, 10) // Ensure starts with 7 and max 11 digits
+  if (d[0] !== '7') d = '7' + d.slice(1, 10) 
   const a = d.slice(1, 4)
   const b = d.slice(4, 7)
   const c = d.slice(7, 9)
@@ -130,7 +130,6 @@ export const vatPercentRule: Rule = v => {
   const num = Number(String(v).replace(',', '.'))
   return (Number.isFinite(num) && num >= 0 && num <= 20) || 'НДС должен быть от 0 до 20'
 }
-
 
 // === Опциональный телефон РФ ===
 export const optionalRuPhone: Rule = v =>

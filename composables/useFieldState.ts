@@ -2,10 +2,6 @@ import { computed, type Ref } from 'vue'
 
 export type Rule = (v: any) => true | string
 
-/**
- * Возвращает реактивное состояние для поля:
- * { error, 'error-messages', messages } — удобно прокидывать через v-bind
- */
 export function useFieldState(
   rules: Ref<Rule[]> | Rule[],
   valueRef: Ref<any>,

@@ -7,6 +7,7 @@ import { categoryOptions, getCategoryLabel } from '../../../constants/productCat
 import { deleteProduct, getProductsWithSizes } from '../../../services/products';
 import type { FilterRequest } from '../../../types/filter';
 import type { WbProduct } from '../../../types/product';
+import LabelManager from '@/components/LabelManager.vue';
 
 const router = useRouter()
 
@@ -43,7 +44,6 @@ const searchQuery = ref<string>('')
 const debouncedQuery = useDebounce(searchQuery, 400)
 const searchArticle = ref<string>('')
 const debouncedArticle = useDebounce(searchArticle, 400) 
-// const clients = ref<Client[]>([])
 const selectedClientId = ref<number>()
 const selectedCategory = ref<string>()
 
@@ -87,17 +87,6 @@ watch(debouncedArticle, () => {
   fetchProducts()
 })
 
-// const fetchClients = async () => {
-//   const { data, error } = await getClients()
-  
-//   if (error.value) {
-//     console.error('Ошибка при загрузке клиентов:', error.value)
-//     return
-//   }
-
-//   clients.value = data.value || []
-// }
-
 const fetchProducts = async () => {
   const { currentClientId } = useCurrentClient()
   if (!currentClientId.value) {
@@ -136,8 +125,9 @@ const fetchProducts = async () => {
 
   entityData.value = data.value
   isLoading.value = false
-}
 
+  libCache.value = null
+}
 
 const handleDelete = async (id: number) => {
   try {
@@ -178,16 +168,6 @@ const onOptionsUpdate = (options: any) => {
 
 const entities = computed<WbProduct[]>(() => entityData.value)
 const totalEntities = computed<number>(() => entities.value.length)
-// const displayedClientId = computed({
-//   get() {
-//     const id = selectedClientId.value;
-//     const exists = clients.value.some(c => c.id === id);
-//     return exists ? id : undefined;
-//   },
-//   set(value) {
-//     selectedClientId.value = value;
-//   }
-// });
 
 const displayedCategory = computed({
   get() {
@@ -212,15 +192,9 @@ onMounted(async () => {
   }
 
   fetchProducts();
-  // await fetchClients();
 });
 
-// const handleClientChange = (newValue) => {
-//   localStorage.setItem('selectedProductClientId', JSON.stringify(newValue));
-//   fetchProducts();
-// };
-
-const handleCategoryChange = (newValue) => {
+const handleCategoryChange = (newValue: any) => {
   localStorage.setItem('selectedProductCategoryId', JSON.stringify(newValue));
   fetchProducts();
 };
@@ -242,6 +216,44 @@ function formatDate(date: string | Date) {
   return `${day}.${month} ${hours}:${minutes}`
 }
 
+
+type ProductLabel = { id: string; name: string; color: string }
+
+const LS_KEY_LIBRARY = 'labels:library'
+const libCache = ref<ProductLabel[] | null>(null)
+
+function readLibrary(): ProductLabel[] {
+  if (libCache.value) return libCache.value
+  try {
+    libCache.value = JSON.parse(localStorage.getItem(LS_KEY_LIBRARY) || '[]') ?? []
+  } catch {
+    libCache.value = []
+  }
+  return libCache.value
+}
+function readAppliedIds(productId: number | 'new'): string[] {
+  const key = `product:${productId}:labelsApplied`
+  try { return JSON.parse(localStorage.getItem(key) || '[]') ?? [] }
+  catch { return [] }
+}
+function getAppliedLabels(productId: number): ProductLabel[] {
+  const lib = readLibrary()
+  const dict = new Map(lib.map(l => [l.id, l]))
+  return readAppliedIds(productId).map(id => dict.get(id)).filter(Boolean) as ProductLabel[]
+}
+
+const labelsDrawer = ref(false)
+const labelsDrawerProductId = ref<number | null>(null)
+const labelsRefreshTick = ref(0)
+
+function openLabelsDrawer(pid: number) {
+  labelsDrawerProductId.value = pid
+  labelsDrawer.value = true
+}
+function onLabelsChanged() {
+  libCache.value = null
+  labelsRefreshTick.value++
+}
 </script>
 
 <template>
@@ -261,17 +273,6 @@ function formatDate(date: string | Date) {
             class="me-3"
             clearable
           />
-          <!-- <VSelect
-            v-model="displayedClientId"
-            :items="clients"
-            item-title="name"
-            item-value="id"
-            label="Клиент"
-            clearable
-            style="inline-size: 200px;"
-            class="me-3"
-            @update:modelValue="handleClientChange"
-          /> -->
           <VSelect
             v-model="displayedCategory"
             :items="categoryOptions"
@@ -328,27 +329,21 @@ function formatDate(date: string | Date) {
     
         <template #item.name="{ item }">
           <div class="prodcell d-flex align-start gap-3">
-          
             <img
               v-if="item.main_image_url"
               :src="item.main_image_url"
               alt="Фото"
               class="prodcell__img"
             />
-          
-            <!-- текстовый блок -->
             <div class="d-flex flex-column">
               <div class="d-flex align-center gap-2">
                 <RouterLink :to="{ name: 'product-details-id', params: { id: item.id } }" class="text-high-emphasis">
                   {{ item.name }}
                 </RouterLink>
               </div>
-            
-          
               <div v-if="item.article" class="text-caption text-medium-emphasis mt-1">
                 {{ item.article }}
               </div>
-            
               <div class="mt-2 d-flex align-center gap-2">
                 <VBtn
                   size="x-small"
@@ -379,18 +374,17 @@ function formatDate(date: string | Date) {
             </div>
           </div>
         </template>
-        <template #item.category="{ item }">
-  <span>{{ getCategoryLabel(item.category) }}</span>
-</template>
 
-        <!-- color -->
+        <template #item.category="{ item }">
+          <span>{{ getCategoryLabel(item.category) }}</span>
+        </template>
+
         <template #item.color="{ item }">
           <div class="d-flex flex-column">
-              <span>{{ item.color }}</span>
+            <span>{{ item.color }}</span>
           </div>
         </template>
 
-        <!-- sizes -->
         <template #item.sizes="{ item, index }" >
           <div class="sizes-text">
             <VTooltip
@@ -429,50 +423,50 @@ function formatDate(date: string | Date) {
             </VTooltip>
           </div>
         </template>
-        <!-- badges (ярлыки) -->
+    
         <template #item.badges="{ item }">
-          <div class="d-flex flex-wrap gap-2">
-            <VChip
-              v-for="tag in (item.tags || [])"
-              :key="String(tag)"
-              size="x-small"
-              variant="tonal"
-              class="italic-chip"
-            >
-              {{ tag }}
-            </VChip>
-            <!-- пока пусто, если нет item.tags -->
+          <div class="d-flex flex-wrap align-center gap-2">
+            <template v-for="lbl in getAppliedLabels(item.id)" :key="lbl.id + ':' + labelsRefreshTick">
+              <VChip
+                class="chip-product"
+                size="x-small"
+                variant="outlined"
+                :style="{ '--chip-color': lbl.color }"
+                :title="lbl.name"
+              >
+                {{ lbl.name }}
+              </VChip>
+            </template>
+
+            <IconBtn class="ms-1" @click="openLabelsDrawer(item.id)"
+              :title="getAppliedLabels(item.id).length ? 'Изменить ярлыки' : 'Добавить ярлык'">
+              <VIcon :icon="getAppliedLabels(item.id).length ? 'tabler-pencil-plus' : 'tabler-plus'" />
+            </IconBtn>
           </div>
         </template>
-        <!-- actions -->
+
         <template #item.actions="{ item }">
           <RouterLink :to="{ name: 'product-details-id', params: { id: item.id } }">
             <IconBtn>
               <VIcon icon="tabler-edit" />
             </IconBtn>
           </RouterLink>
-          
 
           <IconBtn class="ms-4" @click="openDeleteDialog(item.id, item.name)">
-            <VIcon
-              icon="tabler-trash"
-              value="delete"
-            />
+            <VIcon icon="tabler-trash" value="delete" />
           </IconBtn>
         </template>
 
-        <!-- color -->
         <template #item.updated_at="{ item }">
           <div class="d-flex flex-column">
-              <span>{{ formatDate(item.updated_at) }}</span>
+            <span>{{ formatDate(item.updated_at) }}</span>
           </div>
         </template>
 
-        <!-- pagination -->
         <template #bottom>
           <TablePagination
             v-model:page="page"
-            :items-per-page="itemsPerPage"
+            :items-per-page="itemsPer-page"
             :total-items="totalEntities"
           />
         </template>
@@ -494,6 +488,30 @@ function formatDate(date: string | Date) {
   >
     {{ snackbar.text }}
   </VSnackbar>
+
+  <VNavigationDrawer
+    v-model="labelsDrawer"
+    location="right"
+    temporary
+    width="420"
+    :scrim="true"
+  >
+    <div class="pa-4 d-flex align-center justify-space-between">
+      <h6 class="text-h6 m-0">Ярлыки товара</h6>
+      <IconBtn @click="labelsDrawer = false">
+        <VIcon icon="tabler-x" />
+      </IconBtn>
+    </div>
+    <VDivider />
+
+    <div class="pa-4">
+      <LabelManager
+        v-if="labelsDrawerProductId"
+        :product-id="labelsDrawerProductId"
+        @changed="onLabelsChanged"
+      />
+    </div>
+  </VNavigationDrawer>
 </template>
 
 <style lang="scss">
@@ -512,22 +530,30 @@ function formatDate(date: string | Date) {
   border-radius: 8px;
 }
 
-/* компактная кнопка как иконки */
 .mark-btn {
   min-height: 22px !important;
   height: 22px !important;
   padding: 0 8px !important;
   line-height: 22px !important;
   font-size: 12px !important;
-border-radius: 5px!important;
+  border-radius: 5px !important;
 }
 
-
-/* Внутренний вертикальный паддинг у ячеек (работает, в отличие от tr) */
 .product-table .v-data-table__td,
 .product-table .v-data-table__th {
-  padding-block: 10px !important; /* ↑ сверху и снизу */
+  padding-block: 10px !important; 
 }
 
-
+.chip-product {
+  --chip-color: #10bcd4; 
+  border-color: var(--chip-color) !important;
+  color: var(--chip-color) !important;
+  background-color: transparent !important;
+  font-weight: 600;
+  border-radius: 5px !important; 
+  padding-inline: 10px !important;
+  height: 26px !important;
+  line-height: 26px !important;
+  font-size: 12px !important;
+}
 </style>

@@ -35,7 +35,6 @@ const isCreate = computed(() => mode.value === 'create')
 const currentTitle = computed(() => form.name)
 const productColor = computed(() => form.product?.color || '')
 const mainImage = ref<string | null>(null)
-// УДАЛИ старый useBreadcrumbs(...)
 const breadcrumbs = computed(() => {
   const hasProduct = !!form.product?.id
   const productName = form.product?.name || 'Товар'
@@ -189,7 +188,6 @@ async function onSubmit() {
       labelId = data.value.id
     }
 
-    // showSnackbar(mode.value === 'edit' ? 'Этикетка успешно обновлена!' : 'Этикетка успешно создана!', false)
     if (mode.value === 'create' && labelId) {
       await router.push({
         name: 'product-marking-id',
@@ -354,7 +352,6 @@ function handleDownloadStarted(callback: (result: boolean) => void) {
           </VCardText>
         </VCard>
 
-        <!-- Честный знак -->
         <VCard>
           <VCardTitle class="ma-2">
             <div class="d-flex justify-space-between align-center w-100">
