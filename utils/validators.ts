@@ -40,9 +40,9 @@ export const ruPhoneRule: Rule = v => {
 }
 
 export const formatRuPhone = (s: string) => {
-  let d = stripDigits(s).slice(0, 11) // Limit to 11 digits
+  let d = stripDigits(s).slice(0, 11)
   if (d === '') return ''
-  if (d[0] !== '7') d = '7' + d.slice(1, 10) // Ensure starts with 7 and max 11 digits
+  if (d[0] !== '7') d = '7' + d.slice(1, 10) 
   const a = d.slice(1, 4)
   const b = d.slice(4, 7)
   const c = d.slice(7, 9)
@@ -126,8 +126,8 @@ export const bicRule: Rule = v => {
 
 // === НДС (0–20, только цифры) ===
 export const vatPercentRule: Rule = v => {
-  if (!v) return true
-  const num = Number(stripDigits(String(v)))
+  if (v === '' || v === null || v === undefined) return true
+  const num = Number(String(v).replace(',', '.'))
   return (Number.isFinite(num) && num >= 0 && num <= 20) || 'НДС должен быть от 0 до 20'
 }
 
@@ -137,4 +137,4 @@ export const optionalRuPhone: Rule = v =>
 
 // === Название банка (только буквы и пробелы) ===
 export const bankNameRule: Rule = v =>
-  !v || /^[A-Za-zА-Яа-я\s]+$/.test(String(v)) || 'Только буквы и пробелы'
+  !v || /^[A-Za-zА-Яа-я\s"'\-«»]+$/.test(String(v)) || 'Только буквы и пробелы'

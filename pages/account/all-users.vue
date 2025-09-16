@@ -61,7 +61,7 @@ async function fetchUsers() {
 }
 
 const userDialog = ref(false)
-const userDialogTitle = ref('Новый пользователь')
+const userDialogTitle = ref('Пригласить пользователя')
 const formRef = ref<any>(null)
 const savingUser = ref(false)
 const editedUserId = ref<number | null>(null)

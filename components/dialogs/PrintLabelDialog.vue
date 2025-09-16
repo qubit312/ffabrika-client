@@ -263,8 +263,8 @@ async function previewLabel() {
             <!-- Второй блок: количество ЧЗ -->
             <VRow align="center" no-gutters>
               <VCol cols="auto">
-                <VAvatar size="34" color="success" variant="tonal" class="me-2" rounded>
-                  <VIcon icon="tabler-building-bank" size="22" />
+                <VAvatar size="34"   class="me-2" rounded>
+                  <img v-bind="props" src="/icons/chz.svg" alt="Честный знак" />
                 </VAvatar>
               </VCol>
 

@@ -100,7 +100,7 @@ function onPhoneInput(v: string) {
 }
 
 function openCreateUser() {
-  userDialogTitle.value = 'Новый пользователь'
+  userDialogTitle.value = 'Пригласить пользователя'
   editedUserId.value = null
   Object.assign(form, { email: '', role_id: 4 })
   userDialog.value = true
@@ -191,7 +191,7 @@ onMounted(async () => {
 
       <div class="d-flex align-center gap-3 ms-auto">
         <!-- <VTextField v-model="search" placeholder="Search Permissions" hide-details density="comfortable" style="inline-size:320px" prepend-inner-icon="tabler-search" /> -->
-        <VBtn color="primary" prepend-icon="tabler-user-plus" @click="openCreateUser">Добавить Пользователя</VBtn>
+        <VBtn color="primary" prepend-icon="tabler-user-plus" @click="openCreateUser">Пригласить пользователя</VBtn>
       </div>
     </VCardText>
 

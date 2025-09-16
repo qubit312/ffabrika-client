@@ -2,10 +2,14 @@
 import { useCurrentClient } from '@/composables/useCurrentClient';
 import { useDebounce } from '@vueuse/core';
 import { computed, onMounted, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { categoryOptions, getCategoryLabel } from '../../../constants/productCategories';
 import { deleteProduct, getProductsWithSizes } from '../../../services/products';
 import type { FilterRequest } from '../../../types/filter';
 import type { WbProduct } from '../../../types/product';
+import LabelManager from '@/components/LabelManager.vue';
+
+const router = useRouter()
 
 const entityData = ref<WbProduct[]>([])
 
@@ -26,10 +30,11 @@ function hasChestnyZnak(p: any) {
 }
 
 const headers = [
-  { title: 'Название', key: 'name' },
+  { title: 'Товар', key: 'name' },
   { title: 'Категория', key: 'category' },
   { title: 'Цвет', key: 'color' },
   { title: 'Размеры', key: 'sizes', sortable: false },
+  { title: 'Ярлыки', key: 'badges', sortable: false },
   { title: 'Изменено', key: 'updated_at' },
   { title: 'Действия', key: 'actions', sortable: false },
 ]
@@ -39,7 +44,6 @@ const searchQuery = ref<string>('')
 const debouncedQuery = useDebounce(searchQuery, 400)
 const searchArticle = ref<string>('')
 const debouncedArticle = useDebounce(searchArticle, 400) 
-// const clients = ref<Client[]>([])
 const selectedClientId = ref<number>()
 const selectedCategory = ref<string>()
 
@@ -68,6 +72,13 @@ const deleteItemConfirm = async () => {
 const itemsPerPage = ref<number>(10)
 const page = ref<number>(1)
 
+const getLabelId = (item: any) => Number(item?.labels?.[0]?.id ?? 0)
+
+const goToMarking = (item: any) => {
+  const labelId = getLabelId(item)
+  router.push({ name: 'product-marking-id', params: { id: labelId } })
+}
+
 watch(debouncedQuery, () => {
   fetchProducts()
 })
@@ -75,17 +86,6 @@ watch(debouncedQuery, () => {
 watch(debouncedArticle, () => {
   fetchProducts()
 })
-
-// const fetchClients = async () => {
-//   const { data, error } = await getClients()
-  
-//   if (error.value) {
-//     console.error('Ошибка при загрузке клиентов:', error.value)
-//     return
-//   }
-
-//   clients.value = data.value || []
-// }
 
 const fetchProducts = async () => {
   const { currentClientId } = useCurrentClient()
@@ -125,8 +125,9 @@ const fetchProducts = async () => {
 
   entityData.value = data.value
   isLoading.value = false
-}
 
+  libCache.value = null
+}
 
 const handleDelete = async (id: number) => {
   try {
@@ -167,16 +168,6 @@ const onOptionsUpdate = (options: any) => {
 
 const entities = computed<WbProduct[]>(() => entityData.value)
 const totalEntities = computed<number>(() => entities.value.length)
-// const displayedClientId = computed({
-//   get() {
-//     const id = selectedClientId.value;
-//     const exists = clients.value.some(c => c.id === id);
-//     return exists ? id : undefined;
-//   },
-//   set(value) {
-//     selectedClientId.value = value;
-//   }
-// });
 
 const displayedCategory = computed({
   get() {
@@ -201,15 +192,9 @@ onMounted(async () => {
   }
 
   fetchProducts();
-  // await fetchClients();
 });
 
-// const handleClientChange = (newValue) => {
-//   localStorage.setItem('selectedProductClientId', JSON.stringify(newValue));
-//   fetchProducts();
-// };
-
-const handleCategoryChange = (newValue) => {
+const handleCategoryChange = (newValue: any) => {
   localStorage.setItem('selectedProductCategoryId', JSON.stringify(newValue));
   fetchProducts();
 };
@@ -231,6 +216,44 @@ function formatDate(date: string | Date) {
   return `${day}.${month} ${hours}:${minutes}`
 }
 
+
+type ProductLabel = { id: string; name: string; color: string }
+
+const LS_KEY_LIBRARY = 'labels:library'
+const libCache = ref<ProductLabel[] | null>(null)
+
+function readLibrary(): ProductLabel[] {
+  if (libCache.value) return libCache.value
+  try {
+    libCache.value = JSON.parse(localStorage.getItem(LS_KEY_LIBRARY) || '[]') ?? []
+  } catch {
+    libCache.value = []
+  }
+  return libCache.value
+}
+function readAppliedIds(productId: number | 'new'): string[] {
+  const key = `product:${productId}:labelsApplied`
+  try { return JSON.parse(localStorage.getItem(key) || '[]') ?? [] }
+  catch { return [] }
+}
+function getAppliedLabels(productId: number): ProductLabel[] {
+  const lib = readLibrary()
+  const dict = new Map(lib.map(l => [l.id, l]))
+  return readAppliedIds(productId).map(id => dict.get(id)).filter(Boolean) as ProductLabel[]
+}
+
+const labelsDrawer = ref(false)
+const labelsDrawerProductId = ref<number | null>(null)
+const labelsRefreshTick = ref(0)
+
+function openLabelsDrawer(pid: number) {
+  labelsDrawerProductId.value = pid
+  labelsDrawer.value = true
+}
+function onLabelsChanged() {
+  libCache.value = null
+  labelsRefreshTick.value++
+}
 </script>
 
 <template>
@@ -250,17 +273,6 @@ function formatDate(date: string | Date) {
             class="me-3"
             clearable
           />
-          <!-- <VSelect
-            v-model="displayedClientId"
-            :items="clients"
-            item-title="name"
-            item-value="id"
-            label="Клиент"
-            clearable
-            style="inline-size: 200px;"
-            class="me-3"
-            @update:modelValue="handleClientChange"
-          /> -->
           <VSelect
             v-model="displayedCategory"
             :items="categoryOptions"
@@ -300,10 +312,11 @@ function formatDate(date: string | Date) {
         show-select
         :items="entities"
         :items-length="totalEntities"
-        class="text-no-wrap"
+        class="text-no-wrap product-table"
         :loading="isLoading"
         @update:options="onOptionsUpdate"
       >
+
         <template #no-data>
           <!-- ничего не выводим -->
         </template>
@@ -313,52 +326,65 @@ function formatDate(date: string | Date) {
             <VProgressCircular indeterminate color="primary" />
           </div>
         </template>
-        <!-- name  -->
+    
         <template #item.name="{ item }">
-          <div class="d-flex flex-column">
-            <div class="d-flex align-center gap-2">
-              <RouterLink :to="{ name: 'product-details-id', params: { id: item.id } }" class="text-high-emphasis">
-                {{ item.name }}
-              </RouterLink>
-            
-              <VTooltip
-                v-if="hasChestnyZnak(item)"
-                location="top"
-                open-delay="120"
-              >
-                <template #activator="{ props }">
-                  <img
-                    v-bind="props"
-                    src="/icons/chz.svg"
-                    alt="Честный знак"
-                    class="chz-icon ms-2"
-                  />
-                </template>
-                <span>Есть «Честный знак» в размерах</span>
-              </VTooltip>
-            </div>
-          
-            <div v-if="item.article" class="text-caption text-medium-emphasis mt-1">
-              Артикул: {{ item.article }}
+          <div class="prodcell d-flex align-start gap-3">
+            <img
+              v-if="item.main_image_url"
+              :src="item.main_image_url"
+              alt="Фото"
+              class="prodcell__img"
+            />
+            <div class="d-flex flex-column">
+              <div class="d-flex align-center gap-2">
+                <RouterLink :to="{ name: 'product-details-id', params: { id: item.id } }" class="text-high-emphasis">
+                  {{ item.name }}
+                </RouterLink>
+              </div>
+              <div v-if="item.article" class="text-caption text-medium-emphasis mt-1">
+                {{ item.article }}
+              </div>
+              <div class="mt-2 d-flex align-center gap-2">
+                <VBtn
+                  size="x-small"
+                  density="compact"
+                  variant="flat"
+                  color="primary"
+                  prepend-icon="tabler-barcode"
+                  class="mark-btn"
+                  @click="goToMarking(item)"
+                >
+                  Маркировка
+                </VBtn>
+              
+                <VTooltip location="top" open-delay="120">
+                  <template #activator="{ props }">
+                    <img v-bind="props" src="/icons/wb-icon.svg" alt="WB" class="product-icon ms-2" />
+                  </template>
+                  <span>Товар с Wildberries</span>
+                </VTooltip>
+              
+                <VTooltip v-if="hasChestnyZnak(item)" location="top" open-delay="120">
+                  <template #activator="{ props }">
+                    <img v-bind="props" src="/icons/chz.svg" alt="Честный знак" class="product-icon ms-2" />
+                  </template>
+                  <span>Есть «Честный знак» в размерах</span>
+                </VTooltip>
+              </div>
             </div>
           </div>
         </template>
 
-        <!-- category -->
         <template #item.category="{ item }">
-          <div class="d-flex flex-column">
-              <span>{{ getCategoryLabel(item.category) }}</span>
-          </div>
+          <span>{{ getCategoryLabel(item.category) }}</span>
         </template>
 
-        <!-- color -->
         <template #item.color="{ item }">
           <div class="d-flex flex-column">
-              <span>{{ item.color }}</span>
+            <span>{{ item.color }}</span>
           </div>
         </template>
 
-        <!-- sizes -->
         <template #item.sizes="{ item, index }" >
           <div class="sizes-text">
             <VTooltip
@@ -397,36 +423,50 @@ function formatDate(date: string | Date) {
             </VTooltip>
           </div>
         </template>
+    
+        <template #item.badges="{ item }">
+          <div class="d-flex flex-wrap align-center gap-2">
+            <template v-for="lbl in getAppliedLabels(item.id)" :key="lbl.id + ':' + labelsRefreshTick">
+              <VChip
+                class="chip-product"
+                size="x-small"
+                variant="outlined"
+                :style="{ '--chip-color': lbl.color }"
+                :title="lbl.name"
+              >
+                {{ lbl.name }}
+              </VChip>
+            </template>
 
-        <!-- actions -->
+            <IconBtn class="ms-1" @click="openLabelsDrawer(item.id)"
+              :title="getAppliedLabels(item.id).length ? 'Изменить ярлыки' : 'Добавить ярлык'">
+              <VIcon :icon="getAppliedLabels(item.id).length ? 'tabler-pencil-plus' : 'tabler-plus'" />
+            </IconBtn>
+          </div>
+        </template>
+
         <template #item.actions="{ item }">
           <RouterLink :to="{ name: 'product-details-id', params: { id: item.id } }">
             <IconBtn>
               <VIcon icon="tabler-edit" />
             </IconBtn>
           </RouterLink>
-          
 
           <IconBtn class="ms-4" @click="openDeleteDialog(item.id, item.name)">
-            <VIcon
-              icon="tabler-trash"
-              value="delete"
-            />
+            <VIcon icon="tabler-trash" value="delete" />
           </IconBtn>
         </template>
 
-        <!-- color -->
         <template #item.updated_at="{ item }">
           <div class="d-flex flex-column">
-              <span>{{ formatDate(item.updated_at) }}</span>
+            <span>{{ formatDate(item.updated_at) }}</span>
           </div>
         </template>
 
-        <!-- pagination -->
         <template #bottom>
           <TablePagination
             v-model:page="page"
-            :items-per-page="itemsPerPage"
+            :items-per-page="itemsPer-page"
             :total-items="totalEntities"
           />
         </template>
@@ -448,28 +488,72 @@ function formatDate(date: string | Date) {
   >
     {{ snackbar.text }}
   </VSnackbar>
+
+  <VNavigationDrawer
+    v-model="labelsDrawer"
+    location="right"
+    temporary
+    width="420"
+    :scrim="true"
+  >
+    <div class="pa-4 d-flex align-center justify-space-between">
+      <h6 class="text-h6 m-0">Ярлыки товара</h6>
+      <IconBtn @click="labelsDrawer = false">
+        <VIcon icon="tabler-x" />
+      </IconBtn>
+    </div>
+    <VDivider />
+
+    <div class="pa-4">
+      <LabelManager
+        v-if="labelsDrawerProductId"
+        :product-id="labelsDrawerProductId"
+        @changed="onLabelsChanged"
+      />
+    </div>
+  </VNavigationDrawer>
 </template>
 
 <style lang="scss">
-  .sizes-text {
-    max-width: 150px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    cursor: pointer;
-  }
-  .sizes-card > .v-overlay__content {
-    border: 2px solid rgb(115, 103, 240);
-    background: none;
-    padding: 0 !important;
-    box-shadow: rgba(114, 103, 240, 0.17) 7px 6px 2px 1px;
-  }
-.chz-icon {
-  inline-size: 16px;  
-  block-size: 16px;
+.product-icon {
+  inline-size: 22px;
+  block-size: 22px;
   display: inline-block;
   vertical-align: middle;
-  cursor: default;    
+  cursor: default;
 }
 
+.prodcell__img {
+  inline-size: 48px;
+  block-size: 48px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.mark-btn {
+  min-height: 22px !important;
+  height: 22px !important;
+  padding: 0 8px !important;
+  line-height: 22px !important;
+  font-size: 12px !important;
+  border-radius: 5px !important;
+}
+
+.product-table .v-data-table__td,
+.product-table .v-data-table__th {
+  padding-block: 10px !important; 
+}
+
+.chip-product {
+  --chip-color: #10bcd4; 
+  border-color: var(--chip-color) !important;
+  color: var(--chip-color) !important;
+  background-color: transparent !important;
+  font-weight: 600;
+  border-radius: 5px !important; 
+  padding-inline: 10px !important;
+  height: 26px !important;
+  line-height: 26px !important;
+  font-size: 12px !important;
+}
 </style>

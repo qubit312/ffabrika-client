@@ -19,7 +19,7 @@ export default defineNuxtConfig({
     },
   },
   devServer: {
-    port: Number(process.env.APP_PORT)
+    port: 3001
   },
   runtimeConfig: {
     public: {

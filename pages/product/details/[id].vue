@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
+import LabelManager from '@/components/LabelManager.vue'
 import { useBreadcrumbs } from '@/composables/useBreadcrumbs'
 import { getProductMainImage } from '@/services/productImages'
 import { computed, onMounted, reactive, ref, toRaw, watch } from 'vue'
@@ -23,6 +24,7 @@ const mainImage = ref<string | null>(null)
 
 const isCreate = computed(() => mode.value === 'create')
 const currentTitle = computed(() => form.name)
+const appliedLabels = ref<{ id: string; name: string; color: string }[]>([])
 
 const { items: productCrumbs, fullTitle: productTitle } = useBreadcrumbs(
   'Товары',
@@ -84,7 +86,9 @@ function mapServerResponseToForm(serverData: any): void {
   }
   originalForm.value = structuredClone(toRaw(form))
 }
-
+function onLabelsChanged(payload: { applied: any[]; appliedIds: string[]; library: any[] }) {
+  appliedLabels.value = payload.applied
+}
 watch(form, (newVal, oldVal) => {
   if (mode.value === 'view' && isFormInitialized.value && primaryId > 0) {
     if (JSON.stringify(newVal) !== JSON.stringify(originalForm.value)) {
@@ -99,6 +103,13 @@ const snackbar = ref(false)
 const snackMessage = ref('')
 const snackColor = ref<'success' | 'error'>('success')
 const loading = ref(true)
+
+const getLabelId = (item: any) => Number(item?.labels?.[0]?.id ?? 0)
+const goToMarking = () => {
+  const labelId = getLabelId(item)
+  router.push({ name: 'product-marking-id', params: { id: labelId } })
+}
+
 
 async function fetchClients() {
   loading.value = true
@@ -310,6 +321,8 @@ const handleChildCall = (params: ProductSizeWithLabels) => {
     productSize.value = params
   }
 };
+
+
 </script>
 
 <template>
@@ -324,6 +337,16 @@ const handleChildCall = (params: ProductSizeWithLabels) => {
       </div>
 
       <div class="d-flex gap-4 align-center flex-wrap"> 
+        <VBtn
+          v-if="form.id"
+         
+          variant="flat"
+          color="primary"
+          prepend-icon="tabler-barcode"
+          @click="goToMarking"
+        >
+          Маркировка
+        </VBtn>
         <VBtn v-if="mode === 'edit'" variant="outlined" color="primary" @click="cancelEdit">
           Отменить
         </VBtn>
@@ -359,6 +382,7 @@ const handleChildCall = (params: ProductSizeWithLabels) => {
             </div>
           </div>
         </VCard>
+        <LabelManager :product-id="form.id || null" @changed="onLabelsChanged" />
       </VCol>
 
       <VCol md="9">
