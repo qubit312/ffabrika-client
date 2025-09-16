@@ -20,6 +20,11 @@ export type SaveUserDto = {
   role_id: number               
 }
 
+export type UserInClient = {
+  email: string
+  role_id: number               
+}
+
 export function getUsers() {
   return useApi<User[]>('/api/users', { method: 'GET' })
 }
@@ -28,7 +33,7 @@ export function createUser(dto: SaveUserDto) {
   return useApi<{ success: boolean; data: User }>('/api/users', { method: 'POST', body: dto })
 }
 
-export function inviteUser(dto: SaveUserDto) {
+export function inviteUser(dto: UserInClient) {
   return useApi<{ success: boolean; data: User }>('/api/invitations', { method: 'POST', body: dto })
 }
 

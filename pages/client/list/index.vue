@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useCurrentClient } from '@/composables/useCurrentClient';
 import { computed, onMounted, ref } from 'vue';
 import { deleteClient, getClientsWithFilters } from '../../../services/clients';
 import type { FilterRequest } from '../../../types/filter';
@@ -57,6 +58,11 @@ const deleteItemConfirm = async () => {
 }
 
 const fetchClients = async () => {
+  const { currentClientId } = useCurrentClient()
+  if (!currentClientId.value) {
+    return;
+  }
+
   isLoading.value = true
   const payload: FilterRequest = {
     filters: [],

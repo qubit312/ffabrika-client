@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { deleteClientUser, getUsersByClient } from '@/services/clientUsers'
+import { deleteClientUser, getUsersByClient, updateClientUser } from '@/services/clientUsers'
+import type { UpdateClientUserDto } from '@/types/clientUser'
 import avatarFallback from '@images/avatars/avatar-1.png'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import {
@@ -7,8 +8,8 @@ import {
 } from '~/services/roles'
 import {
   inviteUser,
-  updateUser,
-  type SaveUserDto, type User
+  type SaveUserDto, type User,
+  type UserInClient
 } from '~/services/users'
 import { email as emailRule, formatRuPhone, required, ruPhoneRule, stripDigits } from '~/utils/validators'
 
@@ -17,8 +18,25 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
 const snack = reactive({ show: false, text: '', color: 'success' as 'success' | 'error' })
 const notify = (t: string, c: 'success' | 'error' = 'success') => { snack.text = t; snack.color = c; snack.show = true }
 
+interface ClientUserRole {
+  id: number;
+  visible_name: string;
+}
+
+interface ClientUser {
+  id: number;
+  user_id: number;
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  avatar: string;
+  created_at: string;
+  role: ClientUserRole | null;
+}
+
 const loading = ref(false)
-const rows = ref<User[]>([])
+const rows = ref<ClientUser[]>([])
 const search = ref('')
 const itemsPerPage = ref(10)
 const page = ref(1)
@@ -38,9 +56,11 @@ const pageRows = computed(() => {
   const start = (page.value - 1) * itemsPerPage.value
   return filtered.value.slice(start, start + itemsPerPage.value)
 })
+
 function userAvatarUrl(u: User) {
   return u?.avatar ? `${API_BASE}/storage/${u.avatar}` : avatarFallback
 }
+
 async function fetchUsers() {
   loading.value = true
   try {
@@ -57,8 +77,8 @@ const userDialogTitle = ref('Новый пользователь')
 const formRef = ref<any>(null)
 const savingUser = ref(false)
 const editedUserId = ref<number | null>(null)
+const editedClientUserId = ref<number | null>(null)
 
-// const roles = ref<RoleItem[]>([])
 const roles = ref<RoleItem[]>([
   { id: 3, name: 'admin', visible_name: 'Администратор' },
   { id: 4, name: 'manager', visible_name: 'Менеджер' },
@@ -82,13 +102,15 @@ function onPhoneInput(v: string) {
 function openCreateUser() {
   userDialogTitle.value = 'Новый пользователь'
   editedUserId.value = null
-  Object.assign(form, { name: '', email: '', phone: '', address: '', role_id: 5})
+  Object.assign(form, { email: '', role_id: 4 })
   userDialog.value = true
 }
 
-function openEditUser(u: User) {
-  userDialogTitle.value = 'Редактировать пользователя'
-  editedUserId.value = u.id
+function openEditUser(u: ClientUser) {
+  userDialogTitle.value = 'Сменить роль'
+  editedUserId.value = u.user_id
+  editedClientUserId.value = u.id
+
   Object.assign(form, {
     name: u.name || '',
     email: u.email || '',
@@ -98,28 +120,33 @@ function openEditUser(u: User) {
   })
   userDialog.value = true
 }
+
 async function saveUser() {
   const res = await formRef.value?.validate?.()
   if (res && res.valid === false) return
   savingUser.value = true
   try {
-    const payload: SaveUserDto = {
-      name: form.name,
+    const payload: UserInClient = {
       email: form.email,
-      phone: form.phone ? stripDigits(form.phone) : null,
-      address: form.address || null,
       role_id: Number(form.role_id),
     }
+    
     if (editedUserId.value == null) {
       const { data, error } = await inviteUser(payload)
       if (error.value || !data.value?.mail_sent) throw new Error(data.value?.message || 'Не удалось пригласить')
-      // rows.value.unshift(data.value.data)
       notify('Пользователь приглашен')
-    } else {
-      const { data, error } = await updateUser(editedUserId.value, payload)
-      if (error.value || !data.value?.success) throw new Error(data.value?.message || 'Не удалось сохранить')
-      const idx = rows.value.findIndex(r => r.id === editedUserId.value)
-      if (idx > -1) rows.value[idx] = data.value.data
+    } else if (editedClientUserId.value) {
+      const dto: UpdateClientUserDto = {role_id:  payload.role_id}
+      const { data, error } = await updateClientUser(editedClientUserId.value, dto)
+      if (error.value || !data.value) throw new Error(data.value || 'Не удалось сохранить')
+      const idx = rows.value.findIndex(r => r.id === editedClientUserId.value)
+      if (idx > -1) {
+          rows.value[idx].role = {
+              id: data.value.role_id,
+              visible_name: data.value.role?.visible_name || ''
+          };
+      }
+
       notify('Изменения сохранены')
     }
     userDialog.value = false
@@ -223,19 +250,23 @@ onMounted(async () => {
   </VCard>
 
   <!-- Диалоговое окно -->
-  <VDialog v-model="userDialog" max-width="560">
+  <VDialog v-model="userDialog" max-width="500">
     <VCard>
       <VCardTitle class="text-h6">{{ userDialogTitle }}</VCardTitle>
       <VDivider />
       <VCardText>
         <VForm ref="formRef" @submit.prevent="saveUser">
           <VRow>
-            <VCol cols="12" md="6"><VTextField v-model="form.name" label="Имя" :rules="userRules.name" /></VCol>
-            <VCol cols="12" md="6"><VTextField v-model="form.email" type="email" label="Email" :rules="userRules.email" /></VCol>
-            <VCol cols="12" md="6">
-              <VTextField :model-value="form.phone" label="Телефон" placeholder="+7 (___) ___-__-__" :rules="userRules.phone" @update:model-value="onPhoneInput" />
+            <VCol cols="12" md="12">
+              <VTextField 
+                :append-inner-icon="userDialogTitle == 'Сменить роль' ? 'tabler-lock' : undefined" 
+                :readonly="userDialogTitle == 'Сменить роль'"
+                v-model="form.email"
+                type="email"
+                label="Email"
+                :rules="userRules.email"
+              />
             </VCol>
-            <VCol cols="12" md="6"><VTextField v-model="form.address" label="Адрес" /></VCol>
             <VCol cols="12">
               <VSelect v-model="form.role_id" :items="roles" item-title="visible_name" item-value="id" label="Роль" :rules="userRules.role" />
             </VCol>

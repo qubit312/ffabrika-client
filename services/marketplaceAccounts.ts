@@ -38,3 +38,10 @@ export function deleteMarketplaceAccount(id: number) {
     method: 'DELETE',
   })
 }
+
+export function importWbProduct(dto: {'marketplace_account_id': number}) {
+  return useApi(`/api/wb/import-product`, {
+    method: 'POST',
+    body: dto
+  })
+}

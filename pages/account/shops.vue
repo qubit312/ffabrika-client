@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import laptopGirl from '@/assets/images/illustrations/laptop-girl.png'
-import { checkConnection, createMarketplaceAccount, deleteMarketplaceAccount, getMarketplaceAccounts, updateMarketplaceAccount } from '@/services/marketplaceAccounts'
+import { checkConnection, createMarketplaceAccount, deleteMarketplaceAccount, getMarketplaceAccounts, importWbProduct, updateMarketplaceAccount } from '@/services/marketplaceAccounts'
 import { MarketplaceAccountStatus, type CreateMarketplaceAccountDto, type MarketplaceAccount, type UpdateMarketplaceAccountDto } from '@/types/marketplaceAccount'
 import { getStatusColor, getStatusLabel } from '@/utils/marketplace-account-status'
 import { onMounted, reactive, ref } from 'vue'
@@ -24,11 +24,28 @@ const rules = {
 const rows = ref<MarketplaceAccount[]>([])
 const loadingCheckId = ref<number | null>(null)
 
+const loading = ref(true)
+const importLoading = ref(true)
+
 async function load() {
+  loading.value = true
+  error.value = null
+  
   try {
-    const { data, error } = await getMarketplaceAccounts();
-    rows.value = data.value
-  } catch { rows.value = [] }
+    const { data, error: fetchError } = await getMarketplaceAccounts()
+    
+    if (fetchError.value) {
+      throw new Error(fetchError.value.message || 'Ошибка загрузки данных')
+    }
+    
+    rows.value = data.value || []
+  } catch (err) {
+    // error.value = err.message
+    rows.value = []
+    console.error('Ошибка загрузки магазинов:', err)
+  } finally {
+    loading.value = false
+  }
 }
 
 async function onSubmit() {
@@ -72,6 +89,45 @@ async function onSubmit() {
 
 function fmt(s?: string | null) {
   return s ? new Date(s).toLocaleString() : '—'
+}
+
+const importResult = reactive({
+  show: false,
+  success: false,
+  total_processed: 0,
+  created: 0,
+  updated: 0,
+  errors: [] as string[]
+})
+
+const importProduct = async (id: number) => {
+  try {
+    importLoading.value = true
+    const dto = {
+      'marketplace_account_id': id
+    }
+    const { data, error } = await importWbProduct(dto)
+    if (error.value) throw new Error(error.value.message || 'Ошибка при импорте товаров')
+
+    if (data.value) {
+      Object.assign(importResult, {
+        show: true,
+        success: data.value.success,
+        total_processed: data.value.total_processed || 0,
+        created: data.value.created || 0,
+        updated: data.value.updated || 0,
+        errors: data.value.errors || []
+      })
+    }
+  } catch (e) {
+    Object.assign(importResult, {
+      show: true,
+      success: false,
+      errors: [e instanceof Error ? e.message : 'Неизвестная ошибка']
+    })
+  } finally {
+    importLoading.value = false
+  }
 }
 
 async function simulateCheck(id: number) {
@@ -137,10 +193,12 @@ async function removeRow(id: number) {
 
 const renameDialog = ref(false)
 const renameValue = ref('')
+const tokenValue = ref('')
 let renameTarget: MarketplaceAccount | null = null
 function openRename(row: MarketplaceAccount) {
   renameTarget = row
   renameValue.value = row.name
+  tokenValue.value = ''
   renameDialog.value = true
 }
 
@@ -162,6 +220,10 @@ async function saveRename() {
   try {
     const updateDto: UpdateMarketplaceAccountDto = {
       name: renameValue.value.trim() || renameTarget.platform,
+    }
+
+    if (tokenValue.value) {
+      updateDto.api_token_enc = tokenValue.value;
     }
 
     const { data, error: apiError } = await updateMarketplaceAccount(renameTarget.id, updateDto)
@@ -255,7 +317,11 @@ onMounted(load)
     <VCardText class="pt-6">
       <h2 class="section-title text-h6 text-high-emphasis mb-4">Управление магазинами</h2>
 
-      <VAlert v-if="rows.length === 0" type="info" variant="tonal" class="mb-4">
+      <div v-if="loading" class="d-flex justify-center py-8">
+        <VProgressCircular indeterminate color="primary" />
+      </div>
+
+      <VAlert v-else-if="rows.length === 0" type="info" variant="tonal" class="mb-4">
         Пока нет подключённых магазинов — добавьте первый через форму выше.
       </VAlert>
 
@@ -304,9 +370,9 @@ onMounted(load)
                 <IconBtn v-bind="props"><VIcon icon="tabler-dots-vertical" /></IconBtn>
               </template>
               <VList>
-                <VListItem @click="simulateCheck(row.id)">
+                <VListItem @click="importProduct(row.id)">
                   <template #prepend><VIcon icon="tabler-activity" class="me-2" /></template>
-                  <VListItemTitle>Проверить</VListItemTitle>
+                  <VListItemTitle>Импортировать товары</VListItemTitle>
                 </VListItem>
 
               </VList>
@@ -317,16 +383,60 @@ onMounted(load)
     </VCardText>
   </VCard>
 
-  <VDialog v-model="renameDialog" max-width="420">
+  <VDialog v-model="renameDialog" max-width="500">
     <VCard>
-      <VCardTitle class="text-h6">Переименовать магазин</VCardTitle>
+      <VCardTitle class="text-h6">Обновить магазин</VCardTitle>
       <VCardText>
-        <VTextField v-model="renameValue" label="Новое название" autofocus />
+        <VTextField v-model="renameValue" class="mb-6" label="Новое название" autofocus />
+        <VTextField v-model="tokenValue" label="Новый API ключ" />
+        <div class="text-caption text-disabled mt-1 ml-2">
+          <strong>*</strong> Оставьте поле пустым, если не хотите менять токен
+        </div>
       </VCardText>
       <VCardActions>
         <VSpacer />
         <VBtn variant="text" @click="renameDialog=false">Отмена</VBtn>
         <VBtn color="primary" @click="saveRename">Сохранить</VBtn>
+      </VCardActions>
+    </VCard>
+  </VDialog>
+
+  <VDialog v-model="importResult.show" max-width="600" persistent>
+    <VCard>
+      <VCardTitle class="d-flex justify-space-between align-center">
+        <span>Результаты импорта</span>
+        <VBtn icon variant="text" @click="importResult.show = false">
+          <VIcon>tabler-x</VIcon>
+        </VBtn>
+      </VCardTitle>
+
+      <VCardText>
+        <VList>
+          <VListItem>
+            <VListItemTitle class="font-weight-medium">
+              Обработано товаров: {{ importResult.total_processed }}
+            </VListItemTitle>
+          </VListItem>
+          <VListItem><VListItemTitle>Создано: {{ importResult.created }}</VListItemTitle></VListItem>
+          <VListItem><VListItemTitle>Обновлено: {{ importResult.updated }}</VListItemTitle></VListItem>
+        </VList>
+
+        <VAlert v-if="importResult.errors.length" type="error" class="mt-4">
+          <VList>
+            <VListItem v-for="(error, index) in importResult.errors" :key="index" class="pa-0">
+              <VListItemTitle class="text-error">{{ error }}</VListItemTitle>
+            </VListItem>
+          </VList>
+        </VAlert>
+
+        <VAlert v-else type="success" class="mt-4">
+          Все товары успешно обработаны!
+        </VAlert>
+      </VCardText>
+
+      <VCardActions>
+        <VSpacer />
+        <VBtn color="primary" @click="importResult.show = false">Закрыть</VBtn>
       </VCardActions>
     </VCard>
   </VDialog>

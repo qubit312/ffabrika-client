@@ -18,6 +18,7 @@ const notify = (t: string, c: 'success' | 'error' = 'success') => { snack.text =
 
 const isEdit = ref(false)
 const isSaving = ref(false)
+const userId = ref(0)
 const submitted = ref(false)
 const formRef = ref<any>(null)
 
@@ -239,7 +240,13 @@ const openDeleteConfirm = () => { if (agreeDelete.value) confirmDeleteDialog.val
 
 async function doDeleteAccount() {
   deleting.value = true
+  const id = userId.value;
+  if (id) {
+    return
+  }
+
   try {
+    // const { data, error } = await deleteUser(id)
     notify('Запрос на удаление аккаунта отправлен администратору')
     confirmDeleteDialog.value = false
     agreeDelete.value = false
@@ -249,6 +256,7 @@ async function doDeleteAccount() {
     deleting.value = false
   }
 }
+
 </script>
 
 <template>

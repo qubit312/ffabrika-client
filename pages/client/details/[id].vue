@@ -13,7 +13,6 @@ import type { Client, CreateClientDto } from '../../../types/client'
 import type { CreateWbProductDto, WbProduct } from '../../../types/product'
 import type { CreateProductSizeDto, ProductSize } from '../../../types/productSize'
 
-import { useApi } from '@/composables/useApi'
 import {
   account20Rule,
   bankNameRule,
@@ -173,9 +172,6 @@ const bankRules = [bankNameRule]
 const nameRules = [required]
 const typeRules = [required]
 const legalAddressRules = [] // No validation rules for legal_address
-const wbApiTokenRules = [] // No validation rules for wb_api_token
-const notesRules = [] // No validation rules for notes
-const preferredContactRules = [] // No validation rules for preferred_contact
 
 function mapServerResponseToForm(serverData: any): void {
   form.id = serverData.id || 0
@@ -420,47 +416,8 @@ const addSize = () => {
 }
 
 const removeSize = (idx: number) => {
-  if (sizeItems.length > 1) {
+  if (sizeItems.value.length > 1) {
     sizeItems.value.splice(idx, 1)
-  }
-}
-
-const importResult = reactive({
-  show: false,
-  success: false,
-  total_processed: 0,
-  created: 0,
-  updated: 0,
-  errors: [] as string[]
-})
-
-const importProductsFromWb = async () => {
-  try {
-    loading.value = true
-    const { data, error } = await useApi<any>(`/api/wb/test?client_id=${primaryId}`, {
-      method: 'POST',
-    })
-    if (error.value) throw new Error(error.value.message || 'Ошибка при импорте товаров')
-
-    if (data.value) {
-      Object.assign(importResult, {
-        show: true,
-        success: data.value.success,
-        total_processed: data.value.total_processed || 0,
-        created: data.value.created || 0,
-        updated: data.value.updated || 0,
-        errors: data.value.errors || []
-      })
-      await fetchProducts()
-    }
-  } catch (e) {
-    Object.assign(importResult, {
-      show: true,
-      success: false,
-      errors: [e instanceof Error ? e.message : 'Неизвестная ошибка']
-    })
-  } finally {
-    loading.value = false
   }
 }
 
@@ -533,9 +490,6 @@ const editedBrand = reactive({
           <div class="text-body-1">Детальная информация о клиенте</div>
         </div>
         <div class="d-flex gap-4 align-center flex-wrap">
-          <VBtn v-if="primaryId" color="primary" @click="importProductsFromWb">
-            Импортировать товары с WB
-          </VBtn>
           <VBtn v-if="mode === 'edit'" variant="outlined" color="primary" @click="cancelEdit">
             Отменить
           </VBtn>
@@ -845,46 +799,6 @@ const editedBrand = reactive({
     <VSnackbar v-model="snackbar" :timeout="3000" :color="snackColor" location="top right">
       {{ snackMessage }}
     </VSnackbar>
-
-    <VDialog v-model="importResult.show" max-width="600" persistent>
-      <VCard>
-        <VCardTitle class="d-flex justify-space-between align-center">
-          <span>Результаты импорта</span>
-          <VBtn icon variant="text" @click="importResult.show = false">
-            <VIcon>tabler-x</VIcon>
-          </VBtn>
-        </VCardTitle>
-
-        <VCardText>
-          <VList>
-            <VListItem>
-              <VListItemTitle class="font-weight-medium">
-                Обработано товаров: {{ importResult.total_processed }}
-              </VListItemTitle>
-            </VListItem>
-            <VListItem><VListItemTitle>Создано: {{ importResult.created }}</VListItemTitle></VListItem>
-            <VListItem><VListItemTitle>Обновлено: {{ importResult.updated }}</VListItemTitle></VListItem>
-          </VList>
-
-          <VAlert v-if="importResult.errors.length" type="error" class="mt-4">
-            <VList>
-              <VListItem v-for="(error, index) in importResult.errors" :key="index" class="pa-0">
-                <VListItemTitle class="text-error">{{ error }}</VListItemTitle>
-              </VListItem>
-            </VList>
-          </VAlert>
-
-          <VAlert v-else type="success" class="mt-4">
-            Все товары успешно обработаны!
-          </VAlert>
-        </VCardText>
-
-        <VCardActions>
-          <VSpacer />
-          <VBtn color="primary" @click="importResult.show = false">Закрыть</VBtn>
-        </VCardActions>
-      </VCard>
-    </VDialog>
 
     <CustomLoading :loading="loading" />
   </div>
