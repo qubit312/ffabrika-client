@@ -19,6 +19,20 @@ export interface WbProduct {
   brand_id: number | null
   brand: Brand | null
   productSizes?: ProductSize[];
+  tags?: ProductTag[]
+  labels: ProductLabel[]
+}
+
+export type ProductLabel = {
+  id: number
+  product_id: number
+  name: string
+}
+
+export type ProductTag = {
+  id: number
+  name: string
+  color?: string
 }
 
 export interface CreateWbProductDto {
@@ -31,6 +45,7 @@ export interface CreateWbProductDto {
   category: string | null
   client_id: number | null
   brand_id: number | null
+  tags?: number[]
 }
 
 export type UpdateWbProductDto = CreateWbProductDto;

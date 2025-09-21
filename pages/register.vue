@@ -8,13 +8,21 @@ import authV2MaskDark from '@images/pages/misc-mask-dark.png'
 import authV2MaskLight from '@images/pages/misc-mask-light.png'
 import { VNodeRenderer } from '@layouts/components/VNodeRenderer'
 import { themeConfig } from '@themeConfig'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { apiLogin, apiRegister, setAuthSession, type RegisterDto } from '~/services/auth'
 import { checkPassword, email as emailRule, passwordRule, required, type PasswordPolicy } from '~/utils/validators'
 
 definePageMeta({ layout: 'blank', public: true })
 
+const route = useRoute()
 const router = useRouter()
+
+const isInvited = computed(() => String(route.query.invited ?? '').toLowerCase() === 'true')
+const invitedOrgName = ref<string>('')
+
+onMounted(() => {
+  invitedOrgName.value = localStorage.getItem('invite_org_name') || ''
+})
 
 const form = reactive<RegisterDto>({
   name: '',
@@ -46,7 +54,6 @@ const rules = {
   repeat: (v: string) => String(v ?? '') === String(form.password ?? '') || 'Пароли не совпадают',
 }
 
-// ❗ правила подставляем только после сабмита
 const nameRules = computed(() => (submitted.value ? [rules.required] : []))
 const emailRules = computed(() => (submitted.value ? [rules.required, rules.email] : []))
 const passRules = computed(() => (submitted.value ? [rules.required, rules.password] : []))
@@ -80,10 +87,12 @@ async function onSubmit() {
 
   loading.value = true
   try {
-    const { data: regData, error: regErr } = await apiRegister({
-      name: form.name, email: form.email, password: form.password, password_repeat: form.password_repeat,
-    } as any)
+    const regPayload: RegisterDto & { invited?: boolean } = {
+      ...form,
+      invited: isInvited.value || undefined,
+    }
 
+    const { data: regData, error: regErr } = await apiRegister(regPayload as any)
     const reg = regData.value
     if (!reg || reg.success === false) {
       throw new Error((regErr.value as any)?.data?.message || reg?.message || 'Ошибка регистрации')
@@ -92,14 +101,19 @@ async function onSubmit() {
     snackbar.value = { visible: true, text: 'Регистрация успешна! Выполняем вход…', color: 'success', timeout: 2500 }
     await sleep(900)
 
-    const { data: loginData, error: loginErr } = await apiLogin({ email: form.email, password: form.password, remember: true })
+    const { data: loginData, error: loginErr } = await apiLogin({
+      email: form.email,
+      password: form.password,
+      remember: true,
+    })
     const login = loginData.value
     if (!login || !login.success || !login.data?.access_token) {
       throw new Error((loginErr.value as any)?.data?.message || login?.message || 'Ошибка авторизации после регистрации')
     }
 
     setAuthSession(login.data)
-    await router.push('/')
+
+    await router.push(isInvited.value ? '/invite' : '/')
   } catch (e: any) {
     errorMessage.value = e?.message || 'Ошибка регистрации'
   } finally {
@@ -130,10 +144,14 @@ async function onSubmit() {
         <VCardText>
           <h4 class="text-h4 mb-1">Регистрация в <span class="text-capitalize">{{ themeConfig.app.title }}</span></h4>
           <p class="mb-0">Создайте аккаунт, чтобы продолжить.</p>
+
+          <VAlert v-if="isInvited" variant="tonal" type="info" class="mt-4">
+            Зарегистрируйтесь, чтобы принять приглашение в
+            <b>{{ invitedOrgName || 'организацию' }}</b>.
+          </VAlert>
         </VCardText>
 
         <VCardText>
-          <!-- отключаем автофилл и валидируем только при сабмите -->
           <VForm autocomplete="off" validate-on="submit" @submit.prevent="onSubmit">
             <VRow>
               <VCol cols="12">
@@ -207,7 +225,7 @@ async function onSubmit() {
 
                 <VBtn block type="submit" :loading="loading">Зарегистрироваться</VBtn>
 
-                <div class="d-flex align-center justify-center mt-4">
+                <div v-if="!isInvited" class="d-flex align-center justify-center mt-4">
                   <span class="me-1 text-medium-emphasis">Уже есть аккаунт?</span>
                   <NuxtLink to="/login">Войти</NuxtLink>
                 </div>

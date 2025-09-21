@@ -57,7 +57,8 @@ const form = reactive<WbProduct>({
   created_at: new Date(),
   updated_at: new Date(),
   has_chestny_znak: false,
-  sizes: []
+  sizes: [],
+  labels: []
 })
 
 function mapServerResponseToForm(serverData: any): void {
@@ -78,6 +79,7 @@ function mapServerResponseToForm(serverData: any): void {
   form.updated_at = serverData.updated_at || '';
   form.has_chestny_znak = serverData.has_chestny_znak;
   const sizes = serverData.sizes;
+   form.labels = Array.isArray(serverData.labels) ? serverData.labels : []
   if (sizes) {
     form.productSizes = sizes
     productSize.value = Array.isArray(sizes) && sizes.length > 0 
@@ -104,10 +106,14 @@ const snackMessage = ref('')
 const snackColor = ref<'success' | 'error'>('success')
 const loading = ref(true)
 
-const getLabelId = (item: any) => Number(item?.labels?.[0]?.id ?? 0)
+const primaryLabelId = computed(() => form.labels?.[0]?.id ?? 0)
+
 const goToMarking = () => {
-  const labelId = getLabelId(item)
-  router.push({ name: 'product-marking-id', params: { id: labelId } })
+  if (!primaryLabelId.value) {
+    showSnackbar('Для товара не найден ярлык', false)
+    return
+  }
+  router.push({ name: 'product-marking-id', params: { id: primaryLabelId.value } })
 }
 
 

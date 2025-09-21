@@ -58,7 +58,6 @@ const formRef = ref<any>(null)
 const savingUser = ref(false)
 const editedUserId = ref<number | null>(null)
 
-// const roles = ref<RoleItem[]>([])
 const roles = ref<RoleItem[]>([
   { id: 3, name: 'admin', visible_name: 'Администратор' },
   { id: 4, name: 'manager', visible_name: 'Менеджер' },
@@ -101,32 +100,51 @@ function openEditUser(u: User) {
 async function saveUser() {
   const res = await formRef.value?.validate?.()
   if (res && res.valid === false) return
+
   savingUser.value = true
   try {
-    const payload: SaveUserDto = {
-      name: form.name,
-      email: form.email,
-      phone: form.phone ? stripDigits(form.phone) : null,
-      address: form.address || null,
-      role_id: Number(form.role_id),
-    }
     if (editedUserId.value == null) {
+      const payload = {
+        email: form.email,
+        role_id: Number(form.role_id),
+        meta: { locale: 'ru' },     
+      }
+
       const { data, error } = await inviteUser(payload)
-      if (error.value || !data.value?.mail_sent) throw new Error(data.value?.message || 'Не удалось пригласить')
-      // rows.value.unshift(data.value.data)
-      notify('Пользователь приглашен')
+      if (error.value) throw error.value
+
+      const ok = data.value?.success ?? data.value?.mail_sent ?? false
+      if (!ok) {
+        throw new Error(data.value?.message || 'Не удалось отправить приглашение')
+      }
+
+      notify('Пользователь приглашён')
+      userDialog.value = false
     } else {
+      const payload = {
+        name: form.name,
+        email: form.email,
+        phone: form.phone ? stripDigits(form.phone) : null,
+        address: form.address || null,
+        role_id: Number(form.role_id),
+      }
       const { data, error } = await updateUser(editedUserId.value, payload)
-      if (error.value || !data.value?.success) throw new Error(data.value?.message || 'Не удалось сохранить')
+      if (error.value || !data.value?.success) {
+        throw new Error(data.value?.message || 'Не удалось сохранить')
+      }
       const idx = rows.value.findIndex(r => r.id === editedUserId.value)
       if (idx > -1) rows.value[idx] = data.value.data
       notify('Изменения сохранены')
+      userDialog.value = false
     }
-    userDialog.value = false
-  } catch (e:any) {
-    notify(e?.message || 'Ошибка сохранения', 'error')
-  } finally { savingUser.value = false }
+  } catch (e: any) {
+    const msg = e?.response?.data?.message || e?.message || 'Ошибка сохранения'
+    notify(msg, 'error')
+  } finally {
+    savingUser.value = false
+  }
 }
+
 
 const deleteDialog = ref(false)
 const deletingId = ref<number | null>(null)

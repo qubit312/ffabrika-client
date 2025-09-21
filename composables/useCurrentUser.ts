@@ -11,7 +11,7 @@ export const useCurrentUser = () => {
     if (role) roleVisibleName.value = role
   })
 
-  const isAdmin = computed(() => roleVisibleName.value === 'Супер администратор')
+  const isAdmin = computed(() => roleVisibleName.value === 'Суперадминистратор')
 
   return { userName, roleVisibleName, isAdmin }
 }

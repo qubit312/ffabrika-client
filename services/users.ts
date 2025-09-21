@@ -17,7 +17,20 @@ export type SaveUserDto = {
   email: string
   phone?: string | null
   address?: string | null
-  role_id: number               
+  role_id: number
+}
+
+export type InvitationDto = {
+  email: string
+  role_id: number
+  meta?: Record<string, any>
+}
+
+export type InvitationResponse = {
+  success: boolean
+  mail_sent?: boolean
+  message?: string
+  data?: User
 }
 
 export function getUsers() {
@@ -28,8 +41,8 @@ export function createUser(dto: SaveUserDto) {
   return useApi<{ success: boolean; data: User }>('/api/users', { method: 'POST', body: dto })
 }
 
-export function inviteUser(dto: SaveUserDto) {
-  return useApi<{ success: boolean; data: User }>('/api/invitations', { method: 'POST', body: dto })
+export function inviteUser(dto: InvitationDto) {
+  return useApi<InvitationResponse>('/api/invitations', { method: 'POST', body: dto })
 }
 
 export function updateUser(id: number, dto: SaveUserDto) {
@@ -38,4 +51,8 @@ export function updateUser(id: number, dto: SaveUserDto) {
 
 export function deleteUser(id: number) {
   return useApi<{ success: boolean }>(`/api/users/${id}`, { method: 'DELETE' })
+}
+
+export function acceptInvitation(token: string) {
+  return useApi<{ success: boolean; message?: string }>( '/api/invitations/accept', { method: 'POST', body: { token } })
 }
