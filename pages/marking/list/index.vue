@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { getClients } from '../../../services/clients';
 import { getLabelsWithFilters, removeLabel } from '../../../services/labels';
-import type { Client } from '../../../types/client';
 import type { FilterRequest } from '../../../types/filter';
 import type { Label } from '../../../types/label';
 import AddNewProductDrawer from '../../../views/pages/product/list/AddNewProductDrawer.vue';
@@ -17,7 +15,6 @@ const headers = [
 const isDrawerOpen = ref(true)
 const isLoading = ref(false)
 const router = useRouter()
-const clients = ref<Client[]>([])
 const selectedClientId = ref<number | undefined>()
 const labels = ref<Label[]>()
 const searchQuery     = ref<string>('')
@@ -89,41 +86,13 @@ const handleDelete = async (id: number) => {
   }
 }
 
-const displayedClientId = computed({
-  get() {
-    const id = selectedClientId.value;
-    const exists = clients.value.some(c => c.id === id);
-    return exists ? id : undefined;
-  },
-  set(value) {
-    selectedClientId.value = value;
-  }
-});
-
 onMounted(async () => {
   const savedClientId = localStorage.getItem('selectedClientId');
   if (savedClientId) {
     selectedClientId.value = JSON.parse(savedClientId);
   }
   fetchLabels()
-  await fetchClients()
 })
-
-const handleClientChange = (newValue) => {
-  localStorage.setItem('selectedClientId', JSON.stringify(newValue));
-  fetchLabels();
-};
-
-const fetchClients = async () => {
-  const { data, error } = await getClients()
-  
-  if (error.value) {
-    console.error('Ошибка при загрузке клиентов:', error.value)
-    return
-  }
-
-  clients.value = data.value || []
-}
 
 const snackbar = ref({
   visible: false,
@@ -168,17 +137,6 @@ const onOptionsUpdate = (options: any) => {
             clearable
             @update:modelValue="fetchLabels"
           />
-          <VSelect
-            v-model="displayedClientId"
-            :items="clients"
-            item-title="name"
-            item-value="id"
-            label="Клиент"
-            clearable
-            style="inline-size: 200px;"
-            class="me-3"
-            @update:modelValue="handleClientChange"
-          />
         </div>
 
         <VSpacer />
@@ -204,7 +162,6 @@ const onOptionsUpdate = (options: any) => {
       <VDivider class="mt-4" />
       <VDataTableServer
         :headers="headers"
-        show-select
         :items="labels"
         :items-length="totalLabels"
         class="text-no-wrap"

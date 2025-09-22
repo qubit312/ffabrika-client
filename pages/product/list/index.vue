@@ -1,13 +1,12 @@
 <script setup lang="ts">
+import LabelManager from '@/components/LabelManager.vue';
 import { useCurrentClient } from '@/composables/useCurrentClient';
 import { useDebounce } from '@vueuse/core';
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { categoryOptions, getCategoryLabel } from '../../../constants/productCategories';
 import { deleteProduct, getProductsWithSizes } from '../../../services/products';
 import type { FilterRequest } from '../../../types/filter';
 import type { WbProduct } from '../../../types/product';
-import LabelManager from '@/components/LabelManager.vue';
 
 const router = useRouter()
 
@@ -31,7 +30,7 @@ function hasChestnyZnak(p: any) {
 
 const headers = [
   { title: 'Товар', key: 'name' },
-  { title: 'Категория', key: 'category' },
+  { title: 'Категория WB', key: 'wb_category' },
   { title: 'Цвет', key: 'color' },
   { title: 'Размеры', key: 'sizes', sortable: false },
   { title: 'Ярлыки', key: 'badges', sortable: false },
@@ -40,12 +39,12 @@ const headers = [
 ]
 
 const isLoading = ref(false)
-const searchQuery = ref<string>('')
-const debouncedQuery = useDebounce(searchQuery, 400)
+const searchName = ref<string>('')
+const debouncedQuery = useDebounce(searchName, 400)
+const searchCategory = ref<string>('')
+const debouncedCategory = useDebounce(searchCategory, 400)
 const searchArticle = ref<string>('')
 const debouncedArticle = useDebounce(searchArticle, 400) 
-const selectedClientId = ref<number>()
-const selectedCategory = ref<string>()
 
 const deleteDialog = ref(false)
 const selectedDeleteId = ref<number | null>(null)
@@ -69,8 +68,9 @@ const deleteItemConfirm = async () => {
   selectedDeleteId.value = null
 }
 
-const itemsPerPage = ref<number>(10)
+const itemsPerPage = ref<number>(25)
 const page = ref<number>(1)
+const serverTotal = ref<number>(0)
 
 const getLabelId = (item: any) => Number(item?.labels?.[0]?.id ?? 0)
 
@@ -79,11 +79,12 @@ const goToMarking = (item: any) => {
   router.push({ name: 'product-marking-id', params: { id: labelId } })
 }
 
-watch(debouncedQuery, () => {
+watch([debouncedQuery, debouncedArticle, debouncedCategory], () => {
+  page.value = 1
   fetchProducts()
 })
 
-watch(debouncedArticle, () => {
+watch([page, itemsPerPage], () => {
   fetchProducts()
 })
 
@@ -97,24 +98,22 @@ const fetchProducts = async () => {
 
   const payload: FilterRequest = {
     filters: [],
+    page: page.value,
+    per_page: itemsPerPage.value,
     sort_by: sortBy.value?.key ?? 'name',
     sort_dir: sortBy.value?.order ?? 'asc',
   }
 
-  if(selectedClientId.value) {
-    payload.filters?.push({ field: 'client_id', op: 'eq', value: selectedClientId.value })
-  }
-
-  if (selectedCategory.value) {
-    payload.filters?.push({ field: 'category', op: 'eq', value: selectedCategory.value })
+  if (searchCategory.value) {
+    payload.filters?.push({ field: 'wb_category', op: 'like', value: searchCategory.value })
   }
 
   if (searchArticle.value) {
     payload.filters?.push({ field: 'article', op: 'like', value: searchArticle.value })
   }
 
-  if (searchQuery.value) {
-    payload.filters?.push({ field: 'name', op: 'like', value: searchQuery.value })
+  if (searchName.value) {
+    payload.filters?.push({ field: 'name', op: 'like', value: searchName.value })
   }
 
   const { data, error } = await getProductsWithSizes(payload)
@@ -123,12 +122,22 @@ const fetchProducts = async () => {
     return
   }
 
-  entityData.value = data.value
+  const resp = data.value
+  entityData.value = resp?.data ?? []
+  serverTotal.value = Number(resp?.total ?? 0)
+  itemsPerPage.value = Number(resp?.per_page ?? itemsPerPage.value)
+  page.value = Number(resp?.current_page ?? page.value)
+
   isLoading.value = false
 
-  libCache.value = null
+  if (entityData.value.length === 0 && serverTotal.value > 0 && page.value > 1) {
+    const maxPage = Math.max(1, Math.ceil(serverTotal.value / itemsPerPage.value))
+    if (page.value > maxPage) {
+      page.value = maxPage
+      await fetchProducts()
+    }
+  }
 }
-
 const handleDelete = async (id: number) => {
   try {
     const { error } = await deleteProduct(id)
@@ -157,48 +166,19 @@ function showSnackbarMessage(message: string, color = 'success') {
 
 const sortBy = ref<{ key: string, order: 'asc' | 'desc' } | null>(null)
 const onOptionsUpdate = (options: any) => {
+  page.value = options.page
+  itemsPerPage.value = options.itemsPerPage
+
   if (options.sortBy?.length > 0) {
     sortBy.value = options.sortBy[0]
   } else {
     sortBy.value = null
   }
-
   fetchProducts()
 }
 
 const entities = computed<WbProduct[]>(() => entityData.value)
-const totalEntities = computed<number>(() => entities.value.length)
-
-const displayedCategory = computed({
-  get() {
-    const value = selectedCategory.value;
-    const exists = categoryOptions.some(c => c.value === value);
-    return exists ? value : undefined;
-  },
-  set(value) {
-    selectedCategory.value = value;
-  }
-});
-
-onMounted(async () => {
-  const savedClientId = localStorage.getItem('selectedProductClientId');
-  if (savedClientId) {
-    selectedClientId.value = JSON.parse(savedClientId);
-  }
-
-  const savedCategory = localStorage.getItem('selectedProductCategoryId');
-  if (savedCategory) {
-    selectedCategory.value = JSON.parse(savedCategory);
-  }
-
-  fetchProducts();
-});
-
-const handleCategoryChange = (newValue: any) => {
-  localStorage.setItem('selectedProductCategoryId', JSON.stringify(newValue));
-  fetchProducts();
-};
-
+const totalEntities = computed(() => serverTotal.value)
 const visibleTooltipIndex = ref<number | null>(null)
 
 function toggleTooltip(index: number) {
@@ -215,7 +195,6 @@ function formatDate(date: string | Date) {
 
   return `${day}.${month} ${hours}:${minutes}`
 }
-
 
 type ProductLabel = { id: string; name: string; color: string }
 
@@ -254,6 +233,14 @@ function onLabelsChanged() {
   libCache.value = null
   labelsRefreshTick.value++
 }
+
+function getWbCategoryName(category: {id: number, name: string} | null): string {
+  if (!category) {
+    return '';
+  }
+  return category ? category.name : '';
+}
+
 </script>
 
 <template>
@@ -267,13 +254,20 @@ function onLabelsChanged() {
       <div class="d-flex flex-wrap gap-4 ma-6">
         <div class="d-flex align-center">
           <AppTextField
-            v-model="searchQuery"
+            v-model="searchName"
             placeholder="Введите название"
             style="inline-size: 200px;"
             class="me-3"
             clearable
           />
-          <VSelect
+          <AppTextField
+            v-model="searchCategory"
+            placeholder="Введите категорию"
+            style="inline-size: 200px;"
+            class="me-3"
+            clearable
+          />
+          <!-- <VSelect
             v-model="displayedCategory"
             :items="categoryOptions"
             item-title="label"
@@ -283,7 +277,7 @@ function onLabelsChanged() {
             style="inline-size: 200px;"
             class="me-3"
             @update:modelValue="handleCategoryChange"
-          />
+          /> -->
           <AppTextField
             v-model="searchArticle"
             placeholder="Введите артикул"
@@ -309,11 +303,11 @@ function onLabelsChanged() {
 
       <VDataTableServer
         :headers="headers"
-        show-select
         :items="entities"
         :items-length="totalEntities"
         class="text-no-wrap product-table"
         :loading="isLoading"
+        :items-per-page="itemsPerPage"
         @update:options="onOptionsUpdate"
       >
 
@@ -375,8 +369,8 @@ function onLabelsChanged() {
           </div>
         </template>
 
-        <template #item.category="{ item }">
-          <span>{{ getCategoryLabel(item.category) }}</span>
+        <template #item.wb_category="{ item }">
+          <span>{{ getWbCategoryName(item.wb_category) }}</span>
         </template>
 
         <template #item.color="{ item }">
@@ -463,12 +457,25 @@ function onLabelsChanged() {
           </div>
         </template>
 
-        <template #bottom>
-          <TablePagination
-            v-model:page="page"
-            :items-per-page="itemsPer-page"
-            :total-items="totalEntities"
-          />
+        <template #bottom>  
+          <VCardText class="pt-2">
+            <div class="d-flex flex-wrap justify-center justify-sm-space-between gap-y-2 mt-2">
+              <div class="d-flex align-center gap-2">
+                <span>Записей на странице</span>
+                <VSelect
+                  v-model="itemsPerPage"
+                  :items="[5, 10, 25, 50, 100]"
+                  style="max-inline-size: 8rem;min-inline-size: 5rem;"
+                />
+              </div>
+
+              <VPagination
+                v-model="page"
+                :total-visible="$vuetify.display.smAndDown ? 3 : 5"
+                :length="Math.ceil(totalEntities / itemsPerPage)"
+              />
+            </div>
+          </VCardText>
         </template>
       </VDataTableServer>
     </VCard>
@@ -525,7 +532,6 @@ function onLabelsChanged() {
 
 .prodcell__img {
   inline-size: 48px;
-  block-size: 48px;
   object-fit: cover;
   border-radius: 8px;
 }

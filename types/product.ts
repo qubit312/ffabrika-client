@@ -12,9 +12,10 @@ export interface WbProduct {
   color: string
   article: string
   vendor_code: string
+  main_image_url?: string
   composition: string
   has_chestny_znak: boolean
-  category: string
+  wb_category: { id: number, name: string, parent: { id: number, name: string } | null } | null
   client_id: number | null
   brand_id: number | null
   brand: Brand | null
@@ -28,7 +29,7 @@ export interface CreateWbProductDto {
   vendor_code: string
   composition: string
   has_chestny_znak: boolean
-  category: string | null
+  category_id: number | null 
   client_id: number | null
   brand_id: number | null
 }

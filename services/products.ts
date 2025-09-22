@@ -35,6 +35,12 @@ export async function getProductsWithSizes(payload?: FilterRequest) {
   })
 }
 
+export async function getProductCategories(params?: URLSearchParams) {
+  return useApi(`/api/marketplace-categories?${params}`, {
+    method: 'GET',
+  })
+}
+
 export function getProduct(id: number) {
   return useApi<WbProduct>(`/api/wb-products/${id}`, {
     method: 'GET'

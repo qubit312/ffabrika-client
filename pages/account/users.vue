@@ -178,6 +178,14 @@ async function confirmDelete() {
 onMounted(async () => {
   await Promise.all([fetchUsers()])
 })
+
+const headers = [
+  { title: 'Пользователь', key: 'name', sortable: false },
+  { title: 'Доступ', key: 'role', sortable: false },
+  { title: 'Дата и время', key: 'date', sortable: false },
+  { title: 'Действия', key: 'actions', sortable: false},
+]
+
 </script>
 
 <template>
@@ -197,56 +205,73 @@ onMounted(async () => {
 
     <VDivider />
 
-    <VTable class="text-no-wrap">
-      <thead>
-        <tr>
-          <th class="text-subtitle-2">ПОЛЬЗОВАТЕЛЬ</th>
-          <th class="text-subtitle-2">ДОСТУП</th>
-          <th class="text-subtitle-2">ДАТА И ВРЕМЯ</th>
-          <th class="text-subtitle-2 text-right">ДЕЙСТВИЯ</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-if="loading">
-          <td colspan="7">
-            <div class="d-flex justify-center pa-6"><VProgressCircular indeterminate /></div>
-          </td>
-        </tr>
+    <VDataTableServer 
+      :headers="headers"
+      class="text-no-wrap"
+      :items="pageRows"
+      :items-length="pageRows.length"
+      :loading="loading"
+      :items-per-page="itemsPerPage"
+    >
+      <template #no-data>
+        <div v-if="!loading && total === 0">
+          <span class="text-center py-6 text-medium-emphasis">Ничего не найдено</span>
+        </div>
+      </template>
 
-        <tr v-for="u in pageRows" :key="u.id">
-          <td>
-            <div class="d-flex align-center">
-              <VAvatar size="36" class="me-3" variant="tonal" color="primary"><VImg :src="userAvatarUrl(u)" /></VAvatar>
-              <div class="d-flex flex-column">
-                <span class="font-weight-medium">{{ u.name }}</span>
-                <small class="text-medium-emphasis">{{ u.email }}</small>
+      <template #loading>
+        <div class="text-center pa-6">
+          <div class="d-flex justify-center pa-6"><VProgressCircular indeterminate /></div>
+        </div>
+      </template>
+
+      <template #item.name="{ item }">
+        <div class="d-flex align-center">
+          <VAvatar size="36" class="me-3" variant="tonal" color="primary"><VImg :src="userAvatarUrl(item)" /></VAvatar>
+          <div class="d-flex flex-column">
+            <span class="font-weight-medium">{{ item.name }}</span>
+            <small class="text-medium-emphasis">{{ item.email }}</small>
+          </div>
+        </div>
+      </template>
+
+      <template #item.role="{ item }">
+        <div class="d-flex align-center">
+          <VChip v-if="item.role?.visible_name" size="small" class="me-2" variant="tonal" color="primary">{{ item.role.visible_name }}</VChip>
+          <span v-else class="text-medium-emphasis">—</span>
+        </div>
+      </template>
+
+      <template #item.date="{ item }">
+        <span class="text-medium-emphasis">{{ item.created_at ? new Date(item.created_at).toLocaleString() : '—' }}</span>
+      </template>
+
+      <template #item.actions="{ item }">
+        <IconBtn @click="openEditUser(item)"><VIcon icon="tabler-edit" /></IconBtn>
+        <IconBtn @click="askDelete(item)"><VIcon icon="tabler-trash" /></IconBtn>
+      </template>
+
+      <template #bottom>  
+          <VCardText class="pt-2">
+            <div class="d-flex flex-wrap justify-center justify-sm-space-between gap-y-2 mt-2">
+              <div class="d-flex align-center gap-2">
+                <span>Записей на странице</span>
+                <VSelect
+                  v-model="itemsPerPage"
+                  :items="[5, 10, 25, 50, 100]"
+                  style="max-inline-size: 8rem;min-inline-size: 5rem;"
+                />
               </div>
+
+              <VPagination
+                v-model="page"
+                :total-visible="$vuetify.display.smAndDown ? 3 : 5"
+                :length="Math.ceil(pageRows.length / itemsPerPage)"
+              />
             </div>
-          </td>
-          <td>
-            <VChip v-if="u.role?.visible_name" size="small" class="me-2" variant="tonal" color="primary">{{ u.role.visible_name }}</VChip>
-            <span v-else class="text-medium-emphasis">—</span>
-          </td>
-          <td><span class="text-medium-emphasis">{{ u.created_at ? new Date(u.created_at).toLocaleString() : '—' }}</span></td>
-          <td class="text-right">
-            <IconBtn @click="openEditUser(u)"><VIcon icon="tabler-edit" /></IconBtn>
-            <IconBtn @click="askDelete(u)"><VIcon icon="tabler-trash" /></IconBtn>
-          </td>
-        </tr>
-
-        <tr v-if="!loading && total === 0">
-          <td colspan="7" class="text-center py-6 text-medium-emphasis">Ничего не найдено</td>
-        </tr>
-      </tbody>
-    </VTable>
-
-    <VDivider />
-    <div class="d-flex align-center justify-space-between pa-4">
-      <div class="text-body-2 text-medium-emphasis">
-        Показано с {{ Math.min((page-1)*itemsPerPage+1, total) }} по {{ Math.min(page*itemsPerPage, total) }} из {{ total }}
-      </div>
-      <VPagination v-model="page" :length="Math.max(Math.ceil(total / itemsPerPage), 1)" density="comfortable" rounded="lg" show-first-last-page />
-    </div>
+          </VCardText>
+        </template>
+    </VDataTableServer>
   </VCard>
 
   <!-- Диалоговое окно -->

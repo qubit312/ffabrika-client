@@ -2,7 +2,7 @@
 import avatarFallback from '@images/avatars/avatar-1.png'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { changePassword, getProfile, updateProfile } from '~/services/profile'
+import { changePassword, getProfile, sendVerificationEmail, updateProfile } from '~/services/profile'
 import {
   formatRuPhone,
   match,
@@ -21,6 +21,10 @@ const isSaving = ref(false)
 const userId = ref(0)
 const submitted = ref(false)
 const formRef = ref<any>(null)
+
+const emailVerified = ref(true)
+const emailVerifiedDialog = ref(false)
+const emailVerifiedLoading = ref(false)
 
 const defaultAvatar = avatarFallback as string
 const avatarUrl = ref<string>(localStorage.getItem('user_avatar_url') || defaultAvatar)
@@ -127,6 +131,7 @@ async function loadProfile() {
       form.address = u.address || ''
       form.phone = u.phone ? formatRuPhone(stripDigits(u.phone)) : ''
       form.telegram = u.telegram || ''
+      emailVerified.value = u.email_verified
 
       if (u.avatar) {
         const base = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
@@ -175,6 +180,12 @@ async function saveProfile() {
     localStorage.setItem('user_address', form.address || '')
     localStorage.setItem('user_phone', payload.phone || '')
     localStorage.setItem('user_telegram', form.telegram || '')
+
+    if (data.value?.data) {
+      emailVerified.value = data.value.data.email_verified
+    } else {
+      emailVerified.value = true
+    }
 
     if (data.value.data?.avatar) {
       const base = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
@@ -257,6 +268,14 @@ async function doDeleteAccount() {
   }
 }
 
+// TO DO
+async function onSendVerificationEmail() {
+  emailVerifiedLoading.value = true
+  const { data, error } = await sendVerificationEmail();
+  emailVerifiedLoading.value = false
+  emailVerifiedDialog.value = true
+}
+
 </script>
 
 <template>
@@ -284,6 +303,40 @@ async function doDeleteAccount() {
     </VCardText>
 
     <VCardText class="pt-2">
+      <VRow v-if="!emailVerified">
+        <VCol cols="12" md="6">
+          <VAlert 
+            type="warning" 
+            variant="tonal" 
+            density="compact"
+          >
+            <div class="alert-content">
+              <span>
+                Почта {{ form.email }} не подтверждена
+              </span>
+              <VBtn
+                class="ms-4"
+                color="primary"
+                size="small"
+                :disabled="emailVerifiedLoading"
+                @click="onSendVerificationEmail"
+              >
+                <template #prepend>
+                  <VProgressCircular
+                    v-if="emailVerifiedLoading"
+                    indeterminate
+                    size="16"
+                    width="2"
+                    class="me-2"
+                  />
+                </template>
+                Подтвердить
+              </VBtn>
+            </div>
+          </VAlert>
+        </VCol>
+      </VRow>
+      
       <VForm ref="formRef" class="mt-3" :validate-on="submitted ? 'input' : 'blur'" @submit.prevent="saveProfile">
         <VRow>
           <VCol cols="12" md="6">
@@ -491,6 +544,19 @@ async function doDeleteAccount() {
     </VCard>
   </VDialog>
 
+  <!-- Модалка о запросе подтверждения почты -->
+  <VDialog v-model="emailVerifiedDialog" max-width="500">
+    <VCard>
+      <VCardTitle class="text-h6">Подтверждение почты</VCardTitle>
+      <VDivider />
+      <VCardText>Письмо с подтверждением отправлено на адрес из вашего профиля.</VCardText>
+      <VCardActions>
+        <VSpacer />
+        <VBtn @click="emailVerifiedDialog = false">Готово</VBtn>
+      </VCardActions>
+    </VCard>
+  </VDialog>
+
   <VSnackbar v-model="snack.show" :color="snack.color" location="top end" timeout="2500">
     {{ snack.text }}
   </VSnackbar>
@@ -513,5 +579,11 @@ async function doDeleteAccount() {
 }
 :deep(.v-input--error .v-messages__message) {
   color: var(--v-theme-error);
+}
+.alert-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
 }
 </style>

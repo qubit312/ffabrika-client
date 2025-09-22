@@ -164,7 +164,6 @@ onMounted(fetchClients)
 
       <VDataTableServer
         :headers="headers"
-        show-select
         :items="clients"
         :items-length="totalClients"
         :loading="isLoading"

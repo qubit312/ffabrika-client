@@ -23,6 +23,7 @@ if (isMobile)
     <VApp :style="`--v-global-theme-primary: ${hexToRgb(global.current.value.colors.primary)}`">
       <NuxtLayout>
         <NuxtPage />
+        <PermissionsModal />
       </NuxtLayout>
 
       <ScrollToTop />

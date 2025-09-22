@@ -2,16 +2,14 @@
 import AppBreadcrumbs from '@/components/AppBreadcrumbs.vue'
 import LabelManager from '@/components/LabelManager.vue'
 import { useBreadcrumbs } from '@/composables/useBreadcrumbs'
+import { getBrands } from '@/services/brands'
 import { getProductMainImage } from '@/services/productImages'
+import { createProduct, getProduct, getProductCategories, updateProduct } from '@/services/products'
+import type { CreateWbProductDto, WbProduct } from '@/types/product'
+import type { ProductSize, ProductSizeWithLabels } from '@/types/productSize'
+import { useDebounce } from '@vueuse/core'
 import { computed, onMounted, reactive, ref, toRaw, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useApi } from '../../../composables/useApi'
-import { categoryOptions } from '../../../constants/productCategories'
-import { getBrands } from '../../../services/brands'
-import { createProduct, getProduct, updateProduct } from '../../../services/products'
-import { createProductSize, updateProductSize } from '../../../services/productSizes'
-import type { CreateWbProductDto, WbProduct } from '../../../types/product'
-import type { ProductSize, ProductSizeWithLabels } from '../../../types/productSize'
 
 const route = useRoute()
 const router = useRouter()
@@ -33,6 +31,12 @@ const { items: productCrumbs, fullTitle: productTitle } = useBreadcrumbs(
   isCreate,
 )
 
+interface Category {
+  id: number
+  name: string
+  parent: { id: number, name: string } | null
+}
+
 const productSize = ref<ProductSize>({
   id: 0,
   product_id: 0,
@@ -50,7 +54,7 @@ const form = reactive<WbProduct>({
   article: '',
   vendor_code: '',
   composition: '',
-  category: '',
+  wb_category: null,
   client_id: null,
   brand_id: null,
   brand: null,
@@ -67,8 +71,7 @@ function mapServerResponseToForm(serverData: any): void {
   form.article = serverData.article || '';
   form.vendor_code = serverData.vendor_code || '';
   form.composition = serverData.composition || '';
-  form.category = serverData.category || '';
-    
+  form.wb_category = serverData.wb_category || '';  
   form.client_id = serverData.client_id;
   form.brand_id = serverData.brand_id;
   form.brand = serverData.brand;
@@ -77,13 +80,7 @@ function mapServerResponseToForm(serverData: any): void {
   form.created_at = serverData.created_at || '';
   form.updated_at = serverData.updated_at || '';
   form.has_chestny_znak = serverData.has_chestny_znak;
-  const sizes = serverData.sizes;
-  if (sizes) {
-    form.productSizes = sizes
-    productSize.value = Array.isArray(sizes) && sizes.length > 0 
-      ? sizes[0]
-      : { id: 0, product_id: 0, value: '', tech_size: '', barcode: '' }
-  }
+
   originalForm.value = structuredClone(toRaw(form))
 }
 function onLabelsChanged(payload: { applied: any[]; appliedIds: string[]; library: any[] }) {
@@ -97,8 +94,6 @@ watch(form, (newVal, oldVal) => {
   }
 }, { deep: true })
 
-const clientOptions = ref<{ label: string; value: number }[]>([])
-
 const snackbar = ref(false)
 const snackMessage = ref('')
 const snackColor = ref<'success' | 'error'>('success')
@@ -108,29 +103,6 @@ const getLabelId = (item: any) => Number(item?.labels?.[0]?.id ?? 0)
 const goToMarking = () => {
   const labelId = getLabelId(item)
   router.push({ name: 'product-marking-id', params: { id: labelId } })
-}
-
-
-async function fetchClients() {
-  loading.value = true
-  const { data, error } = await useApi<{ data: { id: number; name: string }[]; total: number }>('/api/clients', {
-    method: 'GET'
-  })
-  if (error.value) {
-    console.error('Ошибка при загрузке клиентов:', error.value)
-    loading.value = false
-    return
-  }
-  if (data.value) {
-    clientOptions.value = data.value.map((c: { id: number; name: string })=> ({
-      label: c.name,
-      value: c.id,
-    }))
-  } else {
-    clientOptions.value = []
-    console.warn('data.value is null')
-  }
-  loading.value = false
 }
 
 async function fetchProduct(id: number) {
@@ -152,7 +124,7 @@ async function fetchProduct(id: number) {
 async function onSubmit() {
   loading.value = true
 
-  if (!form.category) {
+  if (!form.wb_category) {
     showSnackbar('Выберите клиента и категорию', false)
     loading.value = false
     return
@@ -164,7 +136,7 @@ async function onSubmit() {
     color: form.color,
     article: form.article,
     vendor_code: form.vendor_code,
-    category: form.category,
+    category_id: form.wb_category.id,
     composition: form.composition,
     has_chestny_znak: form.has_chestny_znak,
     brand_id: form.brand_id,
@@ -184,16 +156,6 @@ async function onSubmit() {
     loading.value = false
     return
   }
-  
-  if (form.category === 'COMMON') {
-    const result = await saveSingleSize(data.value.id)
-    showSnackbar(result.message, result.success)
-
-    if (!result.success) {
-      loading.value = false
-      return
-    }
-  }
 
   showSnackbar('Успешно сохранено', true)
   if (mode.value !== 'edit') {
@@ -203,55 +165,17 @@ async function onSubmit() {
   loading.value = false
 }
 
-async function saveSingleSize(productId: number): Promise<{ success: boolean, message: string }> {
-  const size = productSize.value 
-  if (!size) {
-    return { success: true, message: '' };
-  }
-  
-  if (form.category !== 'COMMON' || (!size.id && !size.barcode)) {
-    return { success: true, message: '' }
-  }
-
-  if (!form.category) {
-    return { success: false, message: 'Выберите категорию' }
-  }
-  
-  const payload = {
-    product_id: productId,
-    value: size.value || '',
-    tech_size: size.tech_size || '',
-    barcode: size.barcode || ''
-  }
-  
-  let data, error
-
-  if (mode.value === 'edit') {
-    if (!size.id) {
-      ({ data, error } = await createProductSize(payload))
-    } else {
-      ({ data, error } = await updateProductSize(size.id, payload))
-    }
-  } else {
-    ({ data, error } = await createProductSize(payload))
-  }
-
-  if (error?.value) {
-    console.error('Ошибка при сохранении размера:', error.value)
-    return { success: false, message: 'Ошибка при сохранении размера' }
-  }
-
-  return { success: true, message: 'Размер успешно сохранён' }
-}
-
 onMounted(async () => {
-  // await fetchClients()
+  fetchBrands()
   if (primaryId > 0) {
     await fetchProduct(primaryId)
+    if (form.wb_category) categories.value.push(form.wb_category)
     const { data, error } = await getProductMainImage(primaryId)
     if (!error.value && data.value?.data) {
       mainImage.value = data.value.data.url
     }
+  } else {
+    await fetchCategories()
   }
   loading.value = false
 })
@@ -273,26 +197,7 @@ function cancelEdit() {
   }
 }
 
-function handlePlaceholderClick() {
-  console.log('Заглушка: клик по загрузке изображения');
-}
-
 const brandOptions = ref<{ label: string; value: number }[]>([])
-
-watch(
-  () => form.client_id,
-  (clientId) => {
-    if (clientId) {
-      // form.brand_id = null
-      const brandClientId = form.brand?.client_id
-      if (brandClientId != clientId) {
-        form.brand_id = null
-      } 
-      fetchBrands()
-    }
-  },
-  { immediate: true }
-);
 
 async function fetchBrands() {
   loading.value = true
@@ -322,18 +227,62 @@ const handleChildCall = (params: ProductSizeWithLabels) => {
   }
 };
 
+const searchCategory = ref<string>('')
+const debouncedCategory = useDebounce(searchCategory, 400)
+const categories = ref<Category[]>([])
+const isLoading = ref<boolean>(false)
+const error = ref<string | null>(null)
 
+watch([form.wb_category], () => {
+  if(form.wb_category) {
+    searchCategory.value = form.wb_category.name || ''
+  }
+})
+
+watch(debouncedCategory, () => {
+  if (!searchCategory.value && form.wb_category) {
+    searchCategory.value = form.wb_category.name
+  }
+  fetchCategories()
+})
+
+const fetchCategories = async () => {
+  isLoading.value = true
+  error.value = null
+
+  try {
+    const params = new URLSearchParams()
+
+    if (searchCategory.value.trim()) {
+      params.append('search', searchCategory.value.trim())
+    }
+
+    const { data, error: apiError } = await getProductCategories(params)
+    
+    if (apiError?.value) {
+      throw new Error(apiError.value)
+    }
+
+    categories.value = data.value?.data ?? []
+  } catch (err) {
+    error.value =
+      err instanceof Error ? err.message : 'Ошибка загрузки категорий'
+    console.error('[fetchCategories] Ошибка:', err)
+    categories.value = []
+  } finally {
+    isLoading.value = false
+  }
+}
 </script>
 
 <template>
   <div>
-  <AppBreadcrumbs :items="productCrumbs" class="mb-2" />
+    <AppBreadcrumbs :items="productCrumbs" class="mb-2" />
     <div class="d-flex flex-wrap justify-start justify-sm-space-between gap-y-4 gap-x-6 mb-6">
       <div class="d-flex flex-column justify-center">
         <h4 class="text-h4 font-weight-medium">
           {{ mode === 'create' ? 'Вы создаете новый товар' : form.name }}
         </h4>
-        <div class="text-body-1">Подробная информация о товаре</div>
       </div>
 
       <div class="d-flex gap-4 align-center flex-wrap"> 
@@ -364,7 +313,6 @@ const handleChildCall = (params: ProductSizeWithLabels) => {
         <VCard
           class="d-flex flex-column align-center justify-center"
           style="height: 430px; width: 100%; overflow: hidden;"
-          @click="handlePlaceholderClick"
         >
           <div v-if="mainImage" style="width: 100%;">
             <img 
@@ -386,25 +334,6 @@ const handleChildCall = (params: ProductSizeWithLabels) => {
       </VCol>
 
       <VCol md="9">
-        <!-- <VCard class="mb-6">
-          <VCardText>
-            <VRow>
-              <VCol cols="12" md="6">
-                <AppSelect
-                  v-model="form.client_id"
-                  :items="clientOptions"
-                  item-title="label"
-                  item-value="value"
-                  label="Клиент"
-                  placeholder="Выберите клиента"
-                  clearable
-                  outlined
-                />
-              </VCol>
-              
-            </VRow>
-          </VCardText>
-        </VCard> -->
         <VCard class="mb-6">
           <VCardText>
             <VRow>
@@ -453,41 +382,41 @@ const handleChildCall = (params: ProductSizeWithLabels) => {
             </VRow>
           </VCardText>
         </VCard>
-        <!-- <VCard class="mb-6" v-if="form.id && form.category == 'CLOTHES'"> -->
+
         <VCard class="mb-6 pa-6">
           <VRow>
+            <VCol cols="6" md="6">
+              <div class="mb-1">
+                <VLabel class="text-body-2" style="color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));">Категория</VLabel>
+                <VChip v-if="form.wb_category?.parent?.name" color="grey lighten-2" size="small" class="ms-2">
+                  {{ form.wb_category?.parent?.name || '' }}
+                </VChip>
+              </div>
+              <AppAutocomplete
+                v-model="form.wb_category"
+                v-model:search="searchCategory"
+                :items="categories"
+                :no-filter="true"
+                item-title="name"
+                item-value="id"
+                return-object
+                placeholder="Введите категорию"
+              />
+            </VCol>
             <VCol cols="6">
-                <AppSelect
-                  v-model="form.category"
-                  :items="categoryOptions"
-                  item-title="label"
-                  item-value="value"
-                  label="Категория"
-                  placeholder="Выберите категорию"
-                  clearable
-                />
-              </VCol>
-               <VCol cols="6">
-                <AppTextField
-                  v-if="form.category == 'CLOTHES'"
-                  label="Состав"
-                  placeholder="Хлопок 95%"
-                  v-model="form.composition"
-                />
-              </VCol>
-              <VCol cols="6">
-                <AppTextField
-                  v-if="form.category != 'CLOTHES'"
-                  label="Баркод"
-                  placeholder=""
-                  v-model="productSize.barcode"
-                />
-              </VCol>
+              <div class="mb-1">
+                <VLabel class="text-body-2" style="color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));">Состав</VLabel>
+              </div>
+              <AppTextField
+                placeholder="Хлопок 95%"
+                v-model="form.composition"
+              />
+            </VCol>
           </VRow>
              
           <VCardText>
             <LabelVariantDetails
-              v-if="form.id && form.category == 'CLOTHES'"
+              v-if="form.id"
               :product="form"
               :name="form.name"
               labelId="0"

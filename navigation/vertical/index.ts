@@ -9,11 +9,11 @@ export default [
   //   to: { name: 'marking-list' },
   //   icon: { icon: 'tabler-barcode' },
   // },
-  {
-    title: 'Клиенты',
-    to: { name: 'client-list' },
-    icon: { icon: 'tabler-users' },
-  },
+  // {
+  //   title: 'Клиенты',
+  //   to: { name: 'client-list' },
+  //   icon: { icon: 'tabler-users' },
+  // },
     {
     title: 'Честный знак',
     to: { name: 'chestny-znak' },

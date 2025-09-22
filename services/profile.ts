@@ -32,6 +32,12 @@ export function changePassword(payload: ChangePasswordRequest) {
   });
 }
 
+export function sendVerificationEmail() {
+  return useApi('/api/profile/send-verification-email', {
+    method: 'GET',
+  });
+}
+
 export async function updateProfile(payload: Partial<ProfileApi>) {
   const res = await useApi<ApiResponse<ProfileApi>>('/api/profile', {
     method: 'PUT',          
