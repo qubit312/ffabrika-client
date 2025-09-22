@@ -124,6 +124,7 @@ function openEditUser(u: ClientUser) {
 async function saveUser() {
   const res = await formRef.value?.validate?.()
   if (res && res.valid === false) return
+
   savingUser.value = true
   try {
     const payload: UserInClient = {
@@ -148,12 +149,16 @@ async function saveUser() {
       }
 
       notify('Изменения сохранены')
+      userDialog.value = false
     }
-    userDialog.value = false
-  } catch (e:any) {
-    notify(e?.message || 'Ошибка сохранения', 'error')
-  } finally { savingUser.value = false }
+  } catch (e: any) {
+    const msg = e?.response?.data?.message || e?.message || 'Ошибка сохранения'
+    notify(msg, 'error')
+  } finally {
+    savingUser.value = false
+  }
 }
+
 
 const deleteDialog = ref(false)
 const deletingId = ref<number | null>(null)

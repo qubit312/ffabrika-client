@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import LabelManager from '@/components/LabelManager.vue';
+import LabelManager from '@/components/LabelManager.vue';
 import { useCurrentClient } from '@/composables/useCurrentClient';
 import { useDebounce } from '@vueuse/core';
 import { computed, ref, watch } from 'vue';
@@ -229,9 +230,24 @@ function openLabelsDrawer(pid: number) {
   labelsDrawerProductId.value = pid
   labelsDrawer.value = true
 }
-function onLabelsChanged() {
+
+
+function onLabelsChanged(payload: { applied: Array<{ id: number; name: string; color?: string }>; appliedIds: number[]; library: any[] }) {
   libCache.value = null
   labelsRefreshTick.value++
+
+  const pid = labelsDrawerProductId.value
+  if (!pid) return
+
+  const idx = entityData.value.findIndex(p => p.id === pid)
+  if (idx === -1) return
+
+  const prev = entityData.value[idx]
+  const updated = { ...prev, tags: payload.applied }
+
+  entityData.value.splice(idx, 1, updated)
+}
+
 }
 
 function getWbCategoryName(category: {id: number, name: string} | null): string {
@@ -420,21 +436,21 @@ function getWbCategoryName(category: {id: number, name: string} | null): string 
     
         <template #item.badges="{ item }">
           <div class="d-flex flex-wrap align-center gap-2">
-            <template v-for="lbl in getAppliedLabels(item.id)" :key="lbl.id + ':' + labelsRefreshTick">
+            <template v-for="tag in (item.tags || [])" :key="tag.id">
               <VChip
                 class="chip-product"
                 size="x-small"
                 variant="outlined"
-                :style="{ '--chip-color': lbl.color }"
-                :title="lbl.name"
+                :style="{ '--chip-color': tag.color || '#10bcd4' }"
+                :title="tag.name"
               >
-                {{ lbl.name }}
+                {{ tag.name }}
               </VChip>
             </template>
-
+          
             <IconBtn class="ms-1" @click="openLabelsDrawer(item.id)"
-              :title="getAppliedLabels(item.id).length ? 'Изменить ярлыки' : 'Добавить ярлык'">
-              <VIcon :icon="getAppliedLabels(item.id).length ? 'tabler-pencil-plus' : 'tabler-plus'" />
+              :title="(item.tags?.length || 0) ? 'Изменить теги' : 'Добавить тег'">
+              <VIcon :icon="(item.tags?.length || 0) ? 'tabler-pencil-plus' : 'tabler-plus'" />
             </IconBtn>
           </div>
         </template>
@@ -504,7 +520,7 @@ function getWbCategoryName(category: {id: number, name: string} | null): string 
     :scrim="true"
   >
     <div class="pa-4 d-flex align-center justify-space-between">
-      <h6 class="text-h6 m-0">Ярлыки товара</h6>
+      <h6 class="text-h6 m-0">Теги товара</h6>
       <IconBtn @click="labelsDrawer = false">
         <VIcon icon="tabler-x" />
       </IconBtn>

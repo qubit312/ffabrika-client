@@ -1,4 +1,3 @@
-<!-- /pages/login.vue -->
 <script setup lang="ts">
 import { useGenerateImageVariant } from '@core/composable/useGenerateImageVariant'
 import authV2LoginIllustrationBorderedDark from '@images/pages/auth-v2-login-illustration-bordered-dark.png'
@@ -9,7 +8,7 @@ import authV2MaskDark from '@images/pages/misc-mask-dark.png'
 import authV2MaskLight from '@images/pages/misc-mask-light.png'
 import { VNodeRenderer } from '@layouts/components/VNodeRenderer'
 import { themeConfig } from '@themeConfig'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { apiLogin, setAuthSession } from '~/services/auth'
 
 definePageMeta({
@@ -17,6 +16,7 @@ definePageMeta({
   public: true,
 })
 
+const route = useRoute()
 const router = useRouter()
 
 const form = ref({
@@ -28,6 +28,13 @@ const form = ref({
 const isPasswordVisible = ref(false)
 const loading = ref(false)
 const errorMessage = ref('')
+
+const isInvited = computed(() => String(route.query.invited ?? '').toLowerCase() === 'true')
+const invitedOrgName = ref<string>('')
+
+onMounted(() => {
+  invitedOrgName.value = localStorage.getItem('invite_org_name') || ''
+})
 
 const authThemeImg = useGenerateImageVariant(
   authV2LoginIllustrationLight,
@@ -54,7 +61,9 @@ async function onSubmit() {
     }
 
     setAuthSession(res.data)
-    await router.push('/')
+
+    const invited = isInvited.value
+    await router.push(invited ? '/invite' : '/')
   } catch (err: any) {
     errorMessage.value = 'Неправильно введены учетные данные'
     console.error(err?.message || err)
@@ -87,6 +96,15 @@ async function onSubmit() {
           <h4 class="text-h4 mb-1">
             С возвращением на <span class="text-capitalize">{{ themeConfig.app.title }}</span>! 👋🏻
           </h4>
+          <VAlert
+            v-if="isInvited"
+            variant="tonal"
+            type="info"
+            class="mt-4"
+          >
+            Войдите в свой аккаунт, чтобы принять приглашение в
+            <b>{{ invitedOrgName || 'компанию' }}</b>.
+          </VAlert>
         </VCardText>
 
         <VCardText>
@@ -134,7 +152,9 @@ async function onSubmit() {
 
                 <div class="d-flex align-center justify-center mt-4">
                   <span class="me-1 text-medium-emphasis">Нет аккаунта?</span>
-                  <NuxtLink to="/register">Зарегистрироваться</NuxtLink>
+                  <NuxtLink :to="isInvited ? { path: '/register', query: { invited: 'true' } } : { path: '/register' }">
+                    Зарегистрироваться
+                  </NuxtLink>
                 </div>
               </VCol>
             </VRow>
