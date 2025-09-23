@@ -247,8 +247,6 @@ function onLabelsChanged(payload: { applied: Array<{ id: number; name: string; c
   entityData.value.splice(idx, 1, updated)
 }
 
-}
-
 function getWbCategoryName(category: {id: number, name: string} | null): string {
   if (!category) {
     return '';
