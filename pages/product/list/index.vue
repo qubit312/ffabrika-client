@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import LabelManager from '@/components/LabelManager.vue';
-import LabelManager from '@/components/LabelManager.vue';
 import { useCurrentClient } from '@/composables/useCurrentClient';
 import { useDebounce } from '@vueuse/core';
 import { computed, ref, watch } from 'vue';

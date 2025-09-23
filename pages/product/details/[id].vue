@@ -129,19 +129,13 @@ async function fetchProduct(id: number) {
 async function onSubmit() {
   loading.value = true
 
-  if (!form.wb_category) {
-    showSnackbar('Выберите клиента и категорию', false)
-    loading.value = false
-    return
-  }
-
   const payload: CreateWbProductDto = {
     client_id: form.client_id,
     name: form.name,
     color: form.color,
     article: form.article,
     vendor_code: form.vendor_code,
-    category_id: form.wb_category.id,
+    category_id: form.wb_category?.id || null,
     composition: form.composition,
     has_chestny_znak: form.has_chestny_znak,
     brand_id: form.brand_id,
