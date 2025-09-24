@@ -78,6 +78,7 @@ const formRef = ref<any>(null)
 const savingUser = ref(false)
 const editedUserId = ref<number | null>(null)
 const editedClientUserId = ref<number | null>(null)
+const isInvite = computed(() => editedUserId.value === null)
 
 const roles = ref<RoleItem[]>([
   { id: 3, name: 'admin', visible_name: 'Администратор' },
@@ -278,19 +279,20 @@ const headers = [
         </template>
     </VDataTableServer>
   </VCard>
-
   <!-- Диалоговое окно -->
   <VDialog v-model="userDialog" max-width="500">
     <VCard>
-      <VCardTitle class="text-h6">{{ userDialogTitle }}</VCardTitle>
+      <VCardTitle class="text-h6">
+        {{ isInvite ? 'Пригласить пользователя' : 'Сменить роль' }}
+      </VCardTitle>
       <VDivider />
       <VCardText>
         <VForm ref="formRef" @submit.prevent="saveUser">
           <VRow>
             <VCol cols="12" md="12">
-              <VTextField 
-                :append-inner-icon="userDialogTitle == 'Сменить роль' ? 'tabler-lock' : undefined" 
-                :readonly="userDialogTitle == 'Сменить роль'"
+              <VTextField
+                :append-inner-icon="!isInvite ? 'tabler-lock' : undefined"
+                :readonly="!isInvite"
                 v-model="form.email"
                 type="email"
                 label="Email"
@@ -298,19 +300,27 @@ const headers = [
               />
             </VCol>
             <VCol cols="12">
-              <VSelect v-model="form.role_id" :items="roles" item-title="visible_name" item-value="id" label="Роль" :rules="userRules.role" />
+              <VSelect
+                v-model="form.role_id"
+                :items="roles"
+                item-title="visible_name"
+                item-value="id"
+                label="Роль"
+                :rules="userRules.role"
+              />
             </VCol>
           </VRow>
         </VForm>
       </VCardText>
       <VCardActions>
         <VSpacer />
-        <VBtn variant="text" @click="userDialog=false">Отмена</VBtn>
-        <VBtn color="primary" :loading="savingUser" @click="saveUser">Сохранить</VBtn>
+        <VBtn variant="text" @click="userDialog = false">{{ isInvite ? 'Закрыть' : 'Отмена' }}</VBtn>
+        <VBtn variant="outlined" color="primary" :loading="savingUser" @click="saveUser">
+          {{ isInvite ? 'Отправить приглашение' : 'Сохранить' }}
+        </VBtn>
       </VCardActions>
     </VCard>
   </VDialog>
-
   <!-- Пользователь -->
   <VDialog v-model="deleteDialog" max-width="500">
     <VCard>

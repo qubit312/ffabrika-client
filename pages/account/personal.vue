@@ -268,7 +268,6 @@ async function doDeleteAccount() {
   }
 }
 
-// TO DO
 async function onSendVerificationEmail() {
   emailVerifiedLoading.value = true
   const { data, error } = await sendVerificationEmail();
@@ -287,7 +286,7 @@ async function onSendVerificationEmail() {
       </VAvatar>
 
       <form class="d-flex flex-column justify-center gap-4" @submit.prevent>
-        <div class="d-flex flex-wrap gap-4">
+        <div class="d-flex flex-wrap gap-4 align-center">
           <VBtn size="small" color="primary" :disabled="!isEdit" @click="pickFile">
             <VIcon class="d-sm-none" icon="tabler-cloud-upload" />
             <span class="d-none d-sm-block">Загрузить фото</span>
@@ -297,6 +296,17 @@ async function onSendVerificationEmail() {
             <span class="d-none d-sm-block">Сбросить</span>
             <VIcon class="d-sm-none" icon="tabler-refresh" />
           </VBtn>
+          <VTooltip text="Почта подтверждена" v-if="emailVerified">
+            <template #activator="{ props }">
+              <VIcon v-bind="props" icon="tabler-circle-check" color="success" size="24" />
+            </template>
+          </VTooltip>
+          
+          <VTooltip text="Почта не подтверждена" v-else>
+            <template #activator="{ props }">
+              <VIcon v-bind="props" icon="tabler-circle-x" color="warning" size="24" />
+            </template>
+          </VTooltip>
         </div>
         <p class="text-body-1 mb-0">Разрешены JPG, GIF или PNG. Максимальный размер 800 КБ</p>
       </form>
@@ -549,7 +559,7 @@ async function onSendVerificationEmail() {
     <VCard>
       <VCardTitle class="text-h6">Подтверждение почты</VCardTitle>
       <VDivider />
-      <VCardText>Письмо с подтверждением отправлено на адрес из вашего профиля.</VCardText>
+      <VCardText>Письмо с подтверждением отправлено на адрес <b>{{ form.email }}</b>.</VCardText>
       <VCardActions>
         <VSpacer />
         <VBtn @click="emailVerifiedDialog = false">Готово</VBtn>

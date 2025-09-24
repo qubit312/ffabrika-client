@@ -9,7 +9,7 @@ export default defineNuxtConfig({
   app: {
     head: {
       titleTemplate: '%s',
-      title: 'Ffabrika',
+      title: 'FF-WMS',
 
       link: [{
         rel: 'icon',
@@ -19,7 +19,7 @@ export default defineNuxtConfig({
     },
   },
   devServer: {
-    port: 3000
+    port: 3001
   },
   runtimeConfig: {
     public: {

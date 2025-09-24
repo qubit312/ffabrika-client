@@ -11,20 +11,21 @@ import { useDebounce } from '@vueuse/core'
 import { computed, onMounted, reactive, ref, toRaw, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+type ProductLabel = { id: number | string; product_id: number; name: string }
+
 const route = useRoute()
 const router = useRouter()
 const idParam = route.params.id as string
 const primaryId = Number(idParam)
-const mode = ref<'create' | 'edit' | 'view' >('create')
+const mode = ref<'create' | 'edit' | 'view'>('create')
 const isFormInitialized = ref(false)
 const originalForm = ref<WbProduct | null>(null)
 const mainImage = ref<string | null>(null)
 
 const isCreate = computed(() => mode.value === 'create')
 const currentTitle = computed(() => form.name)
-const appliedLabels = ref<{ id: string; name: string; color: string }[]>([])
 
-const { items: productCrumbs, fullTitle: productTitle } = useBreadcrumbs(
+const { items: productCrumbs } = useBreadcrumbs(
   'Товары',
   { name: 'product-list' },
   currentTitle,
@@ -54,6 +55,7 @@ const form = reactive<WbProduct>({
   article: '',
   vendor_code: '',
   composition: '',
+  // @ts-ignore – поле есть в ответе
   wb_category: null,
   client_id: null,
   brand_id: null,
@@ -62,32 +64,40 @@ const form = reactive<WbProduct>({
   updated_at: new Date(),
   has_chestny_znak: false,
   sizes: [],
-  labels: []
+  labels: [],
+  // @ts-ignore – поле есть в ответе (теги)
+  tags: [],
 })
 
 function mapServerResponseToForm(serverData: any): void {
-  form.id = serverData.id || 0;
-  form.name = serverData.name || '';
-  form.color = serverData.color || '';
-  form.article = serverData.article || '';
-  form.vendor_code = serverData.vendor_code || '';
-  form.composition = serverData.composition || '';
-  form.wb_category = serverData.wb_category || '';  
-  form.client_id = serverData.client_id;
-  form.brand_id = serverData.brand_id;
-  form.brand = serverData.brand;
-  form.created_by = serverData.created_by || '';
-  form.updated_by = serverData.updated_by || '';
-  form.created_at = serverData.created_at || '';
-  form.updated_at = serverData.updated_at || '';
-  form.has_chestny_znak = serverData.has_chestny_znak;
+  form.id = serverData.id || 0
+  form.name = serverData.name || ''
+  form.color = serverData.color || ''
+  form.article = serverData.article || ''
+  form.vendor_code = serverData.vendor_code || ''
+  form.composition = serverData.composition || ''
+  // @ts-ignore
+  form.wb_category = serverData.wb_category || null
+  form.client_id = serverData.client_id ?? null
+  form.brand_id = serverData.brand_id ?? null
+  form.brand = serverData.brand ?? null
+  form.created_by = serverData.created_by ?? null
+  form.updated_by = serverData.updated_by ?? null
+  form.created_at = serverData.created_at || ''
+  form.updated_at = serverData.updated_at || ''
+  form.has_chestny_znak = !!serverData.has_chestny_znak
+
+  // @ts-ignore
+  form.sizes = Array.isArray(serverData.sizes) ? serverData.sizes : []
+  form.labels = Array.isArray(serverData.labels) ? serverData.labels : []
+  // @ts-ignore
+  form.tags = Array.isArray(serverData.tags) ? serverData.tags : []
 
   originalForm.value = structuredClone(toRaw(form))
+
 }
-function onLabelsChanged(payload: { applied: any[]; appliedIds: string[]; library: any[] }) {
-  appliedLabels.value = payload.applied
-}
-watch(form, (newVal, oldVal) => {
+
+watch(form, (newVal) => {
   if (mode.value === 'view' && isFormInitialized.value && primaryId > 0) {
     if (JSON.stringify(newVal) !== JSON.stringify(originalForm.value)) {
       mode.value = 'edit'
@@ -100,11 +110,16 @@ const snackMessage = ref('')
 const snackColor = ref<'success' | 'error'>('success')
 const loading = ref(true)
 
-const primaryLabelId = computed(() => form.labels?.[0]?.id ?? 0)
+// ТОЛЬКО labels
+const primaryLabelId = computed<number>(() => {
+  const first = (form.labels as unknown as ProductLabel[])?.[0]
+  const n = Number(first?.id)
+  return Number.isFinite(n) ? n : 0
+})
 
 const goToMarking = () => {
   if (!primaryLabelId.value) {
-    showSnackbar('Для товара не найден ярлык', false)
+    showSnackbar('Для товара не найден ярлык (labels пусты)', false)
     return
   }
   router.push({ name: 'product-marking-id', params: { id: primaryLabelId.value } })
@@ -120,7 +135,7 @@ async function fetchProduct(id: number) {
     return
   }
 
-  mode.value = 'view';
+  mode.value = 'view'
   mapServerResponseToForm(data.value)
   isFormInitialized.value = true
   loading.value = false
@@ -129,19 +144,14 @@ async function fetchProduct(id: number) {
 async function onSubmit() {
   loading.value = true
 
-  if (!form.wb_category) {
-    showSnackbar('Выберите клиента и категорию', false)
-    loading.value = false
-    return
-  }
-
   const payload: CreateWbProductDto = {
     client_id: form.client_id,
     name: form.name,
     color: form.color,
     article: form.article,
     vendor_code: form.vendor_code,
-    category_id: form.wb_category.id,
+    // @ts-ignore
+    category_id: form.wb_category?.id || null,
     composition: form.composition,
     has_chestny_znak: form.has_chestny_znak,
     brand_id: form.brand_id,
@@ -174,6 +184,7 @@ onMounted(async () => {
   fetchBrands()
   if (primaryId > 0) {
     await fetchProduct(primaryId)
+    // @ts-ignore
     if (form.wb_category) categories.value.push(form.wb_category)
     const { data, error } = await getProductMainImage(primaryId)
     if (!error.value && data.value?.data) {
@@ -188,11 +199,7 @@ onMounted(async () => {
 function showSnackbar(message: string, isSuccess: boolean) {
   snackbar.value = true
   snackMessage.value = message
-  if (isSuccess) {
-    snackColor.value = 'success'
-  } else {
-    snackColor.value = 'error'
-  }
+  snackColor.value = isSuccess ? 'success' : 'error'
 }
 
 function cancelEdit() {
@@ -202,11 +209,10 @@ function cancelEdit() {
   }
 }
 
-const brandOptions = ref<{ label: string; value: number }[]>([])
+const brandOptions = ref<{ label?: string; value?: number; id?: number; name?: string }[]>([])
 
 async function fetchBrands() {
   loading.value = true
-
   const { data, error } = await getBrands()
   if (error.value) {
     console.error('Ошибка при загрузке брендов:', error.value)
@@ -214,6 +220,7 @@ async function fetchBrands() {
     return
   }
   if (data.value) {
+    // @ts-ignore
     brandOptions.value = data.value
   } else {
     brandOptions.value = []
@@ -223,14 +230,11 @@ async function fetchBrands() {
 }
 
 const handleChildCall = (params: ProductSizeWithLabels) => {
-  if (!params) {
-    return
-  }
-
+  if (!params) return
   if (params.id == productSize.value.id) {
     productSize.value = params
   }
-};
+}
 
 const searchCategory = ref<string>('')
 const debouncedCategory = useDebounce(searchCategory, 400)
@@ -238,14 +242,17 @@ const categories = ref<Category[]>([])
 const isLoading = ref<boolean>(false)
 const error = ref<string | null>(null)
 
-watch([form.wb_category], () => {
-  if(form.wb_category) {
+watch(() => (form as any).wb_category, () => {
+  // @ts-ignore
+  if (form.wb_category) {
+    // @ts-ignore
     searchCategory.value = form.wb_category.name || ''
   }
 })
 
 watch(debouncedCategory, () => {
-  if (!searchCategory.value && form.wb_category) {
+  if (!searchCategory.value && (form as any).wb_category) {
+    // @ts-ignore
     searchCategory.value = form.wb_category.name
   }
   fetchCategories()
@@ -257,21 +264,14 @@ const fetchCategories = async () => {
 
   try {
     const params = new URLSearchParams()
-
     if (searchCategory.value.trim()) {
       params.append('search', searchCategory.value.trim())
     }
-
     const { data, error: apiError } = await getProductCategories(params)
-    
-    if (apiError?.value) {
-      throw new Error(apiError.value)
-    }
-
+    if (apiError?.value) throw new Error(apiError.value)
     categories.value = data.value?.data ?? []
   } catch (err) {
-    error.value =
-      err instanceof Error ? err.message : 'Ошибка загрузки категорий'
+    error.value = err instanceof Error ? err.message : 'Ошибка загрузки категорий'
     console.error('[fetchCategories] Ошибка:', err)
     categories.value = []
   } finally {
@@ -283,6 +283,7 @@ const fetchCategories = async () => {
 <template>
   <div>
     <AppBreadcrumbs :items="productCrumbs" class="mb-2" />
+
     <div class="d-flex flex-wrap justify-start justify-sm-space-between gap-y-4 gap-x-6 mb-6">
       <div class="d-flex flex-column justify-center">
         <h4 class="text-h4 font-weight-medium">
@@ -290,10 +291,9 @@ const fetchCategories = async () => {
         </h4>
       </div>
 
-      <div class="d-flex gap-4 align-center flex-wrap"> 
+      <div class="d-flex gap-4 align-center flex-wrap">
         <VBtn
           v-if="form.id"
-         
           variant="flat"
           color="primary"
           prepend-icon="tabler-barcode"
@@ -301,6 +301,7 @@ const fetchCategories = async () => {
         >
           Маркировка
         </VBtn>
+
         <VBtn v-if="mode === 'edit'" variant="outlined" color="primary" @click="cancelEdit">
           Отменить
         </VBtn>
@@ -320,14 +321,13 @@ const fetchCategories = async () => {
           style="height: 430px; width: 100%; overflow: hidden;"
         >
           <div v-if="mainImage" style="width: 100%;">
-            <img 
-              :src="mainImage" 
-              alt="Фото товара" 
-              style="width: 100%; height: auto; object-fit: contain;" 
+            <img
+              :src="mainImage"
+              alt="Фото товара"
+              style="width: 100%; height: auto; object-fit: contain;"
             />
-            <a v-if="form.article || null" :href="`https://www.wildberries.ru/catalog/${form.article}/detail.aspx`">Открыть на WB</a>
+            <a v-if="form.article || null" :href="`https://www.wildberries.ru/catalog/${form.article}/detail.aspx`" target="_blank" rel="noopener">Открыть на WB</a>
           </div>
-          
           <div v-else class="d-flex flex-column align-center justify-center" style="height: 100%;">
             <VIcon size="40" color="grey">tabler-files</VIcon>
             <div class="text-h6 mt-2" style="color: grey;">
@@ -335,7 +335,10 @@ const fetchCategories = async () => {
             </div>
           </div>
         </VCard>
-        <LabelManager :product-id="form.id || null" @changed="onLabelsChanged" />
+        <LabelManager
+          v-if="!isCreate && form.id"
+          :product-id="form.id || null"
+        />
       </VCol>
 
       <VCol md="9">
@@ -351,20 +354,13 @@ const fetchCategories = async () => {
               </VCol>
 
               <VCol cols="6">
-                <AppTextField
-                  label="Артикул товара"
-                  placeholder=""
-                  v-model="form.article"
-                />
+                <AppTextField label="Артикул товара" v-model="form.article" />
               </VCol>
 
               <VCol cols="12" md="6">
-                <AppTextField
-                  label="Артикул продавца"
-                  placeholder="112233445"
-                  v-model="form.vendor_code"
-                />
+                <AppTextField label="Артикул продавца" placeholder="112233445" v-model="form.vendor_code" />
               </VCol>
+
               <VCol cols="12" md="6">
                 <AppSelect
                   v-model="form.brand_id"
@@ -376,13 +372,10 @@ const fetchCategories = async () => {
                   clearable
                 />
               </VCol>
+
+              <VCol cols="6" md="6" />
               <VCol cols="6" md="6">
-              </VCol>
-              <VCol cols="6" md="6">
-                <VSwitch
-                  v-model="form.has_chestny_znak"
-                  label="Нужна маркировка ЧЗ"
-                />
+                <VSwitch v-model="form.has_chestny_znak" label="Нужна маркировка ЧЗ" />
               </VCol>
             </VRow>
           </VCardText>
@@ -393,12 +386,12 @@ const fetchCategories = async () => {
             <VCol cols="6" md="6">
               <div class="mb-1">
                 <VLabel class="text-body-2" style="color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));">Категория</VLabel>
-                <VChip v-if="form.wb_category?.parent?.name" color="grey lighten-2" size="small" class="ms-2">
-                  {{ form.wb_category?.parent?.name || '' }}
+                <VChip v-if="(form as any).wb_category?.parent?.name" color="grey lighten-2" size="small" class="ms-2">
+                  {{ (form as any).wb_category?.parent?.name || '' }}
                 </VChip>
               </div>
               <AppAutocomplete
-                v-model="form.wb_category"
+                v-model="(form as any).wb_category"
                 v-model:search="searchCategory"
                 :items="categories"
                 :no-filter="true"
@@ -408,17 +401,15 @@ const fetchCategories = async () => {
                 placeholder="Введите категорию"
               />
             </VCol>
+
             <VCol cols="6">
               <div class="mb-1">
                 <VLabel class="text-body-2" style="color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));">Состав</VLabel>
               </div>
-              <AppTextField
-                placeholder="Хлопок 95%"
-                v-model="form.composition"
-              />
+              <AppTextField placeholder="Хлопок 95%" v-model="form.composition" />
             </VCol>
           </VRow>
-             
+
           <VCardText>
             <LabelVariantDetails
               v-if="form.id"
@@ -441,6 +432,7 @@ const fetchCategories = async () => {
       {{ snackMessage }}
     </VSnackbar>
   </div>
+
   <CustomLoading :loading="loading"/>
 </template>
 

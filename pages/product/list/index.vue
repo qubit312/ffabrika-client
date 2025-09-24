@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import LabelManager from '@/components/LabelManager.vue';
-import LabelManager from '@/components/LabelManager.vue';
 import { useCurrentClient } from '@/composables/useCurrentClient';
 import { useDebounce } from '@vueuse/core';
 import { computed, ref, watch } from 'vue';
@@ -31,7 +30,6 @@ function hasChestnyZnak(p: any) {
 
 const headers = [
   { title: 'Товар', key: 'name' },
-  { title: 'Категория WB', key: 'wb_category' },
   { title: 'Цвет', key: 'color' },
   { title: 'Размеры', key: 'sizes', sortable: false },
   { title: 'Ярлыки', key: 'badges', sortable: false },
@@ -42,7 +40,7 @@ const headers = [
 const isLoading = ref(false)
 const searchName = ref<string>('')
 const debouncedQuery = useDebounce(searchName, 400)
-const searchCategory = ref<string>('')
+const searchCategory = ref<string>('') 
 const debouncedCategory = useDebounce(searchCategory, 400)
 const searchArticle = ref<string>('')
 const debouncedArticle = useDebounce(searchArticle, 400) 
@@ -139,6 +137,7 @@ const fetchProducts = async () => {
     }
   }
 }
+
 const handleDelete = async (id: number) => {
   try {
     const { error } = await deleteProduct(id)
@@ -231,7 +230,6 @@ function openLabelsDrawer(pid: number) {
   labelsDrawer.value = true
 }
 
-
 function onLabelsChanged(payload: { applied: Array<{ id: number; name: string; color?: string }>; appliedIds: number[]; library: any[] }) {
   libCache.value = null
   labelsRefreshTick.value++
@@ -248,23 +246,52 @@ function onLabelsChanged(payload: { applied: Array<{ id: number; name: string; c
   entityData.value.splice(idx, 1, updated)
 }
 
-}
-
 function getWbCategoryName(category: {id: number, name: string} | null): string {
-  if (!category) {
-    return '';
-  }
-  return category ? category.name : '';
+  if (!category) return ''
+  return category.name
 }
 
+function conciseSizes(item: any): string {
+  const arr = (item?.sizes ?? [])
+    .map((s: any) => s?.value)
+    .filter((v: any) => !!v)
+
+  if (arr.length > 2) return `${arr.slice(0, 2).join(', ')}…`
+  return arr.join(', ')
+}
+
+async function copyArticle(article?: string | number | null) {
+  if (!article) {
+    showSnackbarMessage('Артикул отсутствует', 'error')
+    return
+  }
+
+  const text = String(article)
+  try {
+    await navigator.clipboard.writeText(text)
+    showSnackbarMessage('Артикул скопирован')
+  } catch {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    try {
+      document.execCommand('copy')
+      showSnackbarMessage('Артикул скопирован')
+    } catch {
+      showSnackbarMessage('Не удалось скопировать артикул', 'error')
+    } finally {
+      document.body.removeChild(ta)
+    }
+  }
+}
 </script>
 
 <template>
   <div>
-    <VCard
-      title="Товары"
-      class="mb-6"
-    >
+    <VCard title="Товары" class="mb-6">
       <VDivider />
 
       <div class="d-flex flex-wrap gap-4 ma-6">
@@ -283,17 +310,6 @@ function getWbCategoryName(category: {id: number, name: string} | null): string 
             class="me-3"
             clearable
           />
-          <!-- <VSelect
-            v-model="displayedCategory"
-            :items="categoryOptions"
-            item-title="label"
-            item-value="value"
-            label="Категория"
-            clearable
-            style="inline-size: 200px;"
-            class="me-3"
-            @update:modelValue="handleCategoryChange"
-          /> -->
           <AppTextField
             v-model="searchArticle"
             placeholder="Введите артикул"
@@ -326,17 +342,14 @@ function getWbCategoryName(category: {id: number, name: string} | null): string 
         :items-per-page="itemsPerPage"
         @update:options="onOptionsUpdate"
       >
-
-        <template #no-data>
-          <!-- ничего не выводим -->
-        </template>
+        <template #no-data></template>
 
         <template #loading>
           <div class="text-center pa-6">
             <VProgressCircular indeterminate color="primary" />
           </div>
         </template>
-    
+
         <template #item.name="{ item }">
           <div class="prodcell d-flex align-start gap-3">
             <img
@@ -345,15 +358,34 @@ function getWbCategoryName(category: {id: number, name: string} | null): string 
               alt="Фото"
               class="prodcell__img"
             />
+            <div v-else class="prodcell__img prodcell__img--placeholder">
+              <VIcon icon="tabler-photo" size="22" />
+            </div>
+
             <div class="d-flex flex-column">
               <div class="d-flex align-center gap-2">
                 <RouterLink :to="{ name: 'product-details-id', params: { id: item.id } }" class="text-high-emphasis">
                   {{ item.name }}
                 </RouterLink>
               </div>
-              <div v-if="item.article" class="text-caption text-medium-emphasis mt-1">
-                {{ item.article }}
+
+              <div class="mt-1 text-caption text-medium-emphasis d-flex align-center flex-wrap gap-1">
+                <template v-if="getWbCategoryName(item.wb_category)">
+                  <span class="text-truncate">{{ getWbCategoryName(item.wb_category) }}</span>
+                  <span class="mx-1 text-disabled">•</span>
+                </template>
+                <template v-if="item.article">
+                  <span
+                    class="cursor-pointer user-select-none d-inline-flex align-center"
+                    title="Скопировать артикул"
+                    @click="copyArticle(item.article)"
+                  >
+                    {{ item.article }}
+                    <VIcon size="14" class="ms-1" icon="tabler-copy" />
+                  </span>
+                </template>
               </div>
+
               <div class="mt-2 d-flex align-center gap-2">
                 <VBtn
                   size="x-small"
@@ -366,14 +398,14 @@ function getWbCategoryName(category: {id: number, name: string} | null): string 
                 >
                   Маркировка
                 </VBtn>
-              
+
                 <VTooltip location="top" open-delay="120">
                   <template #activator="{ props }">
                     <img v-bind="props" src="/icons/wb-icon.svg" alt="WB" class="product-icon ms-2" />
                   </template>
                   <span>Товар с Wildberries</span>
                 </VTooltip>
-              
+
                 <VTooltip v-if="hasChestnyZnak(item)" location="top" open-delay="120">
                   <template #activator="{ props }">
                     <img v-bind="props" src="/icons/chz.svg" alt="Честный знак" class="product-icon ms-2" />
@@ -385,17 +417,13 @@ function getWbCategoryName(category: {id: number, name: string} | null): string 
           </div>
         </template>
 
-        <template #item.wb_category="{ item }">
-          <span>{{ getWbCategoryName(item.wb_category) }}</span>
-        </template>
-
         <template #item.color="{ item }">
           <div class="d-flex flex-column">
             <span>{{ item.color }}</span>
           </div>
         </template>
 
-        <template #item.sizes="{ item, index }" >
+        <template #item.sizes="{ item, index }">
           <div class="sizes-text">
             <VTooltip
               class="sizes-card"
@@ -410,7 +438,7 @@ function getWbCategoryName(category: {id: number, name: string} | null): string 
                   class="cursor-pointer"
                   @click="toggleTooltip(index)"
                 >
-                  {{ item.sizes?.map(size => size.value).join(', ') }}
+                  {{ conciseSizes(item) }}
                 </span>
               </template>
 
@@ -433,7 +461,7 @@ function getWbCategoryName(category: {id: number, name: string} | null): string 
             </VTooltip>
           </div>
         </template>
-    
+
         <template #item.badges="{ item }">
           <div class="d-flex flex-wrap align-center gap-2">
             <template v-for="tag in (item.tags || [])" :key="tag.id">
@@ -447,7 +475,7 @@ function getWbCategoryName(category: {id: number, name: string} | null): string 
                 {{ tag.name }}
               </VChip>
             </template>
-          
+
             <IconBtn class="ms-1" @click="openLabelsDrawer(item.id)"
               :title="(item.tags?.length || 0) ? 'Изменить теги' : 'Добавить тег'">
               <VIcon :icon="(item.tags?.length || 0) ? 'tabler-pencil-plus' : 'tabler-plus'" />
@@ -473,7 +501,7 @@ function getWbCategoryName(category: {id: number, name: string} | null): string 
           </div>
         </template>
 
-        <template #bottom>  
+        <template #bottom>
           <VCardText class="pt-2">
             <div class="d-flex flex-wrap justify-center justify-sm-space-between gap-y-2 mt-2">
               <div class="d-flex align-center gap-2">
@@ -547,9 +575,19 @@ function getWbCategoryName(category: {id: number, name: string} | null): string 
 }
 
 .prodcell__img {
-  inline-size: 48px;
+  inline-size: 55px;
+  block-size: 75px;
   object-fit: cover;
   border-radius: 8px;
+}
+
+.prodcell__img--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(var(--v-theme-on-surface), 0.06);
+  color: rgba(var(--v-theme-on-surface), 0.55);
+  border: 1px dashed rgba(var(--v-theme-on-surface), 0.2);
 }
 
 .mark-btn {
@@ -577,5 +615,20 @@ function getWbCategoryName(category: {id: number, name: string} | null): string 
   height: 26px !important;
   line-height: 26px !important;
   font-size: 12px !important;
+}
+
+.sizes-text {
+  max-width: 150px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.sizes-card > .v-overlay__content {
+  border: 2px solid rgb(0, 0, 0);
+  background: none;
+  padding: 0 !important;
+  box-shadow: rgba(0, 0, 0, 0.17) 7px 6px 2px 1px;
 }
 </style>
