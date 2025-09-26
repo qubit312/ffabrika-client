@@ -2,7 +2,6 @@
 import { computed, defineExpose, defineProps, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useLabelEvents } from '../composables/useLabelBus';
-import { getChestnyZnakLabels } from '../services/chz';
 import { createProductSize, deleteProductSize, getProductSizes, updateProductSize } from '../services/productSizes';
 import type { NewLabelInterface } from '../types/label';
 import type { Printer } from '../types/printer';
@@ -45,7 +44,9 @@ const editedItem = ref<ProductSizeWithLabels>({
   value: '',
   barcode: '',
   tech_size: '',
-  available_labels_count: 0,
+  available_count: 0,
+  total_count: 0,
+  used_count: 0,
   product_id: 0,
 })
 
@@ -55,16 +56,15 @@ const isDialogVisible = ref(false)
 
 const isLabelParent = computed(() => !!(props.label && props.label.id))
 
-const sizeCounts = ref<Record<number, { total: number; used: number; unused: number }>>({})
-const loadingCounts = ref<Record<number, boolean>>({})
-
 const mapPS = (ps: ProductSizeWithLabels): ProductSizeWithLabels => ({
   id: ps.id,
   product_id: ps.product_id,
   value: ps.value,
   tech_size: ps.tech_size,
   barcode: ps.barcode,
-  available_labels_count: ps.available_labels_count,
+  available_count: ps.available_count,
+  total_count: ps.total_count,
+  used_count: ps.used_count,
 })
 
 watch(
@@ -84,35 +84,6 @@ const fetchSizes = async (productId: number) => {
   }
 
   productSizeList.value = data.value.data.map(mapPS)
-
-  await loadSizeCountsForAll()
-}
-
-async function loadSizeCountsForAll() {
-  const sizes = productSizeList.value.slice()
-  await Promise.all(sizes.map(s => loadSizeCount(s)))
-}
-
-async function loadSizeCount(s: ProductSizeWithLabels) {
-  try {
-    loadingCounts.value[s.id] = true
-
-    const { data, error } = await getChestnyZnakLabels({ size_id: s.id, per_page: 1, page: 1 })
-    if (error.value) throw error.value
-
-    const total = Number(data.value?.total ?? 0)
-    const unused = Number(s.available_labels_count ?? 0)
-    const safeTotal = Math.max(total, unused) 
-    const used = Math.max(safeTotal - unused, 0)
-
-    sizeCounts.value[s.id] = { total: safeTotal, used, unused }
-  } catch (e) {
-    console.error('Не удалось получить total для size_id=', s.id, e)
-    const unused = Number(s.available_labels_count ?? 0)
-    sizeCounts.value[s.id] = { total: unused, used: 0, unused }
-  } finally {
-    loadingCounts.value[s.id] = false
-  }
 }
 
 const saveVariant = async () => {
@@ -136,8 +107,6 @@ const saveVariant = async () => {
 
       productSizeList.value[editedIndex.value] = mapPS(resp.value.data)
       emit('callParentMethod', resp.value.data)
-
-      await loadSizeCount(resp.value.data)
     } else {
       const { data: resp, error } = await createProductSize(payload)
       if (error.value)
@@ -145,8 +114,6 @@ const saveVariant = async () => {
 
       productSizeList.value.push(mapPS(resp.value))
       emit('callParentMethod', resp.value)
-
-      await loadSizeCount(resp.value)
     }
   } catch (e: any) {
     console.error('Ошибка сохранения:', e)
@@ -164,9 +131,6 @@ const deleteSize = async () => {
     if (editedIndex.value !== null && editedIndex.value > -1) {
       productSizeList.value.splice(editedIndex.value, 1)
     }
-
-    delete sizeCounts.value[editedItem.value.id]
-    delete loadingCounts.value[editedItem.value.id]
   } catch (e: any) {
     console.error('Ошибка удаления:', e)
   } finally {
@@ -188,7 +152,7 @@ const editItem = (item: ProductSizeWithLabels) => {
 
 const addItem = () => {
   editedIndex.value = null
-  editedItem.value = { id: 0, value: '', tech_size: '', barcode: '', available_labels_count: 0, product_id: 0 }
+  editedItem.value = { id: 0, value: '', tech_size: '', barcode: '', available_count: 0, product_id: 0, total_count: 0, used_count: 0 }
   editDialog.value = true
 }
 
@@ -269,21 +233,15 @@ function goToLabels(size: ProductSizeWithLabels, used: boolean) {
 
     <template #item.labels="{ item }">
       <div class="d-flex align-center">
-        <VProgressCircular
-          v-if="loadingCounts[item.id]"
-          indeterminate
-          size="18"
-          class="me-2"
-        />
-        <span v-else class="text-high-emphasis">
-          {{ sizeCounts[item.id]?.total ?? item.available_labels_count ?? 0 }}
+        <span class="text-high-emphasis">
+          {{ item.total_count ?? 0 }}
           /
           <span
             class="text-primary cursor-pointer"
             @click="goToLabels(item, true)"
             title="Показать использованные метки"
           >
-            {{ sizeCounts[item.id]?.used ?? 0 }}
+            {{ item.used_count ?? 0 }}
           </span>
           /
           <span
@@ -291,7 +249,7 @@ function goToLabels(size: ProductSizeWithLabels, used: boolean) {
             @click="goToLabels(item, false)"
             title="Показать неиспользованные метки"
           >
-            {{ sizeCounts[item.id]?.unused ?? (item.available_labels_count ?? 0) }}
+            {{ item.available_count ?? 0 }}
           </span>
         </span>
       </div>

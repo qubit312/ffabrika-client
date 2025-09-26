@@ -23,7 +23,7 @@ function resolve(str) {
     }"
   >
     <div v-for="b in props.schema.blocks" :key="b.id"
-         class="blk ma-1"
+         class="blk"
          :style="{
            position: 'absolute',
            left: b.x + 'mm',

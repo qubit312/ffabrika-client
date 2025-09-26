@@ -82,7 +82,10 @@ const editedClientUserId = ref<number | null>(null)
 const roles = ref<RoleItem[]>([
   { id: 3, name: 'admin', visible_name: 'Администратор' },
   { id: 4, name: 'manager', visible_name: 'Менеджер' },
-  { id: 5, name: 'logistics', visible_name: 'Логист' }
+  { id: 5, name: 'logistics', visible_name: 'Логист' },
+  { id: 6, name: 'ff-admin', visible_name: 'Администратор фулфилмента' },
+  { id: 7, name: 'ff-pack', visible_name: 'Упаковщик фулфилмента' },
+  { id: 8, name: 'ff-viewer', visible_name: 'Просмотр фулфилмента' }
 ])
 
 const form = reactive<SaveUserDto>({ name: '', email: '', phone: '', address: '', role_id: 0 })
@@ -91,12 +94,6 @@ const userRules = {
   email: [required, emailRule],
   phone: [(v:any)=>!v || ruPhoneRule(v)===true || 'Телефон в формате +7XXXXXXXXXX'],
   role: [(v:any)=>Number(v)>0 || 'Выберите роль'],
-}
-function onPhoneInput(v: string) {
-  if (!v) { form.phone = ''; return }
-  const d = stripDigits(v)
-  const norm = d.startsWith('8') ? `7${d.slice(1)}` : d
-  form.phone = formatRuPhone(norm)
 }
 
 function openCreateUser() {

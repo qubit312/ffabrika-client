@@ -10,7 +10,9 @@ export interface ProductSize extends ProductSizeBase {
 }
 
 export interface ProductSizeWithLabels extends ProductSize {
-  available_labels_count: number
+  total_count: number
+  available_count: number
+  used_count: number
 }
 
 export type CreateProductSizeDto = ProductSizeBase

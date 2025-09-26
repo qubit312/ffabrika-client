@@ -1,169 +1,53 @@
 <script setup lang="ts">
-import { useDebounce } from '@vueuse/core'
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useApi } from '@/composables/useApi'
+import { getProductSizes } from '@/services/chz'
+import { getProductsWithSizes } from '@/services/products'
+import type { FilterRequest } from '@/types/filter'
+import type { WbProduct } from '@/types/product'
+import type { ProductSizeWithLabels } from '@/types/productSize'
+import { onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { getChestnyZnakLabels } from '~/services/chz'
-import { getProduct } from '~/services/products'
 
-type ChzApiItem = {
+interface LabelData {
   id: number
-  size_id: number
-  code: string
-  used: boolean
-  created_at: string
-  size?: { id: number; product_id: number; value: string; barcode: string }
+  product_id: number;
+  product_name: string;
+  size_id: number;
+  size_value: string;
+  barcode: string;
+  total: number;
+  used: number;
+  unused: number;
 }
 
-type GroupRow = {
-  id: number           
-  product_id: number
-  product_name: string
-  size_value: string
-  barcode: string
-  total: number
-  used: number
-  unused: number
+interface MetaData {
+  grouped_by: string;
+  total_groups: number;
+}
+
+interface ApiResponse {
+  data: LabelData[];
+  meta: MetaData;
 }
 
 const router = useRouter()
-
 const loading = ref(false)
 const errorMessage = ref('')
 
-const allItems = ref<ChzApiItem[]>([])
-const grouped = ref<GroupRow[]>([])
-
-const filters = reactive<{ productId?: number; sizeValue?: string; barcode?: string }>({
-  productId: undefined,
-  sizeValue: undefined,
-  barcode: '',
-})
-
-const debouncedBarcode = useDebounce(computed(() => filters.barcode?.trim() || ''), 300)
-
 const page = ref(1)
 const itemsPerPage = ref(15)
-
 const sortBy = ref<{ key: string; order: 'asc' | 'desc' } | null>(null)
 
-const productNameCache = new Map<number, string>()
+const selectedProduct = ref<WbProduct | null>(null)
+const selectedSize = ref<ProductSizeWithLabels | null>(null)
+const productOptions = ref<WbProduct[]>([])
+const sizeOptions = ref<ProductSizeWithLabels[]>([])
 
-async function ensureProductName(productId: number): Promise<string> {
-  if (productNameCache.has(productId)) return productNameCache.get(productId)!
-  const { data, error } = await getProduct(productId)
-  const name = error.value ? `Товар #${productId}` : (data.value as any)?.name || `Товар #${productId}`
-  productNameCache.set(productId, name)
-  return name
-}
+const searchProductNameQuery = ref<string>('')
+const searchBarcodeQuery = ref<string>('')
+const totalEntities = ref<number>(0)
 
-async function buildGroups(items: ChzApiItem[]) {
-  const ids = new Set<number>()
-  items.forEach(i => { if (i.size?.product_id) ids.add(i.size.product_id) })
-  await Promise.all([...ids].map(id => ensureProductName(id)))
-
-  const map = new Map<string, GroupRow>()
-  for (const it of items) {
-    const pid = it.size?.product_id ?? 0
-    const sizeVal = it.size?.value ?? ''
-    const barcode = it.size?.barcode ?? ''
-    const key = `${pid}__${sizeVal}__${barcode}`
-
-    if (!map.has(key)) {
-      map.set(key, {
-        id: pid,
-        product_id: pid,
-        product_name: productNameCache.get(pid) ?? `Товар #${pid}`,
-        size_value: sizeVal,
-        barcode,
-        total: 0,
-        used: 0,
-        unused: 0,
-      })
-    }
-    const row = map.get(key)!
-    row.total += 1
-    if (it.used) row.used += 1
-    else row.unused += 1
-  }
-  grouped.value = [...map.values()]
-}
-
-async function fetchAllPages() {
-  loading.value = true
-  errorMessage.value = ''
-  try {
-    const first = await getChestnyZnakLabels({ page: 1, per_page: 50 })
-    if (first.error.value) throw first.error.value
-    const firstResp = first.data.value as any
-    const lastPage: number = firstResp?.last_page ?? 1
-
-    const agg: ChzApiItem[] = [...(firstResp?.data ?? [])]
-    const tasks: Promise<void>[] = []
-    for (let p = 2; p <= lastPage; p++) {
-      tasks.push((async () => {
-        const { data, error } = await getChestnyZnakLabels({ page: p, per_page: 50 })
-        if (!error.value) agg.push(...(data.value?.data ?? []))
-      })())
-    }
-    await Promise.all(tasks)
-
-    allItems.value = agg
-    await buildGroups(agg)
-    page.value = 1
-  } catch (e: any) {
-    errorMessage.value = e?.data?.message || e?.message || 'Ошибка загрузки меток'
-  } finally {
-    loading.value = false
-  }
-}
-
-onMounted(fetchAllPages)
-
-const productOptions = computed(() =>
-  [...new Map(grouped.value.map(r => [r.product_id, { title: productNameCache.get(r.product_id) ?? `Товар #${r.product_id}`, value: r.product_id }])).values()]
-)
-const sizeOptions = computed(() => {
-  const src = filters.productId ? grouped.value.filter(r => r.product_id === filters.productId) : grouped.value
-  return [...new Set(src.map(r => r.size_value).filter(Boolean))].map(v => ({ title: v, value: v }))
-})
-
-const filteredRows = computed(() => {
-  const bq = debouncedBarcode.value.toLowerCase()
-  return grouped.value.filter(r => {
-    const okProd = filters.productId ? r.product_id === filters.productId : true
-    const okSize = filters.sizeValue ? r.size_value === filters.sizeValue : true
-    const okBarcode = bq ? (r.barcode?.toLowerCase().includes(bq)) : true
-    return okProd && okSize && okBarcode
-  })
-})
-
-function compare(a: any, b: any) {
-  if (a == null && b == null) return 0
-  if (a == null) return -1
-  if (b == null) return 1
-  if (typeof a === 'number' && typeof b === 'number') return a - b
-  return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' })
-}
-
-const sortedRows = computed(() => {
-  const rows = [...filteredRows.value]
-  if (!sortBy.value) return rows
-  const { key, order } = sortBy.value
-  rows.sort((r1: any, r2: any) => {
-    const v1 = (r1 as any)[key]
-    const v2 = (r2 as any)[key]
-    const res = compare(v1, v2)
-    return order === 'desc' ? -res : res
-  })
-  return rows
-})
-
-const total = computed(() => sortedRows.value.length)
-const pageRows = computed(() => {
-  const start = (page.value - 1) * itemsPerPage.value
-  return sortedRows.value.slice(start, start + itemsPerPage.value)
-})
-
+const pageRows = ref<LabelData[]>([])
 const headers = [
   { title: 'Товар',      key: 'product_name', sortable: true },
   { title: 'Размер',     key: 'size_value',   sortable: true },
@@ -172,6 +56,112 @@ const headers = [
   { title: 'Использ.',   key: 'used',         sortable: true },
   { title: 'Неиспольз.', key: 'unused',       sortable: true },
 ]
+
+onMounted(fetchAllPages)
+
+interface Filter {
+  field: string;
+  op: 'eq' | 'ne' | 'gt' | 'like';
+  value: string | number | boolean | Array<string | number>;
+}
+
+interface FilterPayload {
+  filters: Filter[];
+  sort_by: string;
+  sort_dir: 'asc' | 'desc';
+  page: number;
+  per_page: number;
+  group_by_size: boolean;
+}
+
+async function fetchAllPages() {
+  loading.value = true
+  errorMessage.value = ''
+  const filterPayload: FilterPayload = {
+    filters: [],
+    sort_by: sortBy.value?.key || 'number',
+    sort_dir: sortBy.value?.order || "asc",
+    page: page.value,
+    per_page: itemsPerPage.value,
+    group_by_size: true
+  }
+
+  if (selectedSize.value) {
+    filterPayload.filters.push({ field: 'size_id', op: 'eq', value: selectedSize.value.id });
+  }
+
+  if (searchBarcodeQuery.value) {
+    filterPayload.filters.push({ field: 'barcode', op: 'like', value: searchBarcodeQuery.value });
+  }
+
+  try {
+    const { data, error } = await useApi<ApiResponse>('/api/chestny-znak-labels/filters', {
+      method: 'POST',
+      body: filterPayload
+    })
+
+    pageRows.value = data.value.data
+    totalEntities.value = data.value.meta.total_groups | pageRows.value.length 
+  } catch (e: any) {
+    errorMessage.value = 'Ошибка загрузки меток'
+  } finally {
+    loading.value = false
+  }
+}
+
+async function fetchProducts() {
+  const payload: FilterRequest = {
+    filters: [],
+    sort_by: 'name',
+    sort_dir: 'asc',
+  }
+  
+  if (searchProductNameQuery.value) {
+    payload.filters?.push({
+      group: 'or',
+      filters: [
+        { field: 'name', op: 'like', value: searchProductNameQuery.value },
+      ]
+    })
+  }
+
+  const { data, error } = await getProductsWithSizes(payload)
+  if (error.value) {
+    console.error('Ошибка при загрузке целевых товаров:', error.value)
+    return
+  }
+
+  productOptions.value = data.value.data || []
+}
+
+watch(searchProductNameQuery, (val) => {
+  if (val) {
+    fetchProducts()
+  }
+})
+
+watch(() => [selectedProduct.value], () => { 
+  if(selectedProduct.value?.id) {
+    sizeOptions.value = []
+    fetchSizes(selectedProduct.value?.id)
+  }
+})
+
+watch(() => [selectedSize.value, searchBarcodeQuery.value, page.value, itemsPerPage.value], () => {
+  console.log(page.value)
+  console.log(itemsPerPage.value)
+  fetchAllPages()
+})
+
+async function fetchSizes(productId: number) {
+  const { data, error } = await getProductSizes(productId)
+  
+  if (error.value) {
+    console.error('Ошибка загрузки размеров:', error.value)
+    return
+  }
+  sizeOptions.value = data.value.data
+}
 
 function onOptionsUpdate(options: any) {
   if (options.sortBy?.length > 0) {
@@ -182,11 +172,10 @@ function onOptionsUpdate(options: any) {
   }
 }
 
-function openLabels(productId: number, sizeValue: string, used: boolean) {
-  router.push({ path: '/marking/labels', query: { product_id: productId, size: sizeValue, used: used ? 1 : 0 } })
+function openLabels(productId: number, sizeId: number, sizeValue: string, used: boolean) {
+  router.push({ path: '/marking/labels', query: { product_id: productId, size_id: sizeId, size: sizeValue, used: used ? 1 : 0 } })
 }
 
-watch(() => [filters.productId, filters.sizeValue, debouncedBarcode.value], () => { page.value = 1 })
 </script>
 
 <template>
@@ -195,29 +184,41 @@ watch(() => [filters.productId, filters.sizeValue, debouncedBarcode.value], () =
 
     <VCardText>
       <div class="d-flex flex-wrap gap-3 mb-4">
-        <VSelect
-          v-model="filters.productId"
+        <VAutocomplete
+          v-model="selectedProduct"
+          v-model:search="searchProductNameQuery"
           :items="productOptions"
-          item-title="title"
-          item-value="value"
-          label="Товар"
+          :no-filter="true"
+          item-value="id"
+          item-title="name"
           clearable
           style="inline-size: 280px;"
           class="me-3"
+          label="Товар"
+          :return-object="true"
         />
         <VSelect
-          v-model="filters.sizeValue"
+          v-model="selectedSize"
           :items="sizeOptions"
-          item-title="title"
-          item-value="value"
+          item-title="value"
+          item-value="id"
           label="Размер"
           clearable
           style="inline-size: 180px;"
           class="me-3"
-        />
-        <AppTextField
-          v-model="filters.barcode"
-          placeholder="Введите баркод"
+          return-object
+        >
+          <template #no-data>
+            <div class="d-flex align-center justify-space-between pa-2 ps-6">
+            <span>
+              {{ selectedProduct ? 'Ничего не найдено' : 'Выберете товар' }}
+            </span>
+          </div>
+          </template>
+        </VSelect>
+        <VTextField
+          v-model="searchBarcodeQuery"
+          label="Баркод"
           clearable
           style="inline-size: 240px;"
         />
@@ -230,7 +231,7 @@ watch(() => [filters.productId, filters.sizeValue, debouncedBarcode.value], () =
       <VDataTableServer
         :headers="headers"
         :items="pageRows"
-        :items-length="total"
+        :items-length="totalEntities"
         :items-per-page="itemsPerPage"
         :page="page"
         class="text-no-wrap"
@@ -250,7 +251,7 @@ watch(() => [filters.productId, filters.sizeValue, debouncedBarcode.value], () =
         </template>
 
         <template #item.product_name="{ item }">
-          <RouterLink :to="{ name: 'marking-details-id', params: { id: item.id } }" class="text-primary">
+          <RouterLink :to="{ name: 'product-details-id', params: { id: item.id } }" class="text-primary">
             {{ item.product_name }}
           </RouterLink>
         </template>
@@ -268,19 +269,36 @@ watch(() => [filters.productId, filters.sizeValue, debouncedBarcode.value], () =
         </template>
 
         <template #item.used="{ item }">
-          <span class="text-high-emphasis cursor-pointer" @click="openLabels(item.product_id, item.size_value, true)">
+          <span class="text-high-emphasis cursor-pointer" @click="openLabels(item.product_id, item.size_id, item.size_value, true)">
             {{ item.used }}
           </span>
         </template>
 
         <template #item.unused="{ item }">
-          <span class="text-high-emphasis cursor-pointer" @click="openLabels(item.product_id, item.size_value, false)">
+          <span class="text-high-emphasis cursor-pointer" @click="openLabels(item.product_id, item.size_id, item.size_value, false)">
             {{ item.unused }}
           </span>
         </template>
 
-        <template #bottom>
-          <TablePagination v-model:page="page" :items-per-page="itemsPerPage" :total-items="total" />
+        <template #bottom>  
+          <VCardText class="pt-2">
+            <div class="d-flex flex-wrap justify-center justify-sm-space-between gap-y-2 mt-2">
+              <div class="d-flex align-center gap-2">
+                <span>Записей на странице</span>
+                <VSelect
+                  v-model="itemsPerPage"
+                  :items="[5, 10, 25, 50, 100]"
+                  style="max-inline-size: 8rem;min-inline-size: 5rem;"
+                />
+              </div>
+
+              <VPagination
+                v-model="page"
+                :total-visible="$vuetify.display.smAndDown ? 3 : 5"
+                :length="Math.ceil(totalEntities / itemsPerPage)"
+              />
+            </div>
+          </VCardText>
         </template>
       </VDataTableServer>
     </VCardText>

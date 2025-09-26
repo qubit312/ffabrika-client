@@ -15,7 +15,7 @@ const entityData = ref<WbProduct[]>([])
 type ProductSize = {
   barcode?: string
   value?: string
-  available_labels_count?: number
+  available_count?: number
   cz?: boolean
   chestny_znak?: boolean
 }
@@ -23,7 +23,7 @@ type ProductSize = {
 function hasChestnyZnak(p: any) {
   const sizes: ProductSize[] = p?.sizes || []
   return sizes.some(s =>
-    (typeof s.available_labels_count === 'number' && s.available_labels_count > 0) ||
+    (typeof s.available_count === 'number' && s.available_count > 0) ||
     s.cz === true || s.chestny_znak === true
   )
 }
@@ -49,6 +49,7 @@ const debouncedArticle = useDebounce(searchArticle, 400)
 const deleteDialog = ref(false)
 const selectedDeleteId = ref<number | null>(null)
 const selectedDeleteDisplayValue = ref<string>('')
+const { currentClientId } = useCurrentClient()
 
 const confirmationText = computed(() =>
   selectedDeleteId.value !== null
@@ -84,12 +85,11 @@ watch([debouncedQuery, debouncedArticle, debouncedCategory], () => {
   fetchProducts()
 })
 
-watch([page, itemsPerPage], () => {
+watch([page, itemsPerPage, currentClientId], () => {
   fetchProducts()
 })
 
 const fetchProducts = async () => {
-  const { currentClientId } = useCurrentClient()
   if (!currentClientId.value) {
     return;
   }
@@ -423,7 +423,7 @@ function getWbCategoryName(category: {id: number, name: string} | null): string 
                   <tr v-for="size in item.sizes" :key="size.barcode">
                     <td>{{ size.barcode }}</td>
                     <td>{{ size.value }}</td>
-                    <td v-if="item.has_chestny_znak">{{ size.available_labels_count }}</td>
+                    <td v-if="item.has_chestny_znak">{{ size.available_count }}</td>
                   </tr>
                 </tbody>
               </VTable>

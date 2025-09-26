@@ -110,7 +110,7 @@ async function fetchTargetProducts() {
     return
   }
 
-  targetProducts.value = data.value || []
+  targetProducts.value = data.value.data || []
 }
 
 watch(selectedTargetProduct, async (id) => {
@@ -125,7 +125,7 @@ watch(selectedTargetProduct, async (id) => {
 
 const availableSourceQuantity = computed(() => {
   const size = sourceSizes.value.find(s => s.id === selectedSourceSizeId.value)
-  return size?.available_labels_count ?? 0
+  return size?.available_count ?? 0
 })
 
 const sourceSizes = ref<ProductSizeWithLabels[]>([])
@@ -178,7 +178,7 @@ async function fetchProducts() {
     console.error('Ошибка при загрузке товаров:', error.value)
     return
   }
-  sourceProducts.value = data.value || []
+  sourceProducts.value = data.value.data || []
 }
 
 const sourceProductImage = ref<string>('')

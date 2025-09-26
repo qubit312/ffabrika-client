@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { useApi } from '@/composables/useApi'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getChestnyZnakLabels } from '~/services/chz'
 import { getProduct } from '~/services/products'
 
 type ChzApiItem = {
@@ -15,14 +15,25 @@ type ChzApiItem = {
 
 const route = useRoute()
 const router = useRouter()
+const itemsPerPage = ref<number>(25)
+const page = ref<number>(1)
+const totalEntities = ref<number>(0)
 
 const productId = computed(() => Number(route.query.product_id || 0))
+const sizeId = computed(() => Number(route.query.size_id || 0))
 const sizeValue = computed(() => String(route.query.size || ''))
 const usedFilter = computed<true | false | undefined>(() => {
   const raw = route.query.used
   if (raw === '1' || raw === 'true') return true
   if (raw === '0' || raw === 'false') return false
   return undefined
+})
+
+const status = computed<'used' | 'available' | ''>(() => {
+  const raw = route.query.used
+  if (raw === '1' || raw === 'true') return 'used'
+  if (raw === '0' || raw === 'false') return 'available'
+  return ''
 })
 
 const loading = ref(false)
@@ -34,6 +45,47 @@ function prettyCode(code: string) {
   return code?.replace(/\u001d/g, ' ␟ ')
 }
 
+interface Filter {
+  field: string;
+  op: 'eq' | 'ne' | 'gt' | 'like';
+  value: string | number | boolean | Array<string | number>;
+}
+
+interface LabelData {
+  id: number
+  product_id: number;
+  product_name: string;
+  size_value: string;
+  size_id: number;
+  barcode: string;
+  total: number;
+  used: number;
+  unused: number;
+}
+
+interface MetaData {
+  grouped_by: string;
+  total_groups: number;
+}
+
+interface ApiResponse {
+  data: LabelData[];
+  meta: MetaData;
+}
+
+interface FilterPayload {
+  filters: Filter[];
+  sort_by: string;
+  sort_dir: 'asc' | 'desc';
+  page: number;
+  per_page: number;
+  group_by_size: boolean;
+}
+
+watch([page, itemsPerPage], () => {
+  fetchAll()
+})
+
 async function fetchAll() {
   loading.value = true
   errorMessage.value = ''
@@ -43,27 +95,35 @@ async function fetchAll() {
       if (!error.value) productName.value = (data.value as any)?.name || `Товар #${productId.value}`
     }
 
-    const first = await getChestnyZnakLabels({ page: 1, per_page: 50 })
-    if (first.error.value) throw first.error.value
-    const firstResp = first.data.value as any
-    const lastPage: number = firstResp?.last_page ?? 1
-
-    const agg: ChzApiItem[] = [...(firstResp?.data ?? [])]
-    const tasks: Promise<void>[] = []
-    for (let p = 2; p <= lastPage; p++) {
-      tasks.push((async () => {
-        const { data, error } = await getChestnyZnakLabels({ page: p, per_page: 50 })
-        if (!error.value) agg.push(...(data.value?.data ?? []))
-      })())
+    const filterPayload: FilterPayload = {
+      filters: [],
+      sort_by: 'number',
+      sort_dir: "asc",
+      page: page.value,
+      per_page: itemsPerPage.value,
+      group_by_size: false
     }
-    await Promise.all(tasks)
 
-    rows.value = agg.filter(it => {
-      const okProduct = it.size?.product_id === productId.value
-      const okSize = (it.size?.value || '') === sizeValue.value
-      const okUsed = usedFilter.value === undefined ? true : it.used === usedFilter.value
-      return okProduct && okSize && okUsed
+    if (sizeId.value) {
+      filterPayload.filters.push({ field: 'size_id', op: 'eq', value: sizeId.value });
+    }
+
+    if (status.value) {
+      filterPayload.filters.push({ field: 'status', op: 'eq', value: status.value });
+    }
+
+    const { data, error } = await useApi<ApiResponse>('/api/chestny-znak-labels/filters', {
+      method: 'POST',
+      body: filterPayload
     })
+    if (data.value) {
+      if (data.value.data && Array.isArray(data.value.data)) {
+        rows.value = data.value.data as ChzApiItem[]
+      }
+      if (data.value.meta) {
+        totalEntities.value = data.value.meta.total || rows.value.length
+      }
+    }
   } catch (e: any) {
     errorMessage.value = e?.data?.message || e?.message || 'Ошибка загрузки меток'
   } finally {
@@ -81,16 +141,22 @@ const headers = [
 </script>
 
 <template>
-  <VCard :title="`Метки — ${productName || ('Товар #' + productId)}`">
+  <VCard>
+    <VCardText>
+      <span class="v-card-title pa-0">Маркировка Честный Знак</span>
+    </VCardText>
     <VDivider />
     <VCardText>
-      <div class="d-flex justify-space-between align-center mb-4">
+      <div class="d-flex justify-space-between align-start mb-4">
         <div class="text-medium-emphasis">
           Товар: <strong>{{ productName || ('#' + productId) }}</strong>
           <span v-if="sizeValue"> • Размер: <strong>{{ sizeValue }}</strong></span>
           <span v-if="usedFilter !== undefined"> • {{ usedFilter ? 'Использованные' : 'Неиспользованные' }}</span>
+          <p>Количество <strong>{{totalEntities || ''}}</strong></p>
         </div>
-        <VBtn variant="tonal" prepend-icon="tabler-arrow-left" @click="router.back()">Назад</VBtn>
+        <div>
+          <VBtn variant="tonal" prepend-icon="tabler-arrow-left" @click="router.back()">Назад</VBtn>
+        </div>
       </div>
 
       <VAlert v-if="errorMessage" type="error" variant="tonal" class="mb-4">{{ errorMessage }}</VAlert>
@@ -112,13 +178,30 @@ const headers = [
           <span class="mono">{{ prettyCode(item.code) }}</span>
         </template>
 
-  
-
         <template #item.created_at="{ item }">
           {{ new Date(item.created_at).toLocaleString() }}
         </template>
 
+        <template #bottom>  
+          <VCardText class="pt-2">
+            <div class="d-flex flex-wrap justify-center justify-sm-space-between gap-y-2 mt-2">
+              <div class="d-flex align-center gap-2">
+                <span>Записей на странице</span>
+                <VSelect
+                  v-model="itemsPerPage"
+                  :items="[5, 10, 25, 50, 100]"
+                  style="max-inline-size: 8rem;min-inline-size: 5rem;"
+                />
+              </div>
 
+              <VPagination
+                v-model="page"
+                :total-visible="$vuetify.display.smAndDown ? 3 : 5"
+                :length="Math.ceil(totalEntities / itemsPerPage)"
+              />
+            </div>
+          </VCardText>
+        </template>
       </VDataTableServer>
     </VCardText>
   </VCard>

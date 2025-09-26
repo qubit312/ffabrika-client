@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useRuntimeConfig } from 'nuxt/app';
 import { computed, defineEmits, defineProps, ref } from 'vue';
 import { useLabelEvents } from '../../composables/useLabelBus';
 import type { NewLabelInterface } from '../../types/label';
@@ -29,7 +30,7 @@ const snackMessage = ref('')
 const snackColor   = ref<'success'|'error'>('success')
 
 const labelCount = ref<number>(1)
-const availableLabelsCount = computed(() => props.size?.available_labels_count || 0)
+const availableLabelsCount = computed(() => props.size?.available_count || 0)
 const labelError = computed(() => !labelCount.value || labelCount.value <= 0)
 const isLowAvailableLabelsCount = computed(() => 
   availableLabelsCount.value <= 0
@@ -107,6 +108,8 @@ async function downloadFile() {
   }
 
   const token = localStorage.getItem('access_token') || ''
+  const currentClientId = localStorage.getItem('current_client_id') || ''
+  
   try {
     const config = useRuntimeConfig()
     const baseURL = config.public.apiBaseUrl;
@@ -116,7 +119,8 @@ async function downloadFile() {
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+        'Authorization': `Bearer ${token}`,
+        'X-Client-Id': currentClientId
       },
       body: JSON.stringify(payload),
     })
@@ -182,6 +186,7 @@ async function previewLabel() {
   }
 
   const token = localStorage.getItem('access_token') || ''
+  const currentClientId = localStorage.getItem('current_client_id') || ''
   try {
     const config = useRuntimeConfig()
     const baseURL = config.public.apiBaseUrl;
@@ -191,7 +196,8 @@ async function previewLabel() {
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+        'Authorization': `Bearer ${token}`,
+        'X-Client-Id': currentClientId
       },
       body: JSON.stringify(payload),
     })

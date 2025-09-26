@@ -25,8 +25,25 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
 const snack = reactive({ show: false, text: '', color: 'success' as 'success' | 'error' })
 const notify = (t: string, c: 'success' | 'error' = 'success') => { snack.text = t; snack.color = c; snack.show = true }
 
+interface ClientUserRole {
+  id: number;
+  visible_name: string;
+}
+
+interface ClientUser {
+  id: number;
+  user_id: number;
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  avatar: string;
+  created_at: string;
+  roles: {role: ClientUserRole, client: string}[];
+}
+
 const loading = ref(false)
-const rows = ref<User[]>([])
+const rows = ref<ClientUser[]>([])
 const search = ref('')
 const itemsPerPage = ref(10)
 const page = ref(1)
@@ -37,8 +54,8 @@ const filtered = computed(() => {
   if (!q) return rows.value
   return rows.value.filter(u =>
     u.name?.toLowerCase().includes(q) ||
-    u.email?.toLowerCase().includes(q) ||
-    u.role?.visible_name?.toLowerCase().includes(q),
+    u.email?.toLowerCase().includes(q) 
+    // || u.role?.visible_name?.toLowerCase().includes(q),
   )
 })
 const total = computed(() => filtered.value.length)
@@ -53,6 +70,7 @@ async function fetchUsers() {
   loading.value = true
   try {
     const { data, error } = await getUsers()
+    console.log(data.value)
     if (error.value) throw error.value
     rows.value = data.value || []
   } catch (e: any) {
@@ -86,7 +104,7 @@ function openCreateUser() {
   Object.assign(form, { name: '', email: '', phone: '', address: '', role: 0 })
   userDialog.value = true
 }
-function openEditUser(u: User) {
+function openEditUser(u: ClientUser) {
   userDialogTitle.value = 'Редактировать пользователя'
   editedUserId.value = u.id
   Object.assign(form, {
@@ -94,7 +112,7 @@ function openEditUser(u: User) {
     email: u.email || '',
     phone: u.phone ? formatRuPhone(stripDigits(u.phone)) : '',
     address: u.address || '',
-    role_id: u.role?.id || 0,
+    // role_id: u.role?.id || 0,
   })
   userDialog.value = true
 }
@@ -292,75 +310,121 @@ async function confirmDeleteRole() {
     deletingRoleId.value = null; roleDeleteDialog.value = false; roleDeleteTarget.value = null
   }
 }
+
+const headers = [
+  { title: 'Пользователь', key: 'name', sortable: false },
+  { title: 'Доступ', key: 'role', sortable: false },
+  { title: 'Дата создания', key: 'created_at', sortable: false },
+  { title: 'Действия', key: 'actions', sortable: false},
+]
+
+const roleTableHeaders = [
+  { title: 'Название', key: 'visible_name', sortable: false },
+  { title: 'Системное имя', key: 'name', sortable: false },
+  { title: 'Разрешение', key: 'permissions', sortable: false },
+  { title: 'Действия', key: 'actions', sortable: false},
+]
+
 </script>
 
 <template>
   <!-- Пользователи -->
   <VCard>
-    <VCardText class="d-flex flex-wrap align-center justify-space-between gap-4">
-      <div class="d-flex align-center gap-3">
-        <span class="text-body-2">Show</span>
-        <VSelect v-model="itemsPerPage" :items="[10,25,50,100]" hide-details density="comfortable" style="inline-size:84px" />
-      </div>
-
+    <VCardTitle class="mt-2 d-flex align-center justify-space-between">
+      <span class="text-h6">Пользователи системы</span>
       <div class="d-flex align-center gap-3 ms-auto">
-        <VTextField v-model="search" placeholder="Search Permissions" hide-details density="comfortable" style="inline-size:320px" prepend-inner-icon="tabler-search" />
+        <VTextField v-model="search" placeholder="Поиск пользователя" hide-details density="comfortable" style="inline-size:320px" prepend-inner-icon="tabler-search" />
         <VBtn color="primary" prepend-icon="tabler-user-plus" @click="openCreateUser">Добавить Пользователя</VBtn>
       </div>
-    </VCardText>
+    </VCardTitle>
+    <VDivider class="mt-2 mb-4" />
+    <VDataTableServer 
+      :headers="headers"
+      class="text-no-wrap"
+      :items="pageRows"
+      :items-length="pageRows.length"
+      :loading="loading"
+      :items-per-page="itemsPerPage"
+    >
+      <template #no-data>
+        <div v-if="!loading && total === 0">
+          <span class="text-center py-6 text-medium-emphasis">Ничего не найдено</span>
+        </div>
+      </template>
 
-    <VDivider />
+      <template #loading>
+        <div class="text-center pa-6">
+          <div class="d-flex justify-center pa-6"><VProgressCircular indeterminate /></div>
+        </div>
+      </template>
 
-    <VTable class="text-no-wrap">
-      <thead>
-        <tr>
-          <th class="text-subtitle-2">ПОЛЬЗОВАТЕЛЬ</th>
-          <th class="text-subtitle-2">ДОСТУП</th>
-          <th class="text-subtitle-2">ДАТА И ВРЕМЯ</th>
-          <th class="text-subtitle-2 text-right">ДЕЙСТВИЯ</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-if="loading">
-          <td colspan="7">
-            <div class="d-flex justify-center pa-6"><VProgressCircular indeterminate /></div>
-          </td>
-        </tr>
+      <template #item.name="{ item }">
+        <div class="d-flex align-center">
+          <VAvatar size="36" class="me-3" variant="tonal" color="primary"><VImg :src="userAvatarUrl(item)" /></VAvatar>
+          <div class="d-flex flex-column">
+            <span class="font-weight-medium">{{ item.name }}</span>
+            <small class="text-medium-emphasis">{{ item.email }}</small>
+          </div>
+        </div>
+      </template>
 
-        <tr v-for="u in pageRows" :key="u.id">
-          <td>
-            <div class="d-flex align-center">
-              <VAvatar size="36" class="me-3" variant="tonal" color="primary"><VImg :src="userAvatarUrl(u)" /></VAvatar>
-              <div class="d-flex flex-column">
-                <span class="font-weight-medium">{{ u.name }}</span>
-                <small class="text-medium-emphasis">{{ u.email }}</small>
-              </div>
+      <template #item.role="{ item }">
+        <div class="d-flex align-center flex-wrap gap-1">
+          <template v-if="item.roles && item.roles.length">
+            <div
+              v-for="data in item.roles" 
+              :key="data.role.id"
+            >
+              <VTooltip>
+                <template #activator="{ props }">
+                  <VChip 
+                    v-bind="props"
+                    size="small" 
+                    class="me-1" 
+                    variant="tonal" 
+                    color="primary"
+                  >
+                    {{ data.role.visible_name }}
+                  </VChip>
+                </template>
+                <span>Клиент {{ data.client }}</span>
+              </VTooltip>
             </div>
-          </td>
-          <td>
-            <VChip v-if="u.role?.visible_name" size="small" class="me-2" variant="tonal" color="primary">{{ u.role.visible_name }}</VChip>
-            <span v-else class="text-medium-emphasis">—</span>
-          </td>
-          <td><span class="text-medium-emphasis">{{ u.created_at ? new Date(u.created_at).toLocaleString() : '—' }}</span></td>
-          <td class="text-right">
-            <IconBtn @click="openEditUser(u)"><VIcon icon="tabler-edit" /></IconBtn>
-            <IconBtn @click="askDelete(u)"><VIcon icon="tabler-trash" /></IconBtn>
-          </td>
-        </tr>
+          </template>
+          <span v-else class="text-medium-emphasis">—</span>
+        </div>
+      </template>
 
-        <tr v-if="!loading && total === 0">
-          <td colspan="7" class="text-center py-6 text-medium-emphasis">Ничего не найдено</td>
-        </tr>
-      </tbody>
-    </VTable>
+      <template #item.date="{ item }">
+        <span class="text-medium-emphasis">{{ item.created_at ? new Date(item.created_at).toLocaleString() : '—' }}</span>
+      </template>
 
-    <VDivider />
-    <div class="d-flex align-center justify-space-between pa-4">
-      <div class="text-body-2 text-medium-emphasis">
-        Показано c {{ Math.min((page-1)*itemsPerPage+1, total) }} по {{ Math.min(page*itemsPerPage, total) }} из {{ total }}
-      </div>
-      <VPagination v-model="page" :length="Math.max(Math.ceil(total / itemsPerPage), 1)" density="comfortable" rounded="lg" show-first-last-page />
-    </div>
+      <template #item.actions="{ item }">
+        <IconBtn @click="openEditUser(item)"><VIcon icon="tabler-edit" /></IconBtn>
+        <IconBtn @click="askDelete(item)"><VIcon icon="tabler-trash" /></IconBtn>
+      </template>
+
+      <template #bottom>  
+        <VCardText class="pt-2">
+          <div class="d-flex flex-wrap justify-center justify-sm-space-between gap-y-2 mt-2">
+            <div class="d-flex align-center gap-2">
+              <span>Записей на странице</span>
+              <VSelect
+                v-model="itemsPerPage"
+                :items="[5, 10, 25, 50, 100]"
+                style="max-inline-size: 8rem;min-inline-size: 5rem;"
+              />
+            </div>
+
+            <VPagination
+              v-model="page"
+              :total-visible="$vuetify.display.smAndDown ? 3 : 5"
+              :length="Math.ceil(pageRows.length / itemsPerPage)"
+            />
+          </div>
+        </VCardText>
+      </template>
+    </VDataTableServer>
   </VCard>
 
   <!-- Диалоговое окно -->
@@ -410,49 +474,52 @@ async function confirmDeleteRole() {
 
   <!-- Роли -->
   <VCard class="mt-6">
-    <VCardTitle class="d-flex align-center justify-space-between">
+    <VCardTitle class="mt-2 d-flex align-center justify-space-between">
       <span class="text-h6">Роли и доступы</span>
-      <VBtn color="primary" prepend-icon="tabler-plus" @click="openCreateRole">Добавить роль</VBtn>
-    </VCardTitle>
-    <VDivider />
-    <VCardText class="d-flex align-center gap-3">
-      <VTextField v-model="rolesSearch" placeholder="Поиск роли" hide-details density="comfortable" prepend-inner-icon="tabler-search" />
-    </VCardText>
-
-    <VTable class="text-no-wrap">
-      <thead>
-        <tr>
-          <th>Название</th>
-          <th>Системное имя</th>
-          <th>Разрешения</th>
-          <th class="text-right">Действия</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="r in rolesPageRows" :key="r.id">
-          <td>{{ r.visible_name }}</td>
-          <td class="text-medium-emphasis">{{ r.name }}</td>
-          <td class="text-medium-emphasis">—</td>
-          <td class="text-right">
-            <IconBtn @click="openEditRole(r)"><VIcon icon="tabler-edit" /></IconBtn>
-            <IconBtn @click="askDeleteRole(r)"><VIcon icon="tabler-trash" /></IconBtn>
-          </td>
-        </tr>
-        <tr v-if="rolesTotal === 0">
-          <td colspan="4" class="text-center py-6 text-medium-emphasis">Ролей нет</td>
-        </tr>
-      </tbody>
-    </VTable>
-
-    <VDivider />
-    <div class="d-flex align-center justify-space-between pa-4">
-      <div class="text-body-2 text-medium-emphasis">
-        Показано с {{ Math.min((rolesPage-1)*rolesPerPage+1, rolesTotal) }}
-        по {{ Math.min(rolesPage*rolesPerPage, rolesTotal) }}
-        из {{ rolesTotal }}
+      <div class="d-flex align-center gap-3 ms-auto">
+        <VTextField v-model="rolesSearch" placeholder="Поиск роли" hide-details density="comfortable" prepend-inner-icon="tabler-search" style="inline-size:320px" />
+        <VBtn color="primary" prepend-icon="tabler-plus" @click="openCreateRole">Добавить роль</VBtn>
       </div>
-      <VPagination v-model="rolesPage" :length="Math.max(Math.ceil(rolesTotal / rolesPerPage), 1)" density="comfortable" rounded="lg" show-first-last-page />
-    </div>
+    </VCardTitle>
+    <VDivider class="mt-2 mb-4" />
+
+    <VDataTableServer 
+      :headers="roleTableHeaders"
+      class="text-no-wrap"
+      :items="rolesPageRows"
+      :items-length="pageRows.length"
+      :loading="loading"
+      :items-per-page="itemsPerPage"
+    >
+      <template #no-data>
+        <div v-if="!loading && total === 0">
+          <span class="text-center py-6 text-medium-emphasis">Ролей нет</span>
+        </div>
+      </template>
+
+      <template #loading>
+        <div class="text-center pa-6">
+          <div class="d-flex justify-center pa-6"><VProgressCircular indeterminate /></div>
+        </div>
+      </template>
+
+      <template #item.actions="{ item }">
+        <IconBtn @click="openEditRole(item)"><VIcon icon="tabler-edit" /></IconBtn>
+        <IconBtn @click="askDeleteRole(item)"><VIcon icon="tabler-trash" /></IconBtn>
+      </template>
+
+      <template #bottom>  
+        <VCardText class="pt-2">
+          <div class="mt-2">
+            <VPagination
+              v-model="page"
+              :total-visible="$vuetify.display.smAndDown ? 3 : 5"
+              :length="Math.ceil(rolesTotal / rolesPerPage)"
+            />
+          </div>
+        </VCardText>
+      </template>
+    </VDataTableServer>
   </VCard>
 
   <!-- Выбор роли -->

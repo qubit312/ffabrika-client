@@ -17,4 +17,5 @@ export interface FilterRequest {
   sort_dir?: 'asc' | 'desc'
   page?: number
   per_page?: number
+  group_by_size?: boolean
 }

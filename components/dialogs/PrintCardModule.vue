@@ -230,7 +230,6 @@ onMounted(() => {
     position: relative;
     width: 58mm;
     height: 40mm;
-    padding: 8px;
     background: #fff;
     font-family: Arial, sans-serif;
     font-size: 9px;
@@ -244,55 +243,5 @@ onMounted(() => {
 
   .label-box--selected {
     border-color: rgb(var(--v-theme-primary));
-  }
-
-  .label-header {
-    text-align: center;
-    margin-bottom: 4px;
-  }
-
-  .label-header-text {
-    font-weight: bold;
-    font-size: 11px;
-  }
-
-  .label-content {
-    display: flex;
-    align-items: stretch;
-  }
-
-  .label {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .label.left {
-    width: 50%;
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-  }
-
-  .label.right {
-    width: 50%;
-    position: relative;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .label.right .spacer {
-    display: flex;
-    flex: 1;
-    align-items: center;
-  }
-
-  .label-size {
-    font-size: 14px;
-    font-weight: bold;
-  }
-
-  .label-barcode-block {
-    margin-top: 5px;
-    text-align: center;
   }
 </style>
