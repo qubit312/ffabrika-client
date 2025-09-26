@@ -9,7 +9,7 @@ import logo from '@images/logo_wms.png'
 
 export const { themeConfig, layoutConfig } = defineThemeConfig({
   app: {
-    title: 'ffabrika',
+    title: 'ffwms',
     logo: h('img', {
       src: logo,
       alt: 'Ffabrika Logo',

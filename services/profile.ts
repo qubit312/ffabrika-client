@@ -38,6 +38,13 @@ export function sendVerificationEmail() {
   });
 }
 
+export function verifyEmail(payload: { token: string; email: string }) {
+  return useApi('/api/profile/verify-email', {
+    method: 'POST',
+    body: payload,
+  })
+}
+
 export async function updateProfile(payload: Partial<ProfileApi>) {
   const res = await useApi<ApiResponse<ProfileApi>>('/api/profile', {
     method: 'PUT',          

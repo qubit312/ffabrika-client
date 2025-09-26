@@ -74,7 +74,10 @@ onMounted(() => {
             <template #prepend><VIcon class="me-2" icon="tabler-user-circle" size="22" /></template>
             <VListItemTitle>Личный кабинет</VListItemTitle>
           </VListItem>
-
+          <VListItem :to="{ path: '/offer' }" >
+            <template #prepend><VIcon class="me-2" icon="tabler-file-description" size="22" /></template>
+            <VListItemTitle>Публичная оферта</VListItemTitle>
+          </VListItem>
           <VDivider class="my-2" />
           <VListItem @click="handleLogout">
             <template #prepend><VIcon class="me-2" icon="tabler-logout" size="22" /></template>

@@ -29,6 +29,7 @@ const form = reactive<RegisterDto>({
   email: '',
   password: '',
   password_repeat: '',
+  agreeOffer: false,
 })
 
 const isPwd1 = ref(false)
@@ -52,12 +53,14 @@ const rules = {
   email: emailRule,
   password: passwordRule(PWD_POLICY),
   repeat: (v: string) => String(v ?? '') === String(form.password ?? '') || 'Пароли не совпадают',
+  agree: (v: boolean) => v === true || 'Необходимо согласие с офертой',
 }
 
 const nameRules = computed(() => (submitted.value ? [rules.required] : []))
 const emailRules = computed(() => (submitted.value ? [rules.required, rules.email] : []))
 const passRules = computed(() => (submitted.value ? [rules.required, rules.password] : []))
 const repeatRules = computed(() => (submitted.value ? [rules.required, rules.repeat] : []))
+const agreeRules = computed(() => (submitted.value ? [rules.agree] : []))
 
 const pwdCheck = computed(() => checkPassword(form.password, PWD_POLICY))
 const showPwdHelp = computed(() => {
@@ -78,7 +81,8 @@ async function onSubmit() {
     rules.required(form.email) === true &&
     rules.email(form.email) === true &&
     rules.password(form.password) === true &&
-    rules.repeat(form.password_repeat) === true
+        rules.repeat(form.password_repeat) === true &&
+    rules.agree(form.agreeOffer) === true
 
   if (!localOk) {
     errorMessage.value = 'Проверьте правильность заполнения полей'
@@ -222,8 +226,30 @@ async function onSubmit() {
               <VCol cols="12">
                 <VAlert v-if="errorMessage" color="error" variant="tonal" class="mb-4">{{ errorMessage }}</VAlert>
                 <VAlert v-if="successMessage" color="success" variant="tonal" class="mb-4">{{ successMessage }}</VAlert>
+                <VCol cols="12">
+                  <VCheckbox
+                    v-model="form.agreeOffer"
+                    :rules="agreeRules"
+                    :error="submitted && !form.agreeOffer"
+                    density="comfortable"
+                  >
+                    <template #label>
+                      <span>
+                        Я принимаю условия
+                        <NuxtLink
+                          :to="{ path: '/offer', query: { from: 'register' } }"
+                          class="text-primary"
+                          @click.stop
+                          @mousedown.stop
+                        >
+                          Публичной оферты
+                        </NuxtLink>
+                      </span>
+                    </template>
+                  </VCheckbox>
+                </VCol>
 
-                <VBtn block type="submit" :loading="loading">Зарегистрироваться</VBtn>
+                <VBtn block type="submit" :loading="loading" :disabled="!form.agreeOffer">Зарегистрироваться</VBtn>
 
                 <div v-if="!isInvited" class="d-flex align-center justify-center mt-4">
                   <span class="me-1 text-medium-emphasis">Уже есть аккаунт?</span>

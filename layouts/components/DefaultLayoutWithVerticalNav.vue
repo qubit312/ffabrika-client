@@ -6,9 +6,9 @@ import { themeConfig } from '@themeConfig'
 import ClientSelector from '@/layouts/components/ClientSelector.vue'
 import Footer from '@/layouts/components/Footer.vue'
 import NavbarThemeSwitcher from '@/layouts/components/NavbarThemeSwitcher.vue'
+import Notifications from '@/layouts/components/Notifications.vue'
 import UserProfile from '@/layouts/components/UserProfile.vue'
 import NavBarI18n from '@core/components/I18n.vue'
-
 // @layouts plugin
 import { VerticalNavLayout } from '@layouts'
 </script>
@@ -38,6 +38,7 @@ import { VerticalNavLayout } from '@layouts'
           v-if="themeConfig.app.i18n.enable && themeConfig.app.i18n.langConfig?.length"
           :languages="themeConfig.app.i18n.langConfig"
         />
+        <Notifications />
         <UserProfile />
       </div>
     </template>
