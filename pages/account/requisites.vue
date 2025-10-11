@@ -1,3 +1,4 @@
+
 <script setup lang="ts">
 import { useCurrentClient } from '@/composables/useCurrentClient'
 import { useFieldState } from '@/composables/useFieldState'
@@ -27,6 +28,7 @@ const isEdit = ref(false)
 const isSaving = ref(false)
 const submitted = ref(false)
 const formRef = ref<InstanceType<typeof VForm> | null>(null)
+const copiedField = ref<string | null>(null)
 
 const typeOptions = [
   { label: 'Юридическое лицо', value: 'LEGAL_ENTITY' },
@@ -62,11 +64,9 @@ function toVatPercent(v: any): string {
 function mapServerResponseToForm(serverData: any): void {
   org.name = serverData.name || ''
   org.type = serverData.type || ''
-
   org.email = serverData.email || ''
   org.phone = serverData.phone || ''
   org.telegram = serverData.telegram || ''
-
   org.tin = serverData.tin || ''
   org.psrn = serverData.psrn || ''
   org.account = serverData.account || ''
@@ -136,7 +136,6 @@ const typeRules: Rule[] = [required]
 const emailRules: Rule[] = [optionalEmail]
 const phoneRules: Rule[] = [optionalRuPhone]
 const telegramRules: Rule[] = [telegramAtUsername]
-
 const tinRules = computed<Rule[]>(() => [required, innRule(() => org.type)])
 const psrnRules = computed<Rule[]>(() => [
   (v: any) => (org.type === 'INDIVIDUAL' ? required(v) === true : true) || 'Обязательное поле',
@@ -147,22 +146,21 @@ const corrAccountRules: Rule[] = [corrAccount20Rule]
 const bicRules: Rule[] = [bicRule]
 const bankRules: Rule[] = [bankNameRule]
 const vatRules: Rule[] = [vatPercentRule]
-const legalAddressRules: Rule[] = [] 
+const legalAddressRules: Rule[] = []
 
-const nameState   = useFieldState(nameRules,   computed(()=>org.name),   submitted)
-const typeState   = useFieldState(typeRules,   computed(()=>org.type),   submitted)
-const emailState  = useFieldState(emailRules,  computed(()=>org.email),  submitted)
-const phoneState  = useFieldState(phoneRules,  computed(()=>org.phone),  submitted)
-const tgState     = useFieldState(telegramRules, computed(()=>org.telegram), submitted)
-
-const tinState    = useFieldState(tinRules,    computed(()=>org.tin),    submitted)
-const psrnState   = useFieldState(psrnRules,   computed(()=>org.psrn),   submitted)
-const accState    = useFieldState(accountRules,computed(()=>org.account),submitted)
-const corrState   = useFieldState(corrAccountRules, computed(()=>org.correspondent_account), submitted)
-const bankState   = useFieldState(bankRules,   computed(()=>org.bank),   submitted)
-const bicState    = useFieldState(bicRules,    computed(()=>org.bic),    submitted)
-const vatState    = useFieldState(vatRules,    computed(()=>org.vat),    submitted)
-const addrState   = useFieldState(legalAddressRules, computed(()=>org.legal_address), submitted)
+const nameState = useFieldState(nameRules, computed(() => org.name), submitted)
+const typeState = useFieldState(typeRules, computed(() => org.type), submitted)
+const emailState = useFieldState(emailRules, computed(() => org.email), submitted)
+const phoneState = useFieldState(phoneRules, computed(() => org.phone), submitted)
+const tgState = useFieldState(telegramRules, computed(() => org.telegram), submitted)
+const tinState = useFieldState(tinRules, computed(() => org.tin), submitted)
+const psrnState = useFieldState(psrnRules, computed(() => org.psrn), submitted)
+const accState = useFieldState(accountRules, computed(() => org.account), submitted)
+const corrState = useFieldState(corrAccountRules, computed(() => org.correspondent_account), submitted)
+const bankState = useFieldState(bankRules, computed(() => org.bank), submitted)
+const bicState = useFieldState(bicRules, computed(() => org.bic), submitted)
+const vatState = useFieldState(vatRules, computed(() => org.vat), submitted)
+const addrState = useFieldState(legalAddressRules, computed(() => org.legal_address), submitted)
 
 const startEdit = () => {
   isEdit.value = true
@@ -196,30 +194,154 @@ const save = async () => {
   }
 }
 
+const copyToClipboard = (text: string, field: string) => {
+  if (text) {
+    navigator.clipboard.writeText(text)
+    copiedField.value = field
+    setTimeout(() => {
+      copiedField.value = null
+    }, 2000) 
+  }
+}
+
 onMounted(fetchClient)
 </script>
 
 <template>
-  <VCard>
-    <VCardTitle class="text-h6">Реквизиты</VCardTitle>
+  <VCard elevation="2" class="mb-4">
+    <VCardTitle class="text-h6 pa-4">Реквизиты</VCardTitle>
     <VDivider />
     <VCardText>
       <VForm ref="formRef" :validate-on="submitted ? 'input' : 'blur'">
-        <VRow>
+        <VRow v-if="!isEdit" class="view-mode">
+          <!-- Режим просмотра -->
+          <VCol cols="12" md="6">
+            <VList density="comfortable">
+              <VListItem @click="copyToClipboard(org.name, 'name')">
+                <VListItemTitle>Название</VListItemTitle>
+                <VListItemSubtitle>
+                  <VTooltip :model-value="copiedField === 'name'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'name'">
+                    <template #activator="{ props }">
+                      <span v-bind="props">{{ org.name || 'Не указано' }}</span>
+                    </template>
+                    {{ copiedField === 'name' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+                  </VTooltip>
+                </VListItemSubtitle>
+              </VListItem>
+              <VListItem>
+                <VListItemTitle>Тип</VListItemTitle>
+                <VListItemSubtitle>{{ typeOptions.find(t => t.value === org.type)?.label || 'Не указано' }}</VListItemSubtitle>
+              </VListItem>
+              <VListItem @click="copyToClipboard(org.tin, 'tin')">
+                <VListItemTitle>ИНН</VListItemTitle>
+                <VListItemSubtitle>
+                  <VTooltip :model-value="copiedField === 'tin'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'tin'">
+                    <template #activator="{ props }">
+                      <span v-bind="props">{{ org.tin || 'Не указано' }}</span>
+                    </template>
+                    {{ copiedField === 'tin' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+                  </VTooltip>
+                </VListItemSubtitle>
+              </VListItem>
+              <VListItem @click="copyToClipboard(org.psrn, 'psrn')">
+                <VListItemTitle>ОГРНИП</VListItemTitle>
+                <VListItemSubtitle>
+                  <VTooltip :model-value="copiedField === 'psrn'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'psrn'">
+                    <template #activator="{ props }">
+                      <span v-bind="props">{{ org.psrn || 'Не указано' }}</span>
+                    </template>
+                    {{ copiedField === 'psrn' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+                  </VTooltip>
+                </VListItemSubtitle>
+              </VListItem>
+              <VListItem @click="copyToClipboard(org.account, 'account')">
+                <VListItemTitle>Счёт</VListItemTitle>
+                <VListItemSubtitle>
+                  <VTooltip :model-value="copiedField === 'account'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'account'">
+                    <template #activator="{ props }">
+                      <span v-bind="props">{{ org.account || 'Не указано' }}</span>
+                    </template>
+                    {{ copiedField === 'account' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+                  </VTooltip>
+                </VListItemSubtitle>
+              </VListItem>
+            </VList>
+          </VCol>
+          <VCol cols="12" md="6">
+            <VList density="comfortable">
+              <VListItem @click="copyToClipboard(org.correspondent_account, 'correspondent_account')">
+                <VListItemTitle>Корр. счёт</VListItemTitle>
+                <VListItemSubtitle>
+                  <VTooltip :model-value="copiedField === 'correspondent_account'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'correspondent_account'">
+                    <template #activator="{ props }">
+                      <span v-bind="props">{{ org.correspondent_account || 'Не указано' }}</span>
+                    </template>
+                    {{ copiedField === 'correspondent_account' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+                  </VTooltip>
+                </VListItemSubtitle>
+              </VListItem>
+              <VListItem @click="copyToClipboard(org.bank, 'bank')">
+                <VListItemTitle>Банк</VListItemTitle>
+                <VListItemSubtitle>
+                  <VTooltip :model-value="copiedField === 'bank'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'bank'">
+                    <template #activator="{ props }">
+                      <span v-bind="props">{{ org.bank || 'Не указано' }}</span>
+                    </template>
+                    {{ copiedField === 'bank' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+                  </VTooltip>
+                </VListItemSubtitle>
+              </VListItem>
+              <VListItem @click="copyToClipboard(org.bic, 'bic')">
+                <VListItemTitle>БИК</VListItemTitle>
+                <VListItemSubtitle>
+                  <VTooltip :model-value="copiedField === 'bic'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'bic'">
+                    <template #activator="{ props }">
+                      <span v-bind="props">{{ org.bic || 'Не указано' }}</span>
+                    </template>
+                    {{ copiedField === 'bic' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+                  </VTooltip>
+                </VListItemSubtitle>
+              </VListItem>
+              <VListItem>
+                <VListItemTitle>НДС</VListItemTitle>
+                <VListItemSubtitle>{{ org.vat ? `${org.vat}%` : 'Не указано' }}</VListItemSubtitle>
+              </VListItem>
+              <VListItem @click="copyToClipboard(org.legal_address, 'legal_address')">
+                <VListItemTitle>Юридический адрес</VListItemTitle>
+                <VListItemSubtitle>
+                  <VTooltip :model-value="copiedField === 'legal_address'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'legal_address'">
+                    <template #activator="{ props }">
+                      <span v-bind="props">{{ org.legal_address || 'Не указано' }}</span>
+                    </template>
+                    {{ copiedField === 'legal_address' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+                  </VTooltip>
+                </VListItemSubtitle>
+              </VListItem>
+            </VList>
+          </VCol>
+          <VCol cols="12" class="d-flex flex-wrap gap-4">
+            <VBtn
+              color="primary"
+              @click="startEdit"
+              class="text-capitalize"
+              elevation="2"
+            >
+              Редактировать
+            </VBtn>
+          </VCol>
+        </VRow>
+
+        <!-- Режим редактирования -->
+        <VRow v-else v-slide-y-transition>
           <VCol cols="12" md="6">
             <AppTextField
-              :readonly="!isEdit"
               v-model="org.name"
               label="Краткое название"
               outlined
               :rules="nameRules"
               v-bind="nameState"
             />
-          </VCol>
-
-          <VCol cols="12" md="6">
             <AppSelect
-              :readonly="!isEdit"
               v-model="org.type"
               :items="typeOptions"
               item-title="label"
@@ -231,49 +353,7 @@ onMounted(fetchClient)
               :rules="typeRules"
               v-bind="typeState"
             />
-          </VCol>
-
-          <!--
-          <VCol cols="12" md="6">
             <AppTextField
-              :readonly="!isEdit"
-              v-model="org.email"
-              label="Email"
-              outlined
-              :rules="emailRules"
-              v-bind="emailState"
-            />
-          </VCol>
-          <VCol cols="12" md="6">
-            <AppTextField
-              :readonly="!isEdit"
-              :model-value="org.phone"
-              label="Телефон"
-              outlined
-              :rules="phoneRules"
-              v-bind="phoneState"
-              inputmode="tel"
-              maxlength="18"
-              @update:modelValue="onPhoneInput"
-            />
-          </VCol>
-          <VCol cols="12" md="6">
-            <AppTextField
-              :readonly="!isEdit"
-              :model-value="org.telegram"
-              label="Telegram"
-              placeholder="@username"
-              outlined
-              :rules="telegramRules"
-              v-bind="tgState"
-              @update:modelValue="onTelegramInput"
-            />
-          </VCol>
-          -->
-
-          <VCol cols="12" md="6">
-            <AppTextField
-              :readonly="!isEdit"
               :model-value="org.tin"
               label="ИНН"
               outlined
@@ -283,11 +363,7 @@ onMounted(fetchClient)
               v-bind="tinState"
               @update:modelValue="onInnInput"
             />
-          </VCol>
-
-          <VCol cols="12" md="6">
             <AppTextField
-              :readonly="!isEdit"
               :model-value="org.psrn"
               label="ОГРНИП"
               outlined
@@ -297,11 +373,7 @@ onMounted(fetchClient)
               v-bind="psrnState"
               @update:modelValue="onOgrnipInput"
             />
-          </VCol>
-
-          <VCol cols="12" md="6">
             <AppTextField
-              :readonly="!isEdit"
               :model-value="org.account"
               label="Счёт"
               outlined
@@ -312,10 +384,8 @@ onMounted(fetchClient)
               @update:modelValue="onAccountInput"
             />
           </VCol>
-
           <VCol cols="12" md="6">
             <AppTextField
-              :readonly="!isEdit"
               :model-value="org.correspondent_account"
               label="Корр. счёт"
               outlined
@@ -325,11 +395,7 @@ onMounted(fetchClient)
               v-bind="corrState"
               @update:modelValue="onCorrAccountInput"
             />
-          </VCol>
-
-          <VCol cols="12" md="6">
             <AppTextField
-              :readonly="!isEdit"
               :model-value="org.bank"
               label="Банк"
               outlined
@@ -337,11 +403,7 @@ onMounted(fetchClient)
               v-bind="bankState"
               @update:modelValue="onBankInput"
             />
-          </VCol>
-
-          <VCol cols="12" md="6">
             <AppTextField
-              :readonly="!isEdit"
               :model-value="org.bic"
               label="БИК"
               outlined
@@ -351,11 +413,7 @@ onMounted(fetchClient)
               v-bind="bicState"
               @update:modelValue="onBicInput"
             />
-          </VCol>
-
-          <VCol cols="12" md="6">
             <AppTextField
-              :readonly="!isEdit"
               :model-value="org.vat"
               label="НДС(%)"
               outlined
@@ -365,11 +423,7 @@ onMounted(fetchClient)
               maxlength="2"
               v-bind="vatState"
             />
-          </VCol>
-
-          <VCol cols="12" md="6">
             <AppTextField
-              :readonly="!isEdit"
               v-model="org.legal_address"
               label="Юридический адрес"
               outlined
@@ -377,13 +431,26 @@ onMounted(fetchClient)
               v-bind="addrState"
             />
           </VCol>
-
           <VCol cols="12" class="d-flex flex-wrap gap-4">
-            <VBtn v-if="!isEdit" color="primary" @click="startEdit">Редактировать</VBtn>
-            <template v-else>
-              <VBtn color="primary" @click="save" :loading="isSaving">Сохранить изменения</VBtn>
-              <VBtn variant="tonal" color="secondary" @click="cancel">Отмена</VBtn>
-            </template>
+            <VBtn
+              type="submit"
+              color="primary"
+              @click="save"
+              :loading="isSaving"
+              class="text-capitalize"
+              elevation="2"
+            >
+              Сохранить изменения
+            </VBtn>
+            <VBtn
+              variant="tonal"
+              color="secondary"
+              @click="cancel"
+              class="text-capitalize"
+              elevation="2"
+            >
+              Отмена
+            </VBtn>
           </VCol>
         </VRow>
       </VForm>
@@ -392,6 +459,28 @@ onMounted(fetchClient)
 </template>
 
 <style scoped>
-:deep(.v-messages__message) { color: #000; }
-:deep(.v-input--error .v-messages__message) { color: var(--v-theme-error); }
+.view-mode .v-list-item {
+  transition: background-color 0.2s ease;
+  border-radius: 4px;
+  margin-bottom: 4px;
+}
+.view-mode .v-list-item:hover {
+  background-color: var(--v-theme-surface-variant);
+}
+:deep(.v-messages__message) {
+  color: #000;
+}
+:deep(.v-input--error .v-messages__message) {
+  color: var(--v-theme-error);
+}
+.v-card {
+  border-radius: 8px;
+}
+.v-btn {
+  border-radius: 6px;
+  transition: transform 0.2s ease;
+}
+.v-btn:hover {
+  transform: translateY(-2px);
+}
 </style>

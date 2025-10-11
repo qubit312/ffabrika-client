@@ -221,6 +221,26 @@ function goToLabels(size: ProductSizeWithLabels, used: boolean) {
   >
     <template #no-data />
     <template #bottom />
+<!-- колонка Баркод -->
+<template #item.barcode="{ item }">
+  <span class="hoverable cursor-pointer">
+    {{ item.barcode || '—' }}
+  </span>
+</template>
+
+<!-- колонка Размер -->
+<template #item.value="{ item }">
+  <span class="hoverable cursor-pointer">
+    {{ item.value || '—' }}
+  </span>
+</template>
+
+<!-- колонка Рос. Размер -->
+<template #item.tech_size="{ item }">
+  <span class="hoverable cursor-pointer">
+    {{ item.tech_size || '—' }}
+  </span>
+</template>
 
     <template #header.labels="{ column }">
       <VTooltip open-delay="400">
@@ -233,19 +253,28 @@ function goToLabels(size: ProductSizeWithLabels, used: boolean) {
 
     <template #item.labels="{ item }">
       <div class="d-flex align-center">
-        <span class="text-high-emphasis">
-          {{ item.total_count ?? 0 }}
-          /
+        <VProgressCircular
+          v-if="loadingCounts[item.id]"
+          indeterminate
+          size="18"
+          class="me-2"
+        />
+        <span v-else class="text-high-emphasis ">
+                  <span
+            class=" cursor-pointer hoverable"
+         
+          > {{ sizeCounts[item.id]?.total ?? item.available_labels_count ?? 0 }}</span>
+          <span class="divider-hoverable">/</span>
           <span
-            class="text-primary cursor-pointer"
+            class="text-primary cursor-pointer hoverable"
             @click="goToLabels(item, true)"
             title="Показать использованные метки"
           >
             {{ item.used_count ?? 0 }}
           </span>
-          /
+                  <span class="divider-hoverable">/</span>
           <span
-            class="text-primary cursor-pointer"
+            class="text-primary cursor-pointer hoverable"
             @click="goToLabels(item, false)"
             title="Показать неиспользованные метки"
           >
@@ -372,6 +401,4 @@ function goToLabels(size: ProductSizeWithLabels, used: boolean) {
   />
 </template>
 
-<style scoped>
-.cursor-pointer { cursor: pointer; }
-</style>
+

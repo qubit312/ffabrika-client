@@ -55,6 +55,7 @@ const form = reactive<WbProduct>({
   article: '',
   vendor_code: '',
   composition: '',
+  // @ts-ignore 
   is_wb_import: false,
   // @ts-ignore – поле есть в ответе
   wb_category: null,
@@ -66,7 +67,7 @@ const form = reactive<WbProduct>({
   has_chestny_znak: false,
   sizes: [],
   labels: [],
-  // @ts-ignore – поле есть в ответе (теги)
+  // @ts-ignore 
   tags: [],
 })
 
@@ -111,7 +112,6 @@ const snackMessage = ref('')
 const snackColor = ref<'success' | 'error'>('success')
 const loading = ref(true)
 
-// ТОЛЬКО labels
 const primaryLabelId = computed<number>(() => {
   const first = (form.labels as unknown as ProductLabel[])?.[0]
   const n = Number(first?.id)
@@ -302,7 +302,17 @@ const fetchCategories = async () => {
         >
           Маркировка
         </VBtn>
-
+        <VBtn
+          v-if="form.article"
+          color="wb"
+          variant="flat"
+          :href="`https://www.wildberries.ru/catalog/${form.article}/detail.aspx`"
+          target="_blank"
+          rel="noopener"
+        >
+          <img src="/icons/wb-icon.svg" alt="WB" class="wb-icon me-2" />
+          Открыть на WB
+        </VBtn>
         <VBtn v-if="mode === 'edit'" variant="outlined" color="primary" @click="cancelEdit">
           Отменить
         </VBtn>
@@ -327,7 +337,7 @@ const fetchCategories = async () => {
               alt="Фото товара"
               style="width: 100%; height: auto; object-fit: contain;"
             />
-            <a v-if="form.article || null" :href="`https://www.wildberries.ru/catalog/${form.article}/detail.aspx`" target="_blank" rel="noopener">Открыть на WB</a>
+           
           </div>
           <div v-else class="d-flex flex-column align-center justify-center" style="height: 100%;">
             <VIcon size="40" color="grey">tabler-files</VIcon>
@@ -438,4 +448,10 @@ const fetchCategories = async () => {
 </template>
 
 <style lang="scss" scoped>
+.wb-icon {
+  width: 20px;
+  height: 20px;
+  filter: brightness(0) invert(1);
+}
+
 </style>
