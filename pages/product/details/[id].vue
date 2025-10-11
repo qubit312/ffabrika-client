@@ -55,6 +55,7 @@ const form = reactive<WbProduct>({
   article: '',
   vendor_code: '',
   composition: '',
+  is_wb_import: false,
   // @ts-ignore – поле есть в ответе
   wb_category: null,
   client_id: null,

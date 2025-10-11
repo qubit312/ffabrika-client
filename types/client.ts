@@ -2,6 +2,7 @@ export interface Client {
   id: number
   name: string
   type: string
+  is_fulfillment: boolean
   phone: string
   email: string
   telegram: string
@@ -31,7 +32,7 @@ export interface CreateClientDto {
   correspondent_account: string;
   bic: string;
   legal_address: string;
-  vat: string;
+  vat: number;
 }
 
 export type UpdateClientDto = CreateClientDto;

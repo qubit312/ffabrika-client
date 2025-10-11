@@ -15,6 +15,7 @@ export interface WbProduct {
   main_image_url?: string
   composition: string
   has_chestny_znak: boolean
+  is_wb_import: boolean
   wb_category: { id: number, name: string, parent: { id: number, name: string } | null } | null
   client_id: number | null
   brand_id: number | null

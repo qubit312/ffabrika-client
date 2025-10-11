@@ -97,8 +97,8 @@ async function fetchAll() {
 
     const filterPayload: FilterPayload = {
       filters: [],
-      sort_by: 'number',
-      sort_dir: "asc",
+      sort_by: sortBy.value?.key || 'created_at',
+      sort_dir: sortBy.value?.order || 'desc',
       page: page.value,
       per_page: itemsPerPage.value,
       group_by_size: false
@@ -138,6 +138,24 @@ const headers = [
   { title: 'Код', key: 'code', sortable: false },
   { title: 'Создана', key: 'created_at', sortable: true },
 ]
+
+const sortBy = ref<{ key: string, order: 'asc' | 'desc' } | null>(null)
+const onOptionsUpdate = (options: any) => {
+  if (options.sortBy?.length > 0) {
+    const field = options.sortBy[0]
+
+    if (['created_at', 'id'].includes(field.key)) {
+      sortBy.value = field
+    } else {
+      sortBy.value = null
+    }
+  } else {
+    sortBy.value = null
+  }
+
+  fetchAll()
+}
+
 </script>
 
 <template>
@@ -167,6 +185,7 @@ const headers = [
         :items-length="rows.length"
         :loading="loading"
         class="text-no-wrap"
+        @update:options="onOptionsUpdate"
       >
         <template #loading>
           <div class="d-flex justify-center pa-8">

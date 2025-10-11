@@ -2,10 +2,10 @@
 import type { ProductSize } from '@/types/productSize'
 import { computed, reactive, ref, watch } from 'vue'
 import { useLabelEvents } from '../../composables/useLabelBus'
-import { importChestnyZnakLabels } from '../../services/chz'
+import { importCzCsv, importCzPdf } from '../../services/chz'
 import { getProductSizes } from '../../services/productSizes'
 
-interface ImportFileResponce {
+interface ImportCsvResponce {
   fileName: string
   created: number
   errors: {
@@ -14,10 +14,16 @@ interface ImportFileResponce {
   }[]
 }
 
+interface ImportPdfResponce {
+  fileName: string
+  message: string
+}
+
 interface Props {
   modelValue: boolean
   files: File[]
   productId: number
+  type?: 'csv' | 'pdf'
 }
 
 const props = defineProps<Props>()
@@ -35,10 +41,15 @@ const loading = ref(false)
 
 const resultDialog = reactive({
   show: false,
-  items: [] as ImportFileResponce[] | null
+  items: [] as ImportCsvResponce[] | null
 })
 
-function showResultDialog(errors: ImportFileResponce[] | null) {
+const pdfResultDialog = reactive({
+  show: false,
+  items: [] as ImportPdfResponce[] | null,
+})
+
+function showResultDialog(errors: ImportCsvResponce[] | null) {
   resultDialog.show = true
   resultDialog.items = errors
 }
@@ -94,17 +105,30 @@ async function onSave() {
 
   loading.value = true
   try {
-    const { data, error } = await importChestnyZnakLabels(formData)
+    if (props.type === 'pdf') {
+      // 🔹 импорт PDF
+      const { data, error } = await importCzPdf(formData)
+      if (error.value) throw new Error(error.value)
 
-    if (error.value) throw new Error(error.value)
-    const fileResults: ImportFileResponce[] = data.value ?? []
-    const hasErrors = fileResults.some(f => f.errors && f.errors.length > 0)
-    showResultDialog(fileResults)
-    if (!hasErrors) {
+      // результат PDF
+      const pdfResults: ImportPdfResponce[] = data.value.data ?? []
+      pdfResultDialog.items = pdfResults
+      pdfResultDialog.show = true
+
+      // закрываем окно, если нужно
       close()
-    }
+    } else {
+      // 🔹 импорт CSV
+      const { data, error } = await importCzCsv(formData)
+      if (error.value) throw new Error(error.value)
 
-    onLabelsUpdated()
+      const csvResults: ImportCsvResponce[] = data.value ?? []
+      const hasErrors = csvResults.some(f => f.errors?.length)
+      showResultDialog(csvResults)
+
+      if (!hasErrors) close()
+      onLabelsUpdated()
+    }
   } catch (err: any) {
     console.error('Ошибка при импорте:', err)
     showResultDialog(null)
@@ -120,7 +144,7 @@ interface GroupedError {
   errors: { message: string; quantity: number }[]
 }
 
-function groupByFileName(data: ImportFileResponce[]): GroupedError[] {
+function groupByFileName(data: ImportCsvResponce[]): GroupedError[] {
   return data.map(file => {
     const grouped: Record<string, number> = {}
     const errorCount = file.errors.length
@@ -221,7 +245,7 @@ function getStatusColor(errors: number, created: number): string {
     <VCard>
       <VCardTitle class="d-flex align-center">
         <span>
-          Результат импорта
+          Результат обработки CSV
         </span>
       </VCardTitle>
 
@@ -272,6 +296,42 @@ function getStatusColor(errors: number, created: number): string {
       <VCardActions>
         <VSpacer />
         <VBtn variant="flat" color="primary" @click="resultDialog.show = false">Закрыть</VBtn>
+      </VCardActions>
+    </VCard>
+  </VDialog>
+
+  <!-- Окно для PDF -->
+  <VDialog v-model="pdfResultDialog.show" max-width="600px" persistent>
+    <VCard>
+      <VCardTitle class="d-flex align-center">
+        <span>Результат обработки PDF</span>
+      </VCardTitle>
+
+      <VCardText class="pt-2 pb-2 ps-4 pe-4">
+        <div v-if="pdfResultDialog.items && pdfResultDialog.items.length">
+          <span class="mb-1">Файлы приняты в обработку: </span>
+          <ul style="list-style-type: none; padding-left: 0;">
+            <li
+              v-for="item in pdfResultDialog.items"
+              :key="item.fileName"
+              class="mb-3"
+            >
+              <VIcon icon="tabler-circle-check" color="success" class="me-1" />
+              <strong>{{ item.fileName }}</strong>
+              <div class="text-body-2 mt-1 text-medium-emphasis">
+                {{ item.message }}
+              </div>
+            </li>
+          </ul>
+        </div>
+        <div v-else class="text-center text-medium-emphasis">
+          Нет данных для отображения.
+        </div>
+      </VCardText>
+
+      <VCardActions>
+        <VSpacer />
+        <VBtn variant="flat" color="primary" @click="pdfResultDialog.show = false">Закрыть</VBtn>
       </VCardActions>
     </VCard>
   </VDialog>

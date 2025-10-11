@@ -14,6 +14,13 @@ export function getClients() {
   })
 }
 
+export function getFullfilments(showLinked: boolean) {
+  return useApi<{ success: boolean, data: Client[] }>(`/api/clients/ff`, {
+    method: 'GET',
+    params: { show_linked: showLinked },
+  })
+}
+
 export async function getClientsWithFilters(payload?: FilterRequest) {
   return useApi<{ data: Client[] }>('/api/clients/filters', {
     method: 'POST',
@@ -32,6 +39,12 @@ export function updateClient(id: number, dto: CreateClientDto) {
   return useApi<{ data: Client }>(`/api/clients/${id}`, {
     method: 'PUT',
     body: dto,
+  })
+}
+
+export function setFulfillment(id: number) {
+  return useApi(`/api/clients/${id}/set-fulfillment`, {
+    method: 'PATCH',
   })
 }
 

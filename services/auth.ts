@@ -13,6 +13,7 @@ export type LoginPayload = {
   role?: Role
   roles?: Role[]
   permissions?: any[]
+  is_system: boolean
 }
 export type ApiResponse<T> = { success: boolean; message?: string; data: T }
 export type LoginDto = { email: string; password: string; remember?: boolean }
@@ -92,6 +93,10 @@ export function saveProfileToStorage(u: Partial<LoginPayload>) {
   if (u.phone) localStorage.setItem('user_phone', u.phone)
   if (u.address) localStorage.setItem('user_address', u.address)
   if (u.role?.visible_name) localStorage.setItem('role_visible_name', u.role.visible_name)
+  
+  if (u.is_system != null) {
+    localStorage.setItem('is_system', u.is_system ? '1' : '0');
+  }
 
   if (u.avatar) {
     localStorage.setItem('user_avatar', u.avatar)

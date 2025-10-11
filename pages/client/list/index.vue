@@ -7,7 +7,7 @@ import type { FilterRequest } from '../../../types/filter';
 interface Client {
   id: number
   name: string
-  type: 'INDIVIDUAL' | 'LEGAL_ENTITY'
+  type: 'INDIVIDUAL' | 'LEGAL_ENTITY' | 'FULFILLMENT'
   phone: string
   email: string
   telegram: string
@@ -16,7 +16,9 @@ interface Client {
 const typeCaption: Record<Client['type'], string> = {
   INDIVIDUAL:    'Индивидуальный предприниматель',
   LEGAL_ENTITY:  'Юридическое лицо',
+  FULFILLMENT:  'Фулфилмент',
 }
+
 const isLoading = ref(false)
 const headers = [
   { title: 'Название', key: 'name', sortable: true },
@@ -127,7 +129,7 @@ onMounted(fetchClients)
   <div>
     <!-- marking -->
     <VCard
-      title="Клиенты"
+      title="Организации"
       class="mb-6"
     >
       <VDivider />

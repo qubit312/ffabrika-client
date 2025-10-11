@@ -15,15 +15,16 @@ const entityData = ref<WbProduct[]>([])
 type ProductSize = {
   barcode?: string
   value?: string
-  available_count?: number
+  available_labels_count?: number
+  total_cz?: number
   cz?: boolean
   chestny_znak?: boolean
 }
 
-function hasChestnyZnak(p: any) {
+function hasChestnyZnak(p: any, size?: ProductSize) {
   const sizes: ProductSize[] = p?.sizes || []
   return sizes.some(s =>
-    (typeof s.available_count === 'number' && s.available_count > 0) ||
+    (typeof s.total_cz === 'number' && s.total_cz > 0) ||
     s.cz === true || s.chestny_znak === true
   )
 }
@@ -399,7 +400,7 @@ async function copyArticle(article?: string | number | null) {
                   Маркировка
                 </VBtn>
 
-                <VTooltip location="top" open-delay="120">
+                <VTooltip location="top" open-delay="120" v-if="item.is_wb_import">
                   <template #activator="{ props }">
                     <img v-bind="props" src="/icons/wb-icon.svg" alt="WB" class="product-icon ms-2" />
                   </template>
@@ -447,14 +448,14 @@ async function copyArticle(article?: string | number | null) {
                   <tr>
                     <th style="font-weight: 700;">Баркод</th>
                     <th style="font-weight: 700;">Размер</th>
-                    <th style="font-weight: 700;" v-if="item.has_chestny_znak">ЧЗ</th>
+                    <th style="font-weight: 700;" v-if="hasChestnyZnak(item)">ЧЗ</th>
                   </tr>
                 </thead>
                 <tbody style="font-size: 14px;">
                   <tr v-for="size in item.sizes" :key="size.barcode">
                     <td>{{ size.barcode }}</td>
                     <td>{{ size.value }}</td>
-                    <td v-if="item.has_chestny_znak">{{ size.available_count }}</td>
+                    <td v-if="hasChestnyZnak(item)">{{ size.available_labels_count || 0 }}</td>
                   </tr>
                 </tbody>
               </VTable>

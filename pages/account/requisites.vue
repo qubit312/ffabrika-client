@@ -46,7 +46,7 @@ const org = reactive<CreateClientDto>({
   correspondent_account: '',
   bic: '',
   legal_address: '',
-  vat: '',
+  vat: 0,
 })
 
 const originalData = reactive({ ...org })
@@ -75,7 +75,7 @@ function mapServerResponseToForm(serverData: any): void {
   org.bic = serverData.bic || ''
   org.legal_address = serverData.legal_address || ''
 
-  org.vat = toVatPercent(serverData.vat)
+  org.vat = serverData.vat
 
   Object.assign(originalData, { ...org })
   submitted.value = false
@@ -111,9 +111,6 @@ const onCorrAccountInput = (v: string) => {
 }
 const onBicInput = (v: string) => {
   org.bic = String(v || '').replace(/[^0-9]/g, '').slice(0, 9)
-}
-const onVatInput = (v: string) => {
-  org.vat = toVatPercent(v)
 }
 const onBankInput = (v: string) => {
   org.bank = String(v || '').replace(/[^A-Za-zА-Яа-я\s"'\-«»]/g, '')
@@ -186,7 +183,8 @@ const save = async () => {
 
   isSaving.value = true
   try {
-    const { error } = await updateClient(Number(currentClient.value?.id), org)
+    const { data, error } = await updateClient(Number(currentClient.value?.id), org)
+    console.log(data)
     if (error.value) throw new Error(error.value.message)
 
     Object.assign(originalData, { ...org })
@@ -363,9 +361,9 @@ onMounted(fetchClient)
               outlined
               :rules="vatRules"
               inputmode="numeric"
+              type="number"
               maxlength="2"
               v-bind="vatState"
-              @update:modelValue="onVatInput"
             />
           </VCol>
 
@@ -383,7 +381,7 @@ onMounted(fetchClient)
           <VCol cols="12" class="d-flex flex-wrap gap-4">
             <VBtn v-if="!isEdit" color="primary" @click="startEdit">Редактировать</VBtn>
             <template v-else>
-              <VBtn type="submit" color="primary" @click="save" :loading="isSaving">Сохранить изменения</VBtn>
+              <VBtn color="primary" @click="save" :loading="isSaving">Сохранить изменения</VBtn>
               <VBtn variant="tonal" color="secondary" @click="cancel">Отмена</VBtn>
             </template>
           </VCol>

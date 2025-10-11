@@ -5,17 +5,13 @@ import { computed, onMounted, reactive, ref, toRaw, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { VForm } from 'vuetify/components'
 import CustomLoading from '../../../components/CustomLoading.vue'
-import { categoryOptions } from '../../../constants/productCategories'
 import { createBrand, getBrands } from '../../../services/brands'
-import { createClient, getClient, updateClient } from '../../../services/clients'
-import { createProduct, deleteProduct, getProducts } from '../../../services/products'
-import { createProductSize } from '../../../services/productSizes'
+import { createClient, getClient, setFulfillment, updateClient } from '../../../services/clients'
 
 import type { Brand } from '../../../types/brand'
 import type { Client, CreateClientDto } from '../../../types/client'
-import type { CreateWbProductDto, WbProduct } from '../../../types/product'
-import type { CreateProductSizeDto, ProductSize } from '../../../types/productSize'
 
+import { useCurrentUser } from '@/composables/useCurrentUser'
 import {
   account20Rule,
   bankNameRule,
@@ -43,6 +39,7 @@ const router = useRouter()
 const idParam = route.params.id as string | undefined
 const primaryId = idParam ? Number(idParam) : 0
 const mode = ref<'create' | 'edit' | 'view'>('create')
+const { isAdmin } = useCurrentUser()
 
 const loading = ref(false)
 const isFormInitialized = ref(false)
@@ -52,26 +49,17 @@ const snackbar = ref(false)
 const snackMessage = ref('')
 const snackColor = ref<'success' | 'error'>('success')
 
-const sizeItems = ref<ProductSize[]>([
-  { id: 0, value: '', tech_size: '', barcode: '', product_id: 0 }
-])
-
-const savedProducts = ref<WbProduct[]>([])
 const form = reactive<Client>({
   id: 0,
   name: '',
   type: '',
+  is_fulfillment: false,
   phone: '',
   email: '',
   telegram: '',
-  details: {
-    notes: '',
-    preferred_contact: ''
-  },
   tin: '',
   psrn: '',
   account: '',
-  wb_api_token: '',
   bank: '',
   correspondent_account: '',
   bic: '',
@@ -85,6 +73,7 @@ const form = reactive<Client>({
 type Rule = (v: any) => true | string
 const submitted = ref(false)
 const formRef = ref<InstanceType<typeof VForm> | null>(null)
+const changeTypeBtnVisible = computed(() => form.id && !form.is_fulfillment && isAdmin.value)
 
 const isCreate = computed(() => mode.value === 'create')
 const currentTitle = computed(() => form.name)
@@ -159,7 +148,6 @@ const bankRules: Rule[] = [bankNameRule]
 const nameRules: Rule[] = [required]
 const typeRules: Rule[] = [required]
 const legalAddressRules: Rule[] = []
-const wbApiTokenRules: Rule[] = []
 const notesRules: Rule[] = []
 const preferredContactRules: Rule[] = []
 
@@ -168,17 +156,13 @@ function mapServerResponseToForm(serverData: any): void {
   form.id = serverData.id || 0
   form.name = serverData.name || ''
   form.type = serverData.type || ''
+  form.is_fulfillment = serverData.is_fulfillment || false
   form.phone = serverData.phone || ''
   form.email = serverData.email || ''
   form.telegram = serverData.telegram || ''
-  form.details = {
-    notes: serverData.details?.notes || '',
-    preferred_contact: serverData.details?.preferred_contact || ''
-  }
   form.tin = serverData.tin || ''
   form.psrn = serverData.psrn || ''
   form.account = serverData.account || ''
-  form.wb_api_token = serverData.wb_api_token || ''
   form.bank = serverData.bank || ''
   form.correspondent_account = serverData.correspondent_account || ''
   form.bic = serverData.bic || ''
@@ -195,7 +179,7 @@ function mapServerResponseToForm(serverData: any): void {
 // === Dirty tracking (без deep-watch + JSON.stringify) ===
 const fieldsToTrack: (keyof Client)[] = [
   'name','type','phone','email','telegram','tin','psrn','account',
-  'wb_api_token','bank','correspondent_account','bic','legal_address','vat'
+  'bank','correspondent_account','bic','legal_address','vat'
 ]
 const isDirty = computed(() => {
   if (!originalForm.value) return false
@@ -208,17 +192,6 @@ watch(isDirty, (dirty) => {
   }
 })
 
-// === Products ===
-const productForm = reactive({
-  name: '',
-  color: '',
-  article: '',
-  composition: '',
-  category: '',
-  size: [] as string[],
-  hasChestnyZnak: false
-})
-
 function buildSubmitPayload(f: Client): CreateClientDto {
   return {
     name: f.name,
@@ -226,73 +199,14 @@ function buildSubmitPayload(f: Client): CreateClientDto {
     email: f.email,
     phone: f.phone,
     telegram: f.telegram,
-    details: {
-      notes: f.details.notes,
-      preferred_contact: f.details.preferred_contact,
-    },
     tin: f.tin,
     psrn: f.psrn,
     account: f.account,
     bank: f.bank,
-    wb_api_token: f.wb_api_token,
     correspondent_account: f.correspondent_account,
     bic: f.bic,
     legal_address: f.legal_address,
     vat: f.vat,
-  }
-}
-
-async function saveProduct() {
-  loading.value = true
-  const payload: CreateWbProductDto = {
-    client_id: primaryId,
-    name:      productForm.name,
-    color:     productForm.color,
-    article:   productForm.article,
-    composition: productForm.composition,
-    category:  productForm.category,
-    has_chestny_znak: productForm.hasChestnyZnak,
-    vendor_code: '',
-    brand_id: null
-  }
-  const response = await createProduct(payload)
-  const { data, error } = response
-
-  if (error.value) {
-    snackColor.value = 'error'
-    snackMessage.value = 'Не удалось сохранить товар'
-  } else {
-    snackColor.value = 'success'
-    snackMessage.value = 'Товар создан'
-
-    const prod = data.value
-    savedProducts.value.push(prod)
-
-    for (const si of sizeItems.value) {
-      await saveSize(si, prod.id)
-    }
-
-    resetProductForm()
-  }
-
-  snackbar.value = true
-  loading.value = false
-}
-
-async function saveSize(item: ProductSize, productId: number) {
-  try {
-    const dto: CreateProductSizeDto = {
-      product_id: productId,
-      value:      item.value,
-      tech_size:  item.tech_size,
-      barcode:    item.barcode,
-    }
-    const response = await createProductSize(dto)
-    const { data, error } = response
-    if (error.value) throw error.value
-    item.id = data.value.id
-  } catch (e) {
-    console.error('Ошибка сохранения варианта размера:', e)
   }
 }
 
@@ -305,21 +219,6 @@ async function fetchClient(id: number) {
     mode.value = 'view'
     mapServerResponseToForm(data.value.data)
     isFormInitialized.value = true
-  }
-  loading.value = false
-}
-
-async function fetchProducts() {
-  loading.value = true
-  const { data, error } = await getProducts(primaryId)
-  if (error.value) {
-    console.error('Ошибка при загрузке товаров:', error.value)
-  } else {
-    const list: WbProduct[] = (data.value ?? []).map(prod => ({
-      ...prod,
-      productSizes: []
-    }))
-    savedProducts.value = list
   }
   loading.value = false
 }
@@ -366,50 +265,12 @@ async function onSubmit() {
   loading.value = false
 }
 
-async function handleDelete(id: number) {
-  loading.value = true
-  try {
-    const { error } = await deleteProduct(id)
-    if (error.value) throw error.value
-    const idx = savedProducts.value.findIndex(p => p.id === id)
-    if (idx !== -1) savedProducts.value.splice(idx, 1)
-    snackColor.value = 'success'
-    snackMessage.value = 'Товар удалён'
-  } catch (err) {
-    console.error('Ошибка при удалении товара:', err)
-    snackColor.value = 'error'
-    snackMessage.value = 'Не удалось удалить товар'
-  } finally {
-    snackbar.value = true
-    loading.value = false
-  }
-}
-
 onMounted(() => {
   if (primaryId > 0) {
     fetchClient(primaryId)
-    fetchProducts()
-    fetchBrands(primaryId)
+    fetchBrands()
   }
 })
-
-const productHeaders = [
-  { title: 'Название', key: 'name', sortable: false },
-  { title: 'Артикул', key: 'article', sortable: false },
-  { title: 'Цвет', key: 'color', sortable: false },
-  { key: 'actions', sortable: false },
-]
-
-function resetProductForm() {
-  productForm.name = ''
-  productForm.color = ''
-  productForm.article = ''
-  productForm.composition = ''
-  productForm.category = ''
-  productForm.hasChestnyZnak = false
-  productForm.size = []
-  sizeItems.value = [{ id: 0, value: '', tech_size: '', barcode: '', product_id: 0 }]
-}
 
 function cancelEdit() {
   if (originalForm.value) {
@@ -419,19 +280,9 @@ function cancelEdit() {
   }
 }
 
-const addSize = () => {
-  sizeItems.value.push({ value: '', tech_size: '', barcode: '', id: 0, product_id: 0 })
-}
-
-const removeSize = (idx: number) => {
-  if (sizeItems.value.length > 1) {
-    sizeItems.value.splice(idx, 1)
-  }
-}
-
-async function fetchBrands(clientId: number) {
+async function fetchBrands() {
   loading.value = true
-  const { data, error } = await getBrands(clientId)
+  const { data, error } = await getBrands()
   if (error.value) {
     console.error('Ошибка при загрузке брендов:', error.value)
   } else {
@@ -484,6 +335,29 @@ const submitBrand = async () => {
   }
 }
 
+
+const setAsFulfillment = async () => {
+  loading.value = true
+  try {
+    const { data, error } = await setFulfillment(primaryId)
+    snackColor.value = 'success'
+    snackMessage.value = 'Организация установлена как фулфилмент'
+
+    if (error.value || !data.value) {
+      console.error('Error:', error)
+      snackColor.value = 'error'
+      snackMessage.value = 'Ошибка при обновлении'
+    }
+  } catch (error) {
+    console.error('Request error:', error)
+    snackColor.value = 'error'
+    snackMessage.value = 'Ошибка при обновлении'
+  } finally {
+    loading.value = false
+    snackbar.value = true
+  }
+}
+
 // === Field states (без повторных вычислений в шаблоне) ===
 const nameState  = useFieldState(nameRules,  computed(()=>form.name),  submitted)
 const typeState  = useFieldState(typeRules,  computed(()=>form.type),  submitted)
@@ -500,7 +374,6 @@ const bicState   = useFieldState(bicRules, computed(()=>form.bic), submitted)
 const vatState   = useFieldState(vatRules, computed(()=>form.vat), submitted)
 
 const legalState = useFieldState(legalAddressRules, computed(()=>form.legal_address), submitted)
-const wbTokenState = useFieldState(wbApiTokenRules, computed(()=>form.wb_api_token), submitted)
 
 </script>
 
@@ -510,11 +383,21 @@ const wbTokenState = useFieldState(wbApiTokenRules, computed(()=>form.wb_api_tok
 
     <VForm ref="formRef" :validate-on="submitted ? 'input' : 'blur'">
       <div class="d-flex flex-wrap justify-start justify-sm-space-between gap-y-4 gap-x-6 mb-6">
-        <div class="d-flex flex-column justify-center">
-          <h4 class="text-h4 font-weight-medium">
+        <div class="d-flex flex-row align-center">
+          <span class="text-h4 font-weight-medium">
             {{ mode === 'create' ? 'Вы создаете нового клиента' : form.name }}
-          </h4>
-          <div class="text-body-1">Детальная информация о клиенте</div>
+          </span>
+          <!-- TO DO -->
+          <VBtn 
+            v-if="changeTypeBtnVisible" 
+            class="ms-4" 
+            size="small" 
+            variant="outlined" 
+            color="primary" 
+            @click="setAsFulfillment"
+          >
+            Назначить фулфилментом
+          </VBtn>
         </div>
         <div class="d-flex gap-4 align-center flex-wrap">
           <VBtn v-if="mode === 'edit'" variant="outlined" color="primary" @click="cancelEdit">
@@ -731,91 +614,7 @@ const wbTokenState = useFieldState(wbApiTokenRules, computed(()=>form.wb_api_tok
                     v-bind="legalState"
                   />
                 </VCol>
-
-                <VCol cols="12" md="6">
-                  <AppTextField
-                    v-model="form.wb_api_token"
-                    label="Токен WB API"
-                    outlined
-                    :rules="wbApiTokenRules"
-                    v-bind="wbTokenState"
-                  />
-                </VCol>
               </VRow>
-            </VCardText>
-          </VCard>
-
-          <VCard title="Товары" class="mb-6">
-            <VCardText>
-              <VRow>
-                <VCol cols="4">
-                  <VTextField v-model="productForm.name" label="Название" />
-                </VCol>
-                <VCol cols="4">
-                  <VTextField v-model="productForm.color" label="Цвет" />
-                </VCol>
-                <VCol cols="4">
-                  <VTextField v-model="productForm.composition" label="Состав" />
-                </VCol>
-                <VCol cols="4">
-                  <VTextField v-model="productForm.article" label="Артикул" />
-                </VCol>
-                <VCol cols="4">
-                  <VSelect
-                    v-model="productForm.category"
-                    :items="categoryOptions"
-                    label="Категория"
-                    item-title="label"
-                    item-value="value"
-                    class="mb-6"
-                    :menu-props="{ maxHeight: 200, location: 'bottom', offset: 2, persistent: true }"
-                  />
-                </VCol>
-                <VCol cols="4">
-                  <VSwitch v-model="productForm.hasChestnyZnak" label="Нужна маркировка ЧЗ" />
-                </VCol>
-              </VRow>
-
-              <VDivider class="my-4" />
-
-              <div v-for="(item, i) in sizeItems" :key="i">
-                <VRow class="align-center">
-                  <VCol cols="4">
-                    <VTextField v-model="item.barcode" label="Баркод" />
-                  </VCol>
-                  <VCol cols="3">
-                    <VTextField v-model="item.value" label="Размер" />
-                  </VCol>
-                  <VCol cols="2" class="d-flex justify-center">
-                    <VBtn class="me-4" icon color="primary" @click="addSize">
-                      <VIcon size="20" icon="tabler-plus" />
-                    </VBtn>
-                    <VBtn icon color="error" @click="removeSize(i)" v-if="sizeItems.length > 1">
-                      <VIcon size="20" icon="tabler-trash" />
-                    </VBtn>
-                  </VCol>
-                </VRow>
-              </div>
-
-              <VRow class="justify-end mt-4 mb-4">
-                <VBtn class="me-4" color="success" @click="saveProduct">Сохранить</VBtn>
-                <VBtn @click="resetProductForm">Сбросить</VBtn>
-              </VRow>
-
-              <VDataTable :headers="productHeaders" :items="savedProducts">
-                <template #no-data></template>
-                <template #bottom></template>
-                <template #[`item.actions`]="{ item }">
-                  <RouterLink :to="{ name: 'product-details-id', params: { id: item.id } }">
-                    <IconBtn class="me-2" icon>
-                      <VIcon size="20" icon="tabler-eye" />
-                    </IconBtn>
-                  </RouterLink>
-                  <IconBtn icon color="error" @click="handleDelete(item.id)">
-                    <VIcon size="20" icon="tabler-trash" />
-                  </IconBtn>
-                </template>
-              </VDataTable>
             </VCardText>
           </VCard>
         </VCol>

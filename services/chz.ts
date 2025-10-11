@@ -40,9 +40,22 @@ export function replaceProductSize(dto: {
   })
 }
 
-export function importChestnyZnakLabels(formData: FormData) {
+export function importCzCsv(formData: FormData) {
   return useApi<PaginatedResponse<ProductSize>>(
-    '/api/chestny-znak-labels/import',
+    '/api/chestny-znak-labels/import/csv',
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+      },
+      body: formData,
+    }
+  )
+}
+
+export function importCzPdf(formData: FormData) {
+  return useApi<PaginatedResponse<ProductSize>>(
+    '/api/chestny-znak-labels/import/pdf',
     {
       method: 'POST',
       headers: {

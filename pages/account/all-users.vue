@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { updateClientUserRole } from '@/services/clientUsers'
 import avatarFallback from '@images/avatars/avatar-1.png'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import {
@@ -11,8 +12,8 @@ import {
   type RoleItem, type SaveRoleDto,
 } from '~/services/roles'
 import {
-  createUser, deleteUser, getUsers, updateUser,
-  type SaveUserDto, type User,
+  createUser, deleteUser, getUsers,
+  type SaveUserDto, type User
 } from '~/services/users'
 import { email as emailRule, formatRuPhone, required, ruPhoneRule, stripDigits } from '~/utils/validators'
 
@@ -32,6 +33,8 @@ interface ClientUserRole {
 
 interface ClientUser {
   id: number;
+  client_name: string;
+  client_id: number;
   user_id: number;
   name: string;
   email: string;
@@ -39,7 +42,7 @@ interface ClientUser {
   address: string;
   avatar: string;
   created_at: string;
-  roles: {role: ClientUserRole, client: string}[];
+  roles: ClientUserRole[];
 }
 
 const loading = ref(false)
@@ -85,7 +88,14 @@ const savingUser = ref(false)
 const editedUserId = ref<number | null>(null)
 
 const roles = ref<RoleItem[]>([])
+const rolesOptions = ref<RoleItem[]>([
+  { id: 1, name: 'admin', visible_name: 'Администратор' },
+  { id: 2, name: 'manager', visible_name: 'Менеджер' },
+  { id: 3, name: 'logistics', visible_name: 'Логист' },
+])
+
 const form = reactive<SaveUserDto>({ name: '', email: '', phone: '', address: '', role_id: 0 })
+const updateRoleform = reactive({ client_id: 0, user_id: 0})
 const userRules = {
   name: [required],
   email: [required, emailRule],
@@ -106,13 +116,15 @@ function openCreateUser() {
 }
 function openEditUser(u: ClientUser) {
   userDialogTitle.value = 'Редактировать пользователя'
-  editedUserId.value = u.id
+  editedUserId.value = u.user_id
+  updateRoleform.client_id = u.client_id
+  updateRoleform.user_id = u.user_id
   Object.assign(form, {
     name: u.name || '',
     email: u.email || '',
     phone: u.phone ? formatRuPhone(stripDigits(u.phone)) : '',
     address: u.address || '',
-    // role_id: u.role?.id || 0,
+    role_id: u.roles[0] || 0,
   })
   userDialog.value = true
 }
@@ -134,7 +146,12 @@ async function saveUser() {
       rows.value.unshift(data.value.data)
       notify('Пользователь создан')
     } else {
-      const { data, error } = await updateUser(editedUserId.value, payload)
+      const updateClientUserRolePayload = {
+        client_id: updateRoleform.client_id,
+        user_id: updateRoleform.user_id,
+        role_id: Number(form.role_id),
+      }
+      const { data, error } = await updateClientUserRole(updateClientUserRolePayload)
       if (error.value || !data.value?.success) throw new Error(data.value?.message || 'Не удалось сохранить')
       const idx = rows.value.findIndex(r => r.id === editedUserId.value)
       if (idx > -1) rows.value[idx] = data.value.data
@@ -312,11 +329,30 @@ async function confirmDeleteRole() {
 }
 
 const headers = [
+  { title: 'Организация', key: 'data-table-group' },
   { title: 'Пользователь', key: 'name', sortable: false },
   { title: 'Доступ', key: 'role', sortable: false },
   { title: 'Дата создания', key: 'created_at', sortable: false },
   { title: 'Действия', key: 'actions', sortable: false},
 ]
+
+const computedHeaders = computed(() => {
+  const groupTitles: {user: {group: string, name: string}, client: {group: string, name: string}} = {
+    user: { group: 'Пользователь', name: 'Организация' },
+    client: { group: 'Организация', name: 'Пользователь' }
+  }
+  
+  const currentTitles = groupTitles[groupUser.value as keyof typeof groupTitles] || groupTitles.user
+  
+  return headers.map(header => {
+    if (header.key === 'data-table-group') {
+      return { ...header, title: currentTitles.group }
+    } else if (header.key === 'name') {
+      return { ...header, title: currentTitles.name }
+    }
+    return header
+  })
+})
 
 const roleTableHeaders = [
   { title: 'Название', key: 'visible_name', sortable: false },
@@ -325,6 +361,42 @@ const roleTableHeaders = [
   { title: 'Действия', key: 'actions', sortable: false},
 ]
 
+const getIcon = (props: Record<string, unknown>) => props.icon as any
+const groupBy = computed(() => {
+  if (groupUser.value === "user") {
+    return [{ key: 'user_id' }]
+  } else if (groupUser.value === "client") {
+    return [{ key: 'client_id' }]
+  } else {
+    return [{ key: 'user_id' }]
+  }
+})
+
+const groupUser = ref("user")
+
+const getGroupHeaderName = (item) => {
+  switch (groupUser.value) {
+    case "user":
+      const user = pageRows.value.find(d => d.user_id === item.value)
+      return user ? user.name : ''
+    
+    case "client":
+      const client = pageRows.value.find(d => d.client_id === item.value)
+      return client ? client.client_name : ''
+    
+    default:
+      return item.value
+  }
+}
+
+const getGroupHeaderEmail = (item) => {
+  if (groupUser.value === "user") {
+    const user = pageRows.value.find(d => d.user_id === item.value)
+    return user ? user.email : ''
+  }
+  return ''
+}
+
 </script>
 
 <template>
@@ -332,6 +404,17 @@ const roleTableHeaders = [
   <VCard>
     <VCardTitle class="mt-2 d-flex align-center justify-space-between">
       <span class="text-h6">Пользователи системы</span>
+      <div class="ms-2">
+        <VBtn :variant="groupUser === 'user' ? 'flat' : 'outlined'" style="min-width: 150px" size="small" @click="groupUser='user'">
+          <VIcon start icon="tabler-user" />
+          Пользователи
+        </VBtn>
+
+        <VBtn  class="ms-2" :variant="groupUser === 'client' ? 'flat' : 'outlined'" style="min-width: 150px" size="small" @click="groupUser='client'">
+          <VIcon start icon="tabler-building" />
+          Организации
+        </VBtn>
+      </div>
       <div class="d-flex align-center gap-3 ms-auto">
         <VTextField v-model="search" placeholder="Поиск пользователя" hide-details density="comfortable" style="inline-size:320px" prepend-inner-icon="tabler-search" />
         <VBtn color="primary" prepend-icon="tabler-user-plus" @click="openCreateUser">Добавить Пользователя</VBtn>
@@ -339,12 +422,13 @@ const roleTableHeaders = [
     </VCardTitle>
     <VDivider class="mt-2 mb-4" />
     <VDataTableServer 
-      :headers="headers"
+      :headers="computedHeaders"
       class="text-no-wrap"
       :items="pageRows"
       :items-length="pageRows.length"
       :loading="loading"
       :items-per-page="itemsPerPage"
+      :group-by="groupBy"
     >
       <template #no-data>
         <div v-if="!loading && total === 0">
@@ -358,9 +442,35 @@ const roleTableHeaders = [
         </div>
       </template>
 
-      <template #item.name="{ item }">
+
+      <template #item.client_name="{ item }">
         <div class="d-flex align-center">
-          <VAvatar size="36" class="me-3" variant="tonal" color="primary"><VImg :src="userAvatarUrl(item)" /></VAvatar>
+          <!-- <span>{{ item.client_name }}</span> -->
+          <RouterLink :to="{ name: 'client-details-id', params: { id: item.client_id } }" class="text-high-emphasis">
+            {{ item.client_name }}
+          </RouterLink>
+          <VChip
+            size="small" 
+            class="ms-1" 
+            variant="tonal" 
+            color="primary"
+          >
+            ID: {{ item.client_id }}
+          </VChip>
+        </div>
+      </template>
+
+      <template #item.name="{ item }">
+        <div v-if="groupUser === 'user'" class="d-flex align-center">
+          <VIcon start icon="tabler-building" />
+          <RouterLink :to="{ name: 'client-details-id', params: { id: item.client_id } }" class="text-high-emphasis">      
+            <span class="font-weight-medium">{{ item.client_name }}</span>
+          </RouterLink>
+        </div>
+        <div v-else class="d-flex align-center">
+          <VAvatar size="36" class="me-3" variant="tonal" color="primary">
+            <VImg :src="userAvatarUrl(item)" />
+          </VAvatar>
           <div class="d-flex flex-column">
             <span class="font-weight-medium">{{ item.name }}</span>
             <small class="text-medium-emphasis">{{ item.email }}</small>
@@ -373,22 +483,16 @@ const roleTableHeaders = [
           <template v-if="item.roles && item.roles.length">
             <div
               v-for="data in item.roles" 
-              :key="data.role.id"
+              :key="data.id"
             >
-              <VTooltip>
-                <template #activator="{ props }">
-                  <VChip 
-                    v-bind="props"
-                    size="small" 
-                    class="me-1" 
-                    variant="tonal" 
-                    color="primary"
-                  >
-                    {{ data.role.visible_name }}
-                  </VChip>
-                </template>
-                <span>Клиент {{ data.client }}</span>
-              </VTooltip>
+              <VChip
+                size="small" 
+                class="me-1" 
+                variant="tonal" 
+                color="primary"
+              >
+                {{ data.visible_name }}
+              </VChip>
             </div>
           </template>
           <span v-else class="text-medium-emphasis">—</span>
@@ -404,10 +508,48 @@ const roleTableHeaders = [
         <IconBtn @click="askDelete(item)"><VIcon icon="tabler-trash" /></IconBtn>
       </template>
 
+      <template #data-table-group="{ props, item }">
+        <td>
+          <div class="d-flex align-center gap-2">
+            <VBtn
+              v-bind="props"
+              variant="text"
+              density="comfortable"
+              class="flex-shrink-0"
+            >
+              <VIcon
+                class="flip-in-rtl"
+                :icon="getIcon(props)"
+              />
+            </VBtn>
+
+            <VAvatar v-if="groupUser === 'user'" size="36" variant="tonal" color="primary" class="flex-shrink-0">
+              <VImg :src="avatarFallback" />
+            </VAvatar>
+            <div class="d-flex flex-column min-width-0">
+              <span class="font-weight-medium text-truncate">{{ getGroupHeaderName(item)}}
+                <VChip 
+                  size="x-small" 
+                  class="ms-1" 
+                  variant="tonal" 
+                  color="primary"
+                >
+                  ID: {{ item.value }}
+                </VChip>
+              </span>
+
+              <small class="text-medium-emphasis text-truncate">{{ getGroupHeaderEmail(item) }}</small>
+            </div>
+            
+          </div>
+          
+        </td>
+      </template>
+      
       <template #bottom>  
         <VCardText class="pt-2">
           <div class="d-flex flex-wrap justify-center justify-sm-space-between gap-y-2 mt-2">
-            <div class="d-flex align-center gap-2">
+            <!-- <div class="d-flex align-center gap-2">
               <span>Записей на странице</span>
               <VSelect
                 v-model="itemsPerPage"
@@ -420,7 +562,7 @@ const roleTableHeaders = [
               v-model="page"
               :total-visible="$vuetify.display.smAndDown ? 3 : 5"
               :length="Math.ceil(pageRows.length / itemsPerPage)"
-            />
+            /> -->
           </div>
         </VCardText>
       </template>
@@ -435,14 +577,34 @@ const roleTableHeaders = [
       <VCardText>
         <VForm ref="formRef" @submit.prevent="saveUser">
           <VRow>
-            <VCol cols="12" md="6"><VTextField v-model="form.name" label="Имя" :rules="userRules.name" /></VCol>
-            <VCol cols="12" md="6"><VTextField v-model="form.email" type="email" label="Email" :rules="userRules.email" /></VCol>
             <VCol cols="12" md="6">
-              <VTextField :model-value="form.phone" label="Телефон" placeholder="+7 (___) ___-__-__" :rules="userRules.phone" @update:model-value="onPhoneInput" />
+              <VTextField append-inner-icon="tabler-lock" readonly  v-model="form.name" label="Имя" :rules="userRules.name" />
             </VCol>
-            <VCol cols="12" md="6"><VTextField v-model="form.address" label="Адрес" /></VCol>
+            <VCol cols="12" md="6">
+              <VTextField append-inner-icon="tabler-lock" readonly  v-model="form.email" type="email" label="Email" :rules="userRules.email" />
+            </VCol>
+            <VCol cols="12" md="6">
+              <VTextField
+                append-inner-icon="tabler-lock" readonly
+                :model-value="form.phone"
+                label="Телефон"
+                placeholder="+7 (___) ___-__-__"
+                :rules="userRules.phone"
+                @update:model-value="onPhoneInput"
+              />
+            </VCol>
+            <VCol cols="12" md="6">
+              <VTextField append-inner-icon="tabler-lock" readonly v-model="form.address" label="Адрес" />
+            </VCol>
             <VCol cols="12">
-              <VSelect v-model="form.role" :items="roles" item-title="visible_name" item-value="id" label="Роль" :rules="userRules.role" />
+              <VSelect 
+                v-model="form.role_id"
+                :items="rolesOptions"
+                item-title="visible_name"
+                item-value="id"
+                label="Роль"
+                :rules="userRules.role"
+              />
             </VCol>
           </VRow>
         </VForm>
@@ -510,12 +672,7 @@ const roleTableHeaders = [
 
       <template #bottom>  
         <VCardText class="pt-2">
-          <div class="mt-2">
-            <VPagination
-              v-model="page"
-              :total-visible="$vuetify.display.smAndDown ? 3 : 5"
-              :length="Math.ceil(rolesTotal / rolesPerPage)"
-            />
+          <div class="d-flex flex-wrap justify-center justify-sm-space-between gap-y-2 mt-2">
           </div>
         </VCardText>
       </template>

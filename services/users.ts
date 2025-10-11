@@ -50,6 +50,10 @@ export function inviteUser(dto: InvitationDto) {
   return useApi<InvitationResponse>('/api/invitations', { method: 'POST', body: dto })
 }
 
+export function revokeInvite(id: number) {
+  return useApi<{ success: boolean; message: string }>(`/api/invitations/${id}`, { method: 'DELETE' })
+}
+
 export function updateUser(id: number, dto: SaveUserDto) {
   return useApi<{ success: boolean; data: User }>(`/api/users/${id}`, { method: 'PUT', body: dto })
 }

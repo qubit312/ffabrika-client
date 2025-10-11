@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import FileHistoryDialog from '@/components/dialogs/FileHistoryDialog.vue'
 import { getProductMainImage } from '@/services/productImages'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -21,8 +22,10 @@ const snackbar = ref<boolean>(false)
 const snackMessage = ref<string>('')
 const snackColor = ref<'success' | 'error'>('success')
 
-const showSizeModal = ref<boolean>(false)
+const showFileMappingModal = ref<boolean>(false)
 const csvFiles = ref<File[]>([])
+const uploadType = ref<'csv' | 'pdf'>('csv')
+const pdfFiles = ref<File[]>([])
 
 const dropZoneRef = ref<HTMLDivElement>()
 interface FileData { file: File; url: string }
@@ -231,13 +234,11 @@ function openDefective() {
   showDefectiveModal.value = true
 }
 
-function openSizeMappingModal() {
-  if (csvFiles.value.length === 0) {
-    showSnackbar('Пожалуйста, загрузите хотя бы один CSV-файл', true)
-    return
-  }
-  showSizeModal.value = true
-}
+watch(uploadType, () => { 
+  csvFiles.value = []
+  pdfFiles.value = []
+})
+
 
 const loading = ref(false)
 
@@ -251,6 +252,82 @@ function handleDownloadStarted(callback: (result: boolean) => void) {
   onSubmit().then(isSaved => {
     callback(isSaved)
   })
+}
+
+const onFileChange = (files: File[]) => {
+  if (!files) {
+    allFiles.value = []
+    return
+  }
+
+  const isValid = validateFiles(files)
+  if (!isValid) {
+    if (uploadType.value === 'csv') csvFiles.value = []
+    else pdfFiles.value = []
+    return
+  }
+
+  allFiles.value = files
+}
+
+watch(csvFiles, () => { 
+  onFileChange(csvFiles.value)
+})
+
+watch(pdfFiles, () => { 
+  onFileChange(pdfFiles.value)
+})
+
+const allFiles = ref<File[]>([])
+const maxSizeDialogVisible = ref(false)
+const maxSizeDialogForm = reactive({ message: '' })
+const showHistory = ref(false)
+
+const MAX_FILE_SIZE_MB = 20
+const MAX_TOTAL_SIZE_MB = 100
+const MAX_FILE_COUNT = 10
+
+const validateFiles = (files: File[]) => {
+  if (!files || files.length === 0) return true
+
+  if (files.length > MAX_FILE_COUNT) {
+    maxSizeDialogForm.message = `Можно загрузить не более ${MAX_FILE_COUNT} файлов.`
+    maxSizeDialogVisible.value = true
+    return false
+  }
+
+  const totalSize = Array.from(files).reduce((sum, f) => sum + f.size, 0)
+  const tooBigFiles = Array.from(files).filter(f => f.size > MAX_FILE_SIZE_MB * 1024 * 1024)
+
+  if (tooBigFiles.length > 0) {
+    const names = tooBigFiles.map(f => f.name).join(', ')
+    maxSizeDialogForm.message = `Следующие файлы превышают ${MAX_FILE_SIZE_MB} МБ: ${names}`
+    maxSizeDialogVisible.value = true
+    return false
+  }
+
+  if (totalSize > MAX_TOTAL_SIZE_MB * 1024 * 1024) {
+    maxSizeDialogForm.message = `Общий размер файлов не должен превышать ${MAX_TOTAL_SIZE_MB} МБ.`
+    maxSizeDialogVisible.value = true
+    return false
+  }
+
+  return true
+}
+
+watch(uploadType, () => {
+  allFiles.value = []
+})
+
+function openSizeMappingModal() {
+  console.log(allFiles)
+  if (allFiles.value.length === 0) {
+    maxSizeDialogForm.message = 'Пожалуйста, загрузите хотя бы один файл.'
+    maxSizeDialogVisible.value = true
+    return
+  }
+
+  showFileMappingModal.value = true
 }
 
 </script>
@@ -353,37 +430,106 @@ function handleDownloadStarted(callback: (result: boolean) => void) {
         </VCard>
 
         <VCard>
-          <VCardTitle class="ma-2">
+          <VCardTitle class="ms-2 mt-2">
             <div class="d-flex justify-space-between align-center w-100">
               <span>Честный знак</span>
+              
+              <div>
+                <VTooltip>
+                  <template #activator="{ props }">
+                    <IconBtn @click="showHistory = true" v-bind="props">
+                      <VIcon icon="tabler-file-time" />
+                    </IconBtn>
+                  </template>
+                  <span>История загрузок</span>
+                </VTooltip>
+                
+                <VMenu>
+                  <template #activator="{ props }">
+                    <IconBtn v-bind="props">
+                      <VIcon icon="tabler-dots-vertical" />
+                    </IconBtn>
+                  </template>
 
-              <VMenu>
-                <template #activator="{ props }">
-                  <IconBtn v-bind="props">
-                    <VIcon icon="tabler-dots-vertical" />
-                  </IconBtn>
-                </template>
+                  <VList>
+                    <VListItem @click="openDefective">
+                      <VListItemTitle>Бракованная этикетка</VListItemTitle>
+                    </VListItem>
+                  </VList>
+                </VMenu>
+              </div>
 
-                <VList>
-                  <VListItem @click="openDefective">
-                    <VListItemTitle>Бракованная этикетка</VListItemTitle>
-                  </VListItem>
-                </VList>
-              </VMenu>
+              
             </div>
           </VCardTitle>
 
           <div class="d-flex flex-column">
-            <VCardText>
-              <VFileInput accept=".csv,text/csv" label="Загрузить CSV файл" multiple v-model="csvFiles" />
+            <VCardText class="pt-2">
+              <div class="mb-2 d-flex align-center gap-2">
+                <span class="text-body-2">
+                  Выберите тип документа для загрузки ЧЗ и прикрепите файлы.
+                </span>
+              </div>
+
+              <!-- Выбор типа -->
+              <div class="mb-4">
+                <VBtn
+                  class="me-1 pe-2 ps-2"
+                  value="asc"
+                  size="small"
+                  :color="uploadType === 'csv' ? 'primary' : undefined"
+                  :variant="uploadType === 'csv' ? 'flat' : 'outlined'"
+                  @click="uploadType = 'csv'"
+                >
+                  <VIcon icon="tabler-file-spreadsheet" />
+                  CSV
+                </VBtn>
+
+                <VBtn
+                  class="pe-2 ps-2"
+                  value="desc"
+                  size="small"
+                  :color="uploadType === 'pdf' ? 'primary' : undefined"
+                  :variant="uploadType === 'pdf' ? 'flat' : 'outlined'"
+                  @click="uploadType = 'pdf'"
+                >
+                  <VIcon icon="tabler-file-text" />
+                  PDF
+                </VBtn>
+              </div>
+
+              <!-- Загрузка CSV -->
+              <VFileInput
+                v-if="uploadType === 'csv'"
+                accept=".csv,text/csv"
+                label="Загрузить CSV файл"
+                multiple
+                v-model="csvFiles"
+              />
+
+              <!-- Загрузка PDF -->
+              <VFileInput
+                v-else
+                accept=".pdf,application/pdf"
+                label="Загрузить PDF файл"
+                multiple
+                v-model="pdfFiles"
+              />
+
               <VRow class="mt-4">
                 <VCol cols="12" class="d-flex justify-end">
-                  <VBtn color="primary" :disabled="csvFiles.length === 0" @click="openSizeMappingModal">
+                  <VBtn
+                    color="primary"
+                    :disabled="csvFiles.length === 0 && pdfFiles.length === 0"
+                    @click="openSizeMappingModal"
+                  >
                     Настроить соответствие размеров
                   </VBtn>
                 </VCol>
               </VRow>
             </VCardText>
+
+            <FileHistoryDialog v-model="showHistory" />
           </div>
         </VCard>
       </VCol>
@@ -394,9 +540,27 @@ function handleDownloadStarted(callback: (result: boolean) => void) {
     {{ snackMessage }}
   </VSnackbar>
 
-  <SizeMappingModal v-model="showSizeModal" :productId="markingData ? markingData.product_id ? markingData.product_id : 0 : 0" :files="csvFiles" />
+  <SizeMappingModal v-model="showFileMappingModal" :productId="markingData ? markingData.product_id ? markingData.product_id : 0 : 0" :files="allFiles" :type="uploadType" />
 
   <DefectiveLabelModal v-model="showDefectiveModal" />
+
+  <VDialog v-model="maxSizeDialogVisible" max-width="500">
+    <VCard>
+      <VCardTitle class="text-h6">
+        Предупреждение
+      </VCardTitle>
+      <VDivider />
+      <VCardText>
+        <span>
+          {{ maxSizeDialogForm.message }}
+        </span>
+      </VCardText>
+      <VCardActions>
+        <VSpacer />
+        <VBtn variant="flat" @click="maxSizeDialogVisible = false">Закрыть</VBtn>
+      </VCardActions>
+    </VCard>
+  </VDialog>
 
   <CustomLoading :loading="loading" />
 </template>

@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import { deleteClientUser, getUsersByClient, updateClientUser } from '@/services/clientUsers'
+import { getFullfilments } from '@/services/clients'
+import { addFulfillmentToOrg, deleteClientUser, getInvitationsByClient, getUsersByClient, updateClientUser } from '@/services/clientUsers'
 import type { UpdateClientUserDto } from '@/types/clientUser'
 import avatarFallback from '@images/avatars/avatar-1.png'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useCurrentUser } from '~/composables/useCurrentUser'
 import {
   type RoleItem
 } from '~/services/roles'
 import {
   inviteUser,
+  revokeInvite,
   type SaveUserDto, type User,
   type UserInClient
 } from '~/services/users'
@@ -23,6 +26,16 @@ interface ClientUserRole {
   visible_name: string;
 }
 
+interface FulfillmentOrganization {
+  id: number | null;
+  name: string;
+}
+
+interface ClientUserStatus {
+  name: string;
+  visible_name: string;
+}
+
 interface ClientUser {
   id: number;
   user_id: number;
@@ -32,15 +45,24 @@ interface ClientUser {
   address: string;
   avatar: string;
   created_at: string;
+  type: string;
   role: ClientUserRole | null;
+  status: ClientUserStatus | null;
 }
 
-const loading = ref(false)
+const { roleVisibleName } = useCurrentUser()
+const isOrgAdmin = computed(() => roleVisibleName.value === 'Администратор')
+const loadingUsers = ref(false)
+const loadingInvitations = ref(false)
+const loadingFullfilments = ref(false)
 const rows = ref<ClientUser[]>([])
+const fullfilments = ref<FulfillmentOrganization[]>([])
+const invitations = ref<ClientUser[]>([])
 const search = ref('')
 const itemsPerPage = ref(10)
 const page = ref(1)
 watch([itemsPerPage, search], () => { page.value = 1 })
+const { userId: currentUserId } = useCurrentUser()
 
 const filtered = computed(() => {
   const q = search.value.trim().toLowerCase()
@@ -62,34 +84,63 @@ function userAvatarUrl(u: User) {
 }
 
 async function fetchUsers() {
-  loading.value = true
+  loadingUsers.value = true
   try {
     const { data, error } = await getUsersByClient()
     if (error.value) throw error.value
     rows.value = data.value || []
+    console.log(rows.value)
   } catch (e: any) {
     notify(e?.message || 'Не удалось загрузить пользователей', 'error')
-  } finally { loading.value = false }
+  } finally { loadingUsers.value = false }
 }
 
+async function fetchFfOrg() {
+  loadingFullfilments.value = true
+  try {
+    const { data, error } = await getFullfilments(false)
+    if (error.value) throw error.value
+    const result = data.value.data
+    fullfilments.value = result || []
+  } catch (e: any) {
+    notify(e?.message || 'Не удалось загрузить фулфилмент', 'error')
+  } finally { 
+    loadingFullfilments.value = false
+  }
+}
+
+async function fetchInvitations() {
+  if(!isOrgAdmin.value) return
+  loadingInvitations.value = true
+  try {
+    const { data, error } = await getInvitationsByClient()
+    if (error.value) throw error.value
+    invitations.value = data.value || []
+  } catch (e: any) {
+    notify(e?.message || 'Не удалось загрузить приглашения', 'error')
+  } finally { loadingInvitations.value = false }
+}
+
+const fulfillmentDialog = ref(false)
+const fulfillmentDialogTitle = ref('Новый пользователь')
 const userDialog = ref(false)
 const userDialogTitle = ref('Новый пользователь')
 const formRef = ref<any>(null)
 const savingUser = ref(false)
+const invatingFf = ref(false)
 const editedUserId = ref<number | null>(null)
 const editedClientUserId = ref<number | null>(null)
 const isInvite = computed(() => editedUserId.value === null)
 
 const roles = ref<RoleItem[]>([
-  { id: 3, name: 'admin', visible_name: 'Администратор' },
-  { id: 4, name: 'manager', visible_name: 'Менеджер' },
-  { id: 5, name: 'logistics', visible_name: 'Логист' },
-  { id: 6, name: 'ff-admin', visible_name: 'Администратор фулфилмента' },
-  { id: 7, name: 'ff-pack', visible_name: 'Упаковщик фулфилмента' },
-  { id: 8, name: 'ff-viewer', visible_name: 'Просмотр фулфилмента' }
+  { id: 1, name: 'admin', visible_name: 'Администратор' },
+  { id: 2, name: 'manager', visible_name: 'Менеджер' },
+  { id: 3, name: 'logistics', visible_name: 'Логист' },
 ])
 
 const form = reactive<SaveUserDto>({ name: '', email: '', phone: '', address: '', role_id: 0 })
+const formInviteFf = reactive<FulfillmentOrganization>({ id: null, name: '' })
+
 const userRules = {
   name: [required],
   email: [required, emailRule],
@@ -100,8 +151,23 @@ const userRules = {
 function openCreateUser() {
   userDialogTitle.value = 'Пригласить пользователя'
   editedUserId.value = null
-  Object.assign(form, { email: '', role_id: 4 })
+  Object.assign(form, { email: '', role_id: 3 })
   userDialog.value = true
+}
+
+function openInviteFulfillment() {
+  fetchFfOrg()
+  formInviteFf.id = null
+  formInviteFf.name = ''
+  fulfillmentDialogTitle.value = 'Пригласить фулфилмент'
+  fulfillmentDialog.value = true
+}
+
+function showEditButton(u: ClientUser) {
+  if (!u || !u.role?.id) return false
+  if (u.role.id === 4) return false
+
+  return true
 }
 
 function openEditUser(u: ClientUser) {
@@ -119,7 +185,34 @@ function openEditUser(u: ClientUser) {
   userDialog.value = true
 }
 
+async function sendFfInvitation() {
+  const fulfillmentId = formInviteFf.id
+
+  if (!fulfillmentId) {
+    return
+  }
+
+  const payload = {
+    fulfillment_id: fulfillmentId,
+  }
+
+  try {
+    const { data, error } = await addFulfillmentToOrg(payload);
+    if (error.value || !data.value?.data) throw new Error(data.value?.message || 'Не удалось добавить')
+    notify('Фулфилмент добавлен')
+  } catch (e:any) {
+    notify(e?.message || 'Ошибка при добавлении фулфилмента', 'error')
+  } finally {
+    fetchUsers()
+  }
+
+  fulfillmentDialog.value = false
+}
+
 async function saveUser() {
+  editUserRoleDialog.value = false
+  if(!isOrgAdmin.value) return
+
   const res = await formRef.value?.validate?.()
   if (res && res.valid === false) return
 
@@ -129,23 +222,24 @@ async function saveUser() {
       email: form.email,
       role_id: Number(form.role_id),
     }
-    
+
     if (editedUserId.value == null) {
       const { data, error } = await inviteUser(payload)
       if (error.value || !data.value?.mail_sent) throw new Error(data.value?.message || 'Не удалось пригласить')
       notify('Пользователь приглашен')
+      fetchInvitations()
     } else if (editedClientUserId.value) {
       const dto: UpdateClientUserDto = {role_id:  payload.role_id}
       const { data, error } = await updateClientUser(editedClientUserId.value, dto)
       if (error.value || !data.value) throw new Error(data.value || 'Не удалось сохранить')
       const idx = rows.value.findIndex(r => r.id === editedClientUserId.value)
       if (idx > -1) {
-          rows.value[idx].role = {
-              id: data.value.role_id,
-              visible_name: data.value.role?.visible_name || ''
-          };
+        const role = data.value?.user?.role
+        rows.value[idx].role = {
+            id: role.id,
+            visible_name: role?.visible_name || ''
+        };
       }
-
       notify('Изменения сохранены')
       userDialog.value = false
     }
@@ -157,20 +251,31 @@ async function saveUser() {
   }
 }
 
+function openEditUserRoleDialog(val: SaveUserDto) {
+  editDialogForm.userName = val.name
+
+  const role = roles.value.find(r => r.id === val.role_id)
+  editDialogForm.roleVisibleName = role ? role.visible_name : ''
+  editUserRoleDialog.value = true
+}
 
 const deleteDialog = ref(false)
+const editUserRoleDialog = ref(false)
 const deletingId = ref<number | null>(null)
-const deleteTarget = ref<User | null>(null)
-function askDelete(u: User) { deleteTarget.value = u; deleteDialog.value = true }
+const deleteTarget = ref<ClientUser | null>(null)
+const editDialogForm = reactive({ userName: '', roleVisibleName: '' })
+function askDelete(u: ClientUser) { deleteTarget.value = u; deleteDialog.value = true }
 
 async function confirmDelete() {
+  if(!isOrgAdmin.value) return
   if (!deleteTarget.value) return
+
   deletingId.value = deleteTarget.value.id
   try {
     const { data, error } = await deleteClientUser(deleteTarget.value.id)
     if (error.value || !data.value?.success) throw new Error(data.value?.message || 'Не удалось удалить')
     rows.value = rows.value.filter(r => r.id !== deleteTarget.value!.id)
-    notify('Пользователь удалён')
+    notify('Участник удалён')
   } catch (e:any) {
     notify(e?.message || 'Ошибка удаления', 'error')
   } finally {
@@ -178,14 +283,62 @@ async function confirmDelete() {
   }
 }
 
+function getStatusColor(status: ClientUserStatus) {
+    const statusValue = status.name;
+    console.log(statusValue)
+    switch (statusValue.toLowerCase()) {
+      case 'invited':
+        return 'info';
+      case 'accepted':
+        return 'success';
+      case 'expired':
+        return 'warning';
+      case 'revoked':
+        return 'error';
+      default:
+        return 'primary';
+    }
+  }
+
 onMounted(async () => {
-  await Promise.all([fetchUsers()])
+  await Promise.all([fetchUsers(), fetchInvitations()])
 })
 
-const headers = [
-  { title: 'Пользователь', key: 'name', sortable: false },
+async function cancelInvitation() {
+  if (!deleteTarget.value) return
+  deletingId.value = deleteTarget.value.id
+  try {
+    const { data, error } = await revokeInvite(deleteTarget.value.id)
+    if (error.value || !data.value?.success) throw new Error(data.value?.message || 'Не удалось отменить')
+    rows.value = rows.value.filter(r => r.id !== deleteTarget.value!.id)
+    notify('Приглашение отменено')
+  } catch (e:any) {
+    notify(e?.message || 'Ошибка при отмене', 'error')
+  } finally {
+    deletingId.value = null; deleteDialog.value = false; deleteTarget.value = null
+    fetchInvitations()
+  }
+}
+
+const usersHeaders = computed(() => {
+  const base = [
+    { title: 'Название', key: 'name', sortable: false },
+    { title: 'Доступ', key: 'role', sortable: false },
+    { title: 'Дата и время', key: 'date', sortable: false },
+  ]
+
+  if (isOrgAdmin.value) {
+    base.push({ title: 'Действия', key: 'actions', sortable: false },)
+  }
+
+  return base
+})
+
+const invitationHeaders = [
+  { title: 'Почта', key: 'name', sortable: false },
   { title: 'Доступ', key: 'role', sortable: false },
   { title: 'Дата и время', key: 'date', sortable: false },
+  { title: 'Статус', key: 'status', sortable: false },
   { title: 'Действия', key: 'actions', sortable: false},
 ]
 
@@ -194,30 +347,26 @@ const headers = [
 <template>
   <!-- Пользователи -->
   <VCard>
-    <VCardText class="d-flex flex-wrap align-center justify-space-between gap-4">
-      <!-- <div class="d-flex align-center gap-3">
-        <span class="text-body-2">Show</span>
-        <VSelect v-model="itemsPerPage" :items="[10,25,50,100]" hide-details density="comfortable" style="inline-size:84px" />
-      </div> -->
-
+    <VCardTitle class="mt-2 d-flex align-center justify-space-between">
+      <span class="text-h6">Участники</span>
       <div class="d-flex align-center gap-3 ms-auto">
-        <!-- <VTextField v-model="search" placeholder="Search Permissions" hide-details density="comfortable" style="inline-size:320px" prepend-inner-icon="tabler-search" /> -->
-        <VBtn color="primary" prepend-icon="tabler-user-plus" @click="openCreateUser">Пригласить пользователя</VBtn>
+        <VBtn v-if="isOrgAdmin" color="primary" prepend-icon="tabler-user-plus" @click="openCreateUser">Пригласить пользователя</VBtn>
+        <VBtn v-if="isOrgAdmin" color="primary" prepend-icon="tabler-briefcase" @click="openInviteFulfillment">Пригласить фулфилмент</VBtn>
       </div>
-    </VCardText>
-
-    <VDivider />
+    </VCardTitle>
+    
+    <VDivider class="mt-2 mb-4" />
 
     <VDataTableServer 
-      :headers="headers"
+      :headers="usersHeaders"
       class="text-no-wrap"
       :items="pageRows"
       :items-length="pageRows.length"
-      :loading="loading"
+      :loading="loadingUsers"
       :items-per-page="itemsPerPage"
     >
       <template #no-data>
-        <div v-if="!loading && total === 0">
+        <div v-if="!loadingUsers && total === 0">
           <span class="text-center py-6 text-medium-emphasis">Ничего не найдено</span>
         </div>
       </template>
@@ -230,10 +379,23 @@ const headers = [
 
       <template #item.name="{ item }">
         <div class="d-flex align-center">
-          <VAvatar size="36" class="me-3" variant="tonal" color="primary"><VImg :src="userAvatarUrl(item)" /></VAvatar>
+            <template v-if="item.role?.id === 4">
+              <VIcon class="me-3" icon="tabler-briefcase" size="36" />
+            </template>
+          
+            <template v-else>
+              <VAvatar
+                size="36"
+                class="me-3"
+                variant="tonal"
+                color="primary"
+              >
+                <VImg :src="userAvatarUrl(item)" />
+              </VAvatar>
+            </template>  
           <div class="d-flex flex-column">
-            <span class="font-weight-medium">{{ item.name }}</span>
-            <small class="text-medium-emphasis">{{ item.email }}</small>
+            <span class="font-weight-medium">{{ item.name || item.email }}</span>
+            <small v-if="item.type !== 'invitation'" class="text-medium-emphasis">{{ item.email }}</small>
           </div>
         </div>
       </template>
@@ -249,33 +411,120 @@ const headers = [
         <span class="text-medium-emphasis">{{ item.created_at ? new Date(item.created_at).toLocaleString() : '—' }}</span>
       </template>
 
-      <template #item.actions="{ item }">
-        <IconBtn @click="openEditUser(item)"><VIcon icon="tabler-edit" /></IconBtn>
-        <IconBtn @click="askDelete(item)"><VIcon icon="tabler-trash" /></IconBtn>
+      <template v-if="isOrgAdmin" #item.actions="{ item }">
+        <div v-if="currentUserId != item.user_id">
+          <IconBtn v-if="showEditButton(item)" @click="openEditUser(item)"><VIcon icon="tabler-edit" /></IconBtn>
+          <IconBtn @click="askDelete(item)"><VIcon icon="tabler-trash" /></IconBtn>      
+        </div>
       </template>
 
       <template #bottom>  
-          <VCardText class="pt-2">
-            <div class="d-flex flex-wrap justify-center justify-sm-space-between gap-y-2 mt-2">
-              <div class="d-flex align-center gap-2">
-                <span>Записей на странице</span>
-                <VSelect
-                  v-model="itemsPerPage"
-                  :items="[5, 10, 25, 50, 100]"
-                  style="max-inline-size: 8rem;min-inline-size: 5rem;"
-                />
-              </div>
-
-              <VPagination
-                v-model="page"
-                :total-visible="$vuetify.display.smAndDown ? 3 : 5"
-                :length="Math.ceil(pageRows.length / itemsPerPage)"
+        <VCardText class="pt-2">
+          <div class="d-flex flex-wrap justify-center justify-sm-space-between gap-y-2 mt-2">
+            <!-- <div class="d-flex align-center gap-2">
+              <span>Записей на странице</span>
+              <VSelect
+                v-model="itemsPerPage"
+                :items="[5, 10, 25, 50, 100]"
+                style="max-inline-size: 8rem;min-inline-size: 5rem;"
               />
             </div>
-          </VCardText>
-        </template>
+
+            <VPagination
+              v-model="page"
+              :total-visible="$vuetify.display.smAndDown ? 3 : 5"
+              :length="Math.ceil(pageRows.length / itemsPerPage)"
+            /> -->
+          </div>
+        </VCardText>
+      </template>
     </VDataTableServer>
   </VCard>
+
+  <VCard class="mt-6" v-if="isOrgAdmin">
+    <VCardTitle class="mt-2 d-flex align-center justify-space-between">
+      <span class="text-h6">Приглашения</span>
+    </VCardTitle>
+
+    <VDivider class="mt-2 mb-4" />
+
+    <VDataTableServer 
+      :headers="invitationHeaders"
+      class="text-no-wrap"
+      :items="invitations"
+      :items-length="invitations.length"
+      :loading="loadingInvitations"
+      :items-per-page="itemsPerPage"
+    >
+      <template #no-data>
+        <div v-if="!loadingInvitations && total === 0">
+          <span class="text-center py-6 text-medium-emphasis">Ничего не найдено</span>
+        </div>
+      </template>
+
+      <template #loading>
+        <div class="text-center pa-6">
+          <div class="d-flex justify-center pa-6"><VProgressCircular indeterminate /></div>
+        </div>
+      </template>
+
+      <template #item.name="{ item }">
+        <div class="d-flex align-center">
+          <span class="font-weight-medium">{{ item.email }}</span>
+        </div>
+      </template>
+
+      <template #item.status="{ item }">
+        <div class="d-flex align-center">
+          <VChip v-if="item.status?.visible_name" size="small" class="me-2" variant="tonal" :color="getStatusColor(item.status)">{{ item.status.visible_name }}</VChip>
+          <span v-else class="text-medium-emphasis">—</span>
+        </div>
+      </template>
+
+      <template #item.role="{ item }">
+        <div class="d-flex align-center">
+          <VChip v-if="item.role?.visible_name" size="small" class="me-2" variant="tonal" color="primary">{{ item.role.visible_name }}</VChip>
+          <span v-else class="text-medium-emphasis">—</span>
+        </div>
+      </template>
+
+      <template #item.date="{ item }">
+        <span class="text-medium-emphasis">{{ item.created_at ? new Date(item.created_at).toLocaleString() : '—' }}</span>
+      </template>
+
+      <template #item.actions="{ item }">
+        <VTooltip location="top" open-delay="120">
+          <template #activator="{ props }">
+            <IconBtn v-bind="props" @click="askDelete(item)"><VIcon icon="tabler-mail-cancel" /></IconBtn>
+          </template>
+          <span>Отменить приглашение</span>
+        </VTooltip>
+        
+      </template>
+
+      <template #bottom>  
+        <VCardText class="pt-2">
+          <div class="d-flex flex-wrap justify-center justify-sm-space-between gap-y-2 mt-2">
+            <!-- <div class="d-flex align-center gap-2">
+              <span>Записей на странице</span>
+              <VSelect
+                v-model="itemsPerPage"
+                :items="[5, 10, 25, 50, 100]"
+                style="max-inline-size: 8rem;min-inline-size: 5rem;"
+              />
+            </div>
+
+            <VPagination
+              v-model="page"
+              :total-visible="$vuetify.display.smAndDown ? 3 : 5"
+              :length="Math.ceil(pageRows.length / itemsPerPage)"
+            /> -->
+          </div>
+        </VCardText>
+      </template>
+    </VDataTableServer>
+  </VCard>
+  
   <!-- Диалоговое окно -->
   <VDialog v-model="userDialog" max-width="500">
     <VCard>
@@ -311,26 +560,106 @@ const headers = [
       </VCardText>
       <VCardActions>
         <VSpacer />
-        <VBtn variant="text" @click="userDialog = false">{{ isInvite ? 'Закрыть' : 'Отмена' }}</VBtn>
-        <VBtn variant="outlined" color="primary" :loading="savingUser" @click="saveUser">
+        <VBtn variant="outlined" @click="userDialog = false">Отмена</VBtn>
+        <VBtn variant="flat" color="primary" :loading="savingUser" @click="openEditUserRoleDialog(form)">
           {{ isInvite ? 'Отправить приглашение' : 'Сохранить' }}
         </VBtn>
       </VCardActions>
     </VCard>
   </VDialog>
-  <!-- Пользователь -->
-  <VDialog v-model="deleteDialog" max-width="500">
+
+  <!-- Диалоговое окно для приглашения фулфилмента-->
+  <VDialog v-model="fulfillmentDialog" max-width="500">
     <VCard>
-      <VCardTitle class="text-h6">Удалить пользователя?</VCardTitle>
+      <VCardTitle class="text-h6">
+        {{ fulfillmentDialogTitle }}
+      </VCardTitle>
+      <VDivider />
       <VCardText>
-        Вы действительно хотите исключить пользователя 
-        <strong v-if="deleteTarget">{{ deleteTarget.name }}</strong>
-        из организации?
+        <VForm ref="formRef" @submit.prevent="saveUser">
+          <VRow>
+            <VCol cols="12">
+              <VSelect
+                v-model="formInviteFf.id"
+                :items="fullfilments"
+                item-title="name"
+                item-value="id"
+                label="Организация"
+              />
+            </VCol>
+          </VRow>
+        </VForm>
       </VCardText>
       <VCardActions>
         <VSpacer />
-        <VBtn variant="text" @click="deleteDialog=false">Отмена</VBtn>
-        <VBtn color="error" :loading="!!deletingId" @click="confirmDelete">Удалить</VBtn>
+        <VBtn variant="outlined" @click="fulfillmentDialog = false">Отмена</VBtn>
+        <VBtn variant="flat" color="primary" :loading="invatingFf" @click="sendFfInvitation">
+          Отправить приглашение
+        </VBtn>
+      </VCardActions>
+    </VCard>
+  </VDialog>
+
+  <!-- Пользователь -->
+  <VDialog v-model="deleteDialog" max-width="500">
+    <VCard>
+      <VCardTitle class="text-h6">
+        {{ deleteTarget?.type === 'invitation' ? 'Отменить приглашение?' : 'Удалить пользователя?' }}
+      </VCardTitle>
+        <VCardText>
+          <template v-if="deleteTarget?.type === 'invitation'">
+            Вы действительно хотите отменить приглашение для 
+            <strong>{{ deleteTarget.email }}</strong>?
+          </template>
+
+          <template v-else-if="deleteTarget?.role?.id === 4">
+            Вы действительно хотите исключить фулфилмент-организацию 
+            <strong>{{ deleteTarget?.name }}</strong> из списка?
+          </template>
+
+          <template v-else>
+            Вы действительно хотите исключить пользователя 
+            <strong>{{ deleteTarget?.name }}</strong> из организации?
+          </template>
+        </VCardText>
+      <VCardActions>
+        <VSpacer />
+        <VBtn variant="text" @click="deleteDialog = false">Отмена</VBtn>
+        <VBtn 
+          color="error" 
+          :loading="!!deletingId" 
+          @click="deleteTarget?.type === 'invitation' ? cancelInvitation() : confirmDelete()"
+        >
+          {{ deleteTarget?.type === 'invitation' ? 'Отменить' : 'Удалить' }}
+        </VBtn>
+      </VCardActions>
+    </VCard>
+  </VDialog>
+
+  <!-- Предупреждение о редактировании роли -->
+  <VDialog v-model="editUserRoleDialog" max-width="500">
+    <VCard>
+      <VCardTitle class="text-h6">
+        {{ 'Передача прав' }}
+      </VCardTitle>
+      <VDivider />
+      <VCardText>
+        <span>
+          Вы действительно передать роль 
+          <strong>{{ editDialogForm.roleVisibleName }}</strong> 
+          пользователю
+          <strong>{{ editDialogForm.userName }}</strong>?
+        </span>
+      </VCardText>
+      <VCardActions>
+        <VSpacer />
+        <VBtn variant="flat" @click="editUserRoleDialog = false">Отмена</VBtn>
+        <VBtn 
+          variant="outlined"
+          @click="saveUser()"
+        >
+          Продолжить
+        </VBtn>
       </VCardActions>
     </VCard>
   </VDialog>
