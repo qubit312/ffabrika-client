@@ -194,11 +194,11 @@ const onOptionsUpdate = (options: any) => {
         </template>
 
         <template #item.code="{ item }">
-          <span class="mono">{{ prettyCode(item.code) }}</span>
+          <span class="mono hoverable pointer">{{ prettyCode(item.code) }}</span>
         </template>
 
         <template #item.created_at="{ item }">
-          {{ new Date(item.created_at).toLocaleString() }}
+          <span class="hoverable pointer">{{ new Date(item.created_at).toLocaleString() }}</span>
         </template>
 
         <template #bottom>  

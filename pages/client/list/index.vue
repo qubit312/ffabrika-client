@@ -41,6 +41,8 @@ const deleteDialog = ref(false)
 const selectedDeleteId = ref<number | null>(null)
 const selectedDeleteDisplayValue = ref<string>('')
 
+const copiedField = ref<string | null>(null)
+
 const confirmationText = computed(() =>
   selectedDeleteId.value !== null
     ? `Удалить товар ${selectedDeleteDisplayValue.value}?`
@@ -122,6 +124,16 @@ const onOptionsUpdate = (options: any) => {
   fetchClients()
 }
 
+const copyToClipboard = (text: string, field: string) => {
+  if (text) {
+    navigator.clipboard.writeText(text)
+    copiedField.value = field
+    setTimeout(() => {
+      copiedField.value = null
+    }, 2000) 
+  }
+}
+
 onMounted(fetchClients)
 </script>
 
@@ -173,7 +185,6 @@ onMounted(fetchClients)
         @update:options="onOptionsUpdate"
       >
         <template #no-data>
-          <!-- ничего не выводим -->
         </template>
 
         <template #loading>
@@ -181,11 +192,10 @@ onMounted(fetchClients)
             <VProgressCircular indeterminate color="primary" />
           </div>
         </template>
-        <!-- name  -->
+        
         <template #item.name="{ item }">
           <div
             class="d-flex align-center gap-x-4 pointer"
-            
           >
             <div class="d-flex flex-column hoverable">
               <RouterLink :to="{ name: 'client-details-id', params: { id: item.id } }">
@@ -202,17 +212,50 @@ onMounted(fetchClients)
 
         <!-- phone -->
         <template #item.phone="{ item }">
-          <span class="text-body-1 text-high-emphasis hoverable pointer">{{ item.phone }}</span>
+          <VTooltip :model-value="copiedField === 'phone'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'phone'">
+            <template #activator="{ props }">
+              <span
+                v-bind="props"
+                class="text-body-1 text-high-emphasis hoverable pointer"
+                @click="copyToClipboard(item.phone || '', 'phone')"
+              >
+                {{ item.phone || 'Не указано' }}
+              </span>
+            </template>
+            {{ copiedField === 'phone' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+          </VTooltip>
         </template>
 
         <!-- email -->
         <template #item.email="{ item }">
-          <span class="text-body-1 text-high-emphasis hoverable pointer">{{ item.email }}</span>
+          <VTooltip :model-value="copiedField === 'email'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'email'">
+            <template #activator="{ props }">
+              <span
+                v-bind="props"
+                class="text-body-1 text-high-emphasis hoverable pointer"
+                @click="copyToClipboard(item.email || '', 'email')"
+              >
+                {{ item.email || 'Не указано' }}
+              </span>
+            </template>
+            {{ copiedField === 'email' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+          </VTooltip>
         </template>
 
         <!-- telegram -->
         <template #item.telegram="{ item }">
-          <span class="text-body-1 text-high-emphasis hoverable pointer">{{ item.telegram }}</span>
+          <VTooltip :model-value="copiedField === 'telegram'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'telegram'">
+            <template #activator="{ props }">
+              <span
+                v-bind="props"
+                class="text-body-1 text-high-emphasis hoverable pointer"
+                @click="copyToClipboard(item.telegram || '', 'telegram')"
+              >
+                {{ item.telegram || 'Не указано' }}
+              </span>
+            </template>
+            {{ copiedField === 'telegram' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+          </VTooltip>
         </template>
 
         <!-- Actions -->
@@ -257,9 +300,9 @@ onMounted(fetchClients)
 </template>
 
 <style scoped>
-  .development-note {
-    margin-top: 4px;
-    font-size: 0.9rem;
-    color: grey;
-  }
+.development-note {
+  margin-top: 4px;
+  font-size: 0.9rem;
+  color: grey;
+}
 </style>
