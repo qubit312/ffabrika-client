@@ -8,6 +8,9 @@ export const themes: Record<string, ThemeDefinition> = {
     dark: false,
     colors: {
       'primary': staticPrimaryColor,
+      'wb': '#7d256f',
+      'telegram':'#0088cc',
+      'support':'#8652f3',
       'on-primary': '#fff',
       'primary-darken-1': '#292929c5',
       'secondary': '#808390',
@@ -82,6 +85,9 @@ export const themes: Record<string, ThemeDefinition> = {
     dark: true,
     colors: {
       'primary': staticPrimaryColor,
+      'wb': '#a5378b',
+      'telegram':'#0088cc',
+      'support':'#8652f3',
       'on-primary': '#fff',
       'primary-darken-1': '#675DD8',
       'secondary': '#808390',

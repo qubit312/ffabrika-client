@@ -1,3 +1,4 @@
+
 <script setup lang="ts">
 import avatarFallback from '@images/avatars/avatar-1.png'
 import { computed, onMounted, reactive, ref } from 'vue'
@@ -21,6 +22,7 @@ const isSaving = ref(false)
 const userId = ref(0)
 const submitted = ref(false)
 const formRef = ref<any>(null)
+const copiedField = ref<string | null>(null)
 
 const emailVerified = ref(true)
 const emailVerifiedDialog = ref(false)
@@ -31,6 +33,8 @@ const avatarUrl = ref<string>(localStorage.getItem('user_avatar_url') || default
 const originalAvatar = ref<string>(avatarUrl.value)
 const fileInput = ref<HTMLInputElement | null>(null)
 const avatarBase64 = ref<string | null>(null)
+
+const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
 
 const pickFile = () => isEdit.value && fileInput.value?.click()
 const onFile = (e: Event) => {
@@ -57,16 +61,16 @@ const resetAvatar = () => {
 }
 
 const form = reactive({
-  name:       localStorage.getItem('user_name')        || '',
-  lastName:   localStorage.getItem('user_last_name')   || '',
-  email:      localStorage.getItem('user_email')       || '',
+  name: localStorage.getItem('user_name') || '',
+  lastName: localStorage.getItem('user_last_name') || '',
+  email: localStorage.getItem('user_email') || '',
   phone: (() => {
     const raw = localStorage.getItem('user_phone') || ''
     const d = stripDigits(raw)
     return d ? formatRuPhone(d) : ''
   })(),
-  address:    localStorage.getItem('user_address')     || '',
-  telegram:   localStorage.getItem('user_telegram')    || '',
+  address: localStorage.getItem('user_address') || '',
+  telegram: localStorage.getItem('user_telegram') || '',
 })
 
 type Rule = (v: any) => true | string
@@ -134,8 +138,7 @@ async function loadProfile() {
       emailVerified.value = u.email_verified
 
       if (u.avatar) {
-        const base = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
-        const url = `${base}/storage/${u.avatar}`
+        const url = `${API_BASE_URL}/storage/${u.avatar}`
         localStorage.setItem('user_avatar_url', url)
         avatarUrl.value = url
       }
@@ -188,8 +191,7 @@ async function saveProfile() {
     }
 
     if (data.value.data?.avatar) {
-      const base = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
-      const url = `${base}/storage/${data.value.data.avatar}`
+      const url = `${API_BASE_URL}/storage/${data.value.data.avatar}`
       localStorage.setItem('user_avatar_url', url)
       avatarUrl.value = url
     }
@@ -233,7 +235,6 @@ async function savePassword() {
   if (!c.len || !c.lower || !c.complex) return notify('Новый пароль не соответствует требованиям', 'error')
 
   try {
-    // const { data, error } = await updateProfile({ change_password: true, password: pwd.p1 })
     const { data, error } = await changePassword({ current_password: pwd.current, new_password: pwd.p1, new_password_confirmation: pwd.p2 })
     if (error.value || !data.value?.success) throw new Error(data.value?.message || 'Не удалось сменить пароль')
     resetPwdForm()
@@ -251,13 +252,12 @@ const openDeleteConfirm = () => { if (agreeDelete.value) confirmDeleteDialog.val
 
 async function doDeleteAccount() {
   deleting.value = true
-  const id = userId.value;
+  const id = userId.value
   if (id) {
     return
   }
 
   try {
-    // const { data, error } = await deleteUser(id)
     notify('Запрос на удаление аккаунта отправлен администратору')
     confirmDeleteDialog.value = false
     agreeDelete.value = false
@@ -270,75 +270,53 @@ async function doDeleteAccount() {
 
 async function onSendVerificationEmail() {
   emailVerifiedLoading.value = true
-  const { data, error } = await sendVerificationEmail();
+  const { data, error } = await sendVerificationEmail()
   emailVerifiedLoading.value = false
   emailVerifiedDialog.value = true
 }
 
+const copyToClipboard = (text: string, field: string) => {
+  if (text) {
+    navigator.clipboard.writeText(text)
+    copiedField.value = field
+    setTimeout(() => {
+      copiedField.value = null
+    }, 2000) 
+  }
+}
 </script>
 
 <template>
-  <!-- Профиль -->
-  <VCard :loading="isSaving" class="mb-4">
-    <VCardText class="d-flex">
-      <VAvatar rounded size="100" class="me-6" variant="flat">
-        <VImg :src="avatarUrl" />
-      </VAvatar>
-
-      <form class="d-flex flex-column justify-center gap-4" @submit.prevent>
-        <div class="d-flex flex-wrap gap-4 align-center">
-          <VBtn size="small" color="primary" :disabled="!isEdit" @click="pickFile">
-            <VIcon class="d-sm-none" icon="tabler-cloud-upload" />
+  <VCard elevation="2" class="mb-4" :loading="isSaving">
+    <VCardTitle class="text-h6 pa-4">Профиль</VCardTitle>
+    <VDivider />
+    <VCardText class="pt-2">
+      <div class="d-flex align-center mb-4">
+        <VAvatar rounded size="100" class="me-6">
+          <VImg :src="avatarUrl" />
+        </VAvatar>
+        <div v-if="isEdit" class="d-flex flex-wrap gap-4 align-center">
+          <VBtn size="small" color="primary" @click="pickFile">
             <span class="d-none d-sm-block">Загрузить фото</span>
+            <VIcon class="d-sm-none" icon="tabler-cloud-upload" />
           </VBtn>
           <input ref="fileInput" type="file" accept=".jpeg,.png,.jpg,.gif" hidden @change="onFile" />
-          <VBtn size="small" variant="tonal" color="secondary" type="reset" :disabled="!isEdit" @click="resetAvatar">
+          <VBtn size="small" variant="tonal" color="secondary" @click="resetAvatar">
             <span class="d-none d-sm-block">Сбросить</span>
             <VIcon class="d-sm-none" icon="tabler-refresh" />
           </VBtn>
-          <VTooltip text="Почта подтверждена" v-if="emailVerified">
-            <template #activator="{ props }">
-              <VIcon v-bind="props" icon="tabler-circle-check" color="success" size="24" />
-            </template>
-          </VTooltip>
-          
-          <VTooltip text="Почта не подтверждена" v-else>
-            <template #activator="{ props }">
-              <VIcon v-bind="props" icon="tabler-circle-x" color="warning" size="24" />
-            </template>
-          </VTooltip>
         </div>
-        <p class="text-body-1 mb-0">Разрешены JPG, GIF или PNG. Максимальный размер 800 КБ</p>
-      </form>
-    </VCardText>
+      </div>
+      <p v-if="isEdit" class="text-body-1 mt-2">Разрешены JPG, GIF или PNG. Максимальный размер 800 КБ</p>
 
-    <VCardText class="pt-2">
       <VRow v-if="!emailVerified">
         <VCol cols="12" md="6">
-          <VAlert 
-            type="warning" 
-            variant="tonal" 
-            density="compact"
-          >
+          <VAlert type="warning" variant="tonal" density="compact">
             <div class="alert-content">
-              <span>
-                Почта {{ form.email }} не подтверждена
-              </span>
-              <VBtn
-                class="ms-4"
-                color="primary"
-                size="small"
-                :disabled="emailVerifiedLoading"
-                @click="onSendVerificationEmail"
-              >
+              <span>Почта {{ form.email }} не подтверждена</span>
+              <VBtn class="ms-4" color="primary" size="small" :disabled="emailVerifiedLoading" @click="onSendVerificationEmail">
                 <template #prepend>
-                  <VProgressCircular
-                    v-if="emailVerifiedLoading"
-                    indeterminate
-                    size="16"
-                    width="2"
-                    class="me-2"
-                  />
+                  <VProgressCircular v-if="emailVerifiedLoading" indeterminate size="16" width="2" class="me-2" />
                 </template>
                 Подтвердить
               </VBtn>
@@ -346,70 +324,157 @@ async function onSendVerificationEmail() {
           </VAlert>
         </VCol>
       </VRow>
-      
+
       <VForm ref="formRef" class="mt-3" :validate-on="submitted ? 'input' : 'blur'" @submit.prevent="saveProfile">
-        <VRow>
+        <VRow v-if="!isEdit" class="view-mode">
+          <!-- Режим просмотра -->
           <VCol cols="12" md="6">
-            <label class="v-label mb-1 text-body-2">Имя</label>
+            <VList density="default">
+              <VListItem @click="copyToClipboard(form.name, 'name')">
+                <VListItemTitle>Имя</VListItemTitle>
+                <VListItemSubtitle>
+                  <VTooltip :model-value="copiedField === 'name'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'name'">
+                    <template #activator="{ props }">
+                      <span v-bind="props">{{ form.name || 'Не указано' }}</span>
+                    </template>
+                    {{ copiedField === 'name' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+                  </VTooltip>
+                </VListItemSubtitle>
+              </VListItem>
+              <VListItem @click="copyToClipboard(form.lastName, 'lastName')">
+                <VListItemTitle>Фамилия</VListItemTitle>
+                <VListItemSubtitle>
+                  <VTooltip :model-value="copiedField === 'lastName'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'lastName'">
+                    <template #activator="{ props }">
+                      <span v-bind="props">{{ form.lastName || 'Не указано' }}</span>
+                    </template>
+                    {{ copiedField === 'lastName' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+                  </VTooltip>
+                </VListItemSubtitle>
+              </VListItem>
+              <VListItem @click="copyToClipboard(form.email, 'email')">
+                <VListItemTitle>
+                E-mail                                
+                <VTooltip :text="emailVerified ? 'Почта подтверждена' : 'Почта не подтверждена'" class="ml-4">
+                  <template #activator="{ props }">
+                    <VIcon v-bind="props" :icon="emailVerified ? 'tabler-circle-check' : 'tabler-circle-x'" :color="emailVerified ? 'success' : 'warning'" size="24" />
+                  </template>
+                </VTooltip>      
+                </VListItemTitle>
+                <VListItemSubtitle>
+                  <VTooltip :model-value="copiedField === 'email'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'email'">
+                    <template #activator="{ props }">
+                      <span v-bind="props" class="d-flex align-center">
+                        {{ form.email || 'Не указано' }}
+
+                      </span>
+                    </template>
+                    {{ copiedField === 'email' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+                  </VTooltip>
+                </VListItemSubtitle>
+              </VListItem>
+            </VList>
+          </VCol>
+          <VCol cols="12" md="6">
+            <VList density="default">
+              <VListItem @click="copyToClipboard(form.telegram, 'telegram')">
+                <VListItemTitle>Telegram</VListItemTitle>
+                <VListItemSubtitle>
+                  <VTooltip :model-value="copiedField === 'telegram'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'telegram'">
+                    <template #activator="{ props }">
+                      <span v-bind="props">{{ form.telegram || 'Не указано' }}</span>
+                    </template>
+                    {{ copiedField === 'telegram' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+                  </VTooltip>
+                </VListItemSubtitle>
+              </VListItem>
+              <VListItem @click="copyToClipboard(form.phone, 'phone')">
+                <VListItemTitle>Телефон</VListItemTitle>
+                <VListItemSubtitle>
+                  <VTooltip :model-value="copiedField === 'phone'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'phone'">
+                    <template #activator="{ props }">
+                      <span v-bind="props">{{ form.phone || 'Не указано' }}</span>
+                    </template>
+                    {{ copiedField === 'phone' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+                  </VTooltip>
+                </VListItemSubtitle>
+              </VListItem>
+              <VListItem @click="copyToClipboard(form.address, 'address')">
+                <VListItemTitle>Адрес</VListItemTitle>
+                <VListItemSubtitle>
+                  <VTooltip :model-value="copiedField === 'address'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'address'">
+                    <template #activator="{ props }">
+                      <span v-bind="props">{{ form.address || 'Не указано' }}</span>
+                    </template>
+                    {{ copiedField === 'address' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+                  </VTooltip>
+                </VListItemSubtitle>
+              </VListItem>
+            </VList>
+          </VCol>
+          <VCol cols="12" class="d-flex flex-wrap gap-4">
+            <VBtn color="primary" @click="startEdit" class="text-capitalize" elevation="2">
+              Редактировать
+            </VBtn>
+          </VCol>
+        </VRow>
+
+        <!-- Режим редактирования -->
+        <VRow v-else v-slide-y-transition>
+          <VCol cols="12" md="6">
             <VTextField
               v-model="form.name"
+              label="Имя"
               placeholder="Ваше имя"
               variant="outlined"
-              :disabled="!isEdit"
+              class="mb-4"
               :rules="rules.name"
               v-bind="fieldState(rules.name, form.name, submitted)"
               :error="fieldState(rules.name, form.name, submitted).hasError"
             />
-          </VCol>
-
-          <VCol cols="12" md="6">
-            <label class="v-label mb-1 text-body-2">Фамилия</label>
             <VTextField
               v-model="form.lastName"
+              label="Фамилия"
               placeholder="Ваша фамилия"
               variant="outlined"
-              :disabled="!isEdit"
+              class="mb-4"
               :rules="rules.lastName"
               v-bind="fieldState(rules.lastName, form.lastName, submitted)"
               :error="fieldState(rules.lastName, form.lastName, submitted).hasError"
             />
-          </VCol>
-
-          <VCol cols="12" md="6">
-            <label class="v-label mb-1 text-body-2">E-mail</label>
             <VTextField
               v-model="form.email"
+              label="E-mail"
               type="email"
               placeholder="you@example.com"
               variant="outlined"
-              :disabled="!isEdit"
+              class="mb-4"
               :rules="rules.email"
               v-bind="fieldState(rules.email, form.email, submitted)"
               :error="fieldState(rules.email, form.email, submitted).hasError"
+              :append-inner-icon="emailVerified ? 'tabler-circle-check' : 'tabler-circle-x'"
+              :append-inner-icon-color="emailVerified ? 'success' : 'warning'"
+              @click:append-inner="!emailVerified && onSendVerificationEmail()"
             />
           </VCol>
-
           <VCol cols="12" md="6">
-            <label class="v-label mb-1 text-body-2">Telegram</label>
             <VTextField
               :model-value="form.telegram"
+              label="Telegram"
               placeholder="@username"
               variant="outlined"
-              :disabled="!isEdit"
+              class="mb-4"
               :rules="rules.telegram"
               v-bind="fieldState(rules.telegram, form.telegram, submitted)"
               :error="fieldState(rules.telegram, form.telegram, submitted).hasError"
               @update:model-value="onTelegramInput"
             />
-          </VCol>
-
-          <VCol cols="12" md="6">
-            <label class="v-label mb-1 text-body-2">Телефон</label>
             <VTextField
               :model-value="form.phone"
+              label="Телефон"
               placeholder="+7 (___) ___-__-__"
               variant="outlined"
-              :disabled="!isEdit"
+              class="mb-4"
               :rules="rules.phone"
               inputmode="tel"
               maxlength="18"
@@ -417,81 +482,72 @@ async function onSendVerificationEmail() {
               :error="fieldState(rules.phone, form.phone, submitted).hasError"
               @update:model-value="onPhoneInput"
             />
-          </VCol>
-
-          <VCol cols="12" md="6">
-            <label class="v-label mb-1 text-body-2">Адрес</label>
             <VTextField
               v-model="form.address"
+              label="Адрес"
               placeholder="Город, улица, дом"
               variant="outlined"
-              :disabled="!isEdit"
+              class="mb-4"
               :rules="rules.address"
               v-bind="fieldState(rules.address, form.address, submitted)"
               :error="fieldState(rules.address, form.address, submitted).hasError"
             />
           </VCol>
-
           <VCol cols="12" class="d-flex flex-wrap gap-4">
-            <VBtn v-if="!isEdit" color="primary" @click="startEdit">Редактировать</VBtn>
-            <template v-else>
-              <VBtn type="submit" color="primary" :loading="isSaving">Сохранить изменения</VBtn>
-              <VBtn variant="tonal" color="secondary" @click="cancel">Отмена</VBtn>
-            </template>
+            <VBtn type="submit" color="primary" :loading="isSaving" class="text-capitalize" elevation="2">
+              Сохранить изменения
+            </VBtn>
+            <VBtn variant="tonal" color="secondary" @click="cancel" class="text-capitalize" elevation="2">
+              Отмена
+            </VBtn>
           </VCol>
         </VRow>
       </VForm>
     </VCardText>
   </VCard>
 
-  <!-- Смена пароля-->
-  <VCard class="mb-4">
+  <!-- Смена пароля -->
+  <VCard elevation="2" class="mb-4">
+    <VCardTitle class="text-h6 pa-4">Изменить пароль</VCardTitle>
+    <VDivider />
     <VCardText>
-      <div class="d-flex align-center justify-between mb-4">
-        <h3 class="text-h5 mb-0">Изменить пароль</h3>
-      </div>
-
       <VForm ref="pwdFormRef" @submit.prevent="savePassword">
         <VRow>
           <VCol cols="12" md="6">
-            <label class="v-label mb-1 text-body-2">Текущий пароль</label>
             <VTextField
               v-model="pwd.current"
+              label="Текущий пароль"
               :type="show.current ? 'text' : 'password'"
               placeholder="……………"
               :disabled="!pwdEdit"
+              class="mb-4"
               :append-inner-icon="show.current ? 'tabler-eye-off' : 'tabler-eye'"
               @click:append-inner="show.current = !show.current"
             />
-          </VCol>
-          <VCol cols="12" md="6"></VCol>
-          <VCol cols="12" md="6">
-            <label class="v-label mb-1 text-body-2">Новый пароль</label>
             <VTextField
               v-model="pwd.p1"
+              label="Новый пароль"
               :type="show.p1 ? 'text' : 'password'"
               placeholder="……………"
               :disabled="!pwdEdit"
+              class="mb-4"
               :rules="pwdEdit ? pwdRules.new : []"
               :append-inner-icon="show.p1 ? 'tabler-eye-off' : 'tabler-eye'"
               @click:append-inner="show.p1 = !show.p1"
             />
-          </VCol>
-
-          <VCol cols="12" md="6">
-            <label class="v-label mb-1 text-body-2">Подтвердите новый пароль</label>
             <VTextField
               v-model="pwd.p2"
+              label="Подтвердите новый пароль"
               :type="show.p2 ? 'text' : 'password'"
               placeholder="……………"
               :disabled="!pwdEdit"
+              class="mb-4"
               :rules="pwdEdit ? pwdRules.confirm : []"
               :append-inner-icon="show.p2 ? 'tabler-eye-off' : 'tabler-eye'"
               @click:append-inner="show.p2 = !show.p2"
             />
           </VCol>
-
-          <VCol cols="12">
+          <VCol cols="12" md="6">
             <div class="text-body-1 mb-2">Требования к паролю:</div>
             <ul class="requirements">
               <li :class="{ ok: pwChecks.len }">Минимум 8 символов — чем больше, тем лучше.</li>
@@ -499,14 +555,13 @@ async function onSendVerificationEmail() {
               <li :class="{ ok: pwChecks.complex }">Как минимум одна цифра, специальный символ или пробел.</li>
             </ul>
           </VCol>
-
           <VCol cols="12" class="d-flex gap-4">
             <template v-if="!pwdEdit">
-              <VBtn color="primary" @click="pwdEdit = true">Изменить</VBtn>
+              <VBtn color="primary" @click="pwdEdit = true" class="text-capitalize" elevation="2">Изменить</VBtn>
             </template>
             <template v-if="pwdEdit">
-              <VBtn type="submit" color="primary">Сохранить изменения</VBtn>
-              <VBtn variant="tonal" color="secondary" @click="pwdEdit=false; resetPwdForm()">Отмена</VBtn>
+              <VBtn type="submit" color="primary" class="text-capitalize" elevation="2">Сохранить изменения</VBtn>
+              <VBtn variant="tonal" color="secondary" @click="pwdEdit=false; resetPwdForm()" class="text-capitalize" elevation="2">Отмена</VBtn>
             </template>
           </VCol>
         </VRow>
@@ -515,41 +570,41 @@ async function onSendVerificationEmail() {
   </VCard>
 
   <!-- Удалить аккаунт -->
-  <VCard>
+  <VCard elevation="2" class="mb-4">
+    <VCardTitle class="text-h6 pa-4">Удалить аккаунт</VCardTitle>
+    <VDivider />
     <VCardText>
-      <h3 class="text-h5 mb-4">Удалить аккаунт</h3>
-
       <VAlert type="warning" variant="tonal" class="mb-4">
         <div class="text-subtitle-1 font-weight-medium mb-1">Вы уверены, что хотите удалить свой аккаунт?</div>
         <div>После удаления восстановить его будет невозможно. Пожалуйста, убедитесь в своём решении.</div>
       </VAlert>
-
       <div class="d-flex align-center mb-4">
         <VCheckbox v-model="agreeDelete" density="comfortable" hide-details class="me-4" />
         <div class="text-body-1">Я подтверждаю деактивацию своего аккаунта.</div>
       </div>
-
       <VBtn
         color="error"
         variant="elevated"
         :disabled="!agreeDelete || deleting"
         :loading="deleting"
         @click="openDeleteConfirm"
+        class="text-capitalize"
+        elevation="2"
       >
         Удалить Аккаунт
       </VBtn>
     </VCardText>
   </VCard>
 
-  <!-- Модалка подтверждения -->
+  <!-- Модалка для подтверждения удаления -->
   <VDialog v-model="confirmDeleteDialog" max-width="460">
     <VCard>
       <VCardTitle class="text-h6">Подтверждение</VCardTitle>
       <VCardText>Вы действительно хотите удалить аккаунт? Это действие необратимо.</VCardText>
       <VCardActions>
         <VSpacer />
-        <VBtn variant="tonal" color="secondary" @click="confirmDeleteDialog = false">Отмена</VBtn>
-        <VBtn color="error" :loading="deleting" @click="doDeleteAccount">Удалить</VBtn>
+        <VBtn variant="tonal" color="secondary" @click="confirmDeleteDialog = false" class="text-capitalize">Отмена</VBtn>
+        <VBtn color="error" :loading="deleting" @click="doDeleteAccount" class="text-capitalize">Удалить</VBtn>
       </VCardActions>
     </VCard>
   </VDialog>
@@ -562,7 +617,7 @@ async function onSendVerificationEmail() {
       <VCardText>Письмо с подтверждением отправлено на адрес <b>{{ form.email }}</b>.</VCardText>
       <VCardActions>
         <VSpacer />
-        <VBtn @click="emailVerifiedDialog = false">Готово</VBtn>
+        <VBtn @click="emailVerifiedDialog = false" class="text-capitalize">Готово</VBtn>
       </VCardActions>
     </VCard>
   </VDialog>
@@ -573,6 +628,27 @@ async function onSendVerificationEmail() {
 </template>
 
 <style scoped>
+.view-mode .v-list-item {
+  transition: background-color 0.2s ease;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+:deep(.v-messages__message) {
+  color: #000;
+}
+:deep(.v-input--error .v-messages__message) {
+  color: var(--v-theme-error);
+}
+.v-card {
+  border-radius: 8px;
+}
+.v-btn {
+  border-radius: 6px;
+  transition: transform 0.2s ease;
+}
+.v-btn:hover {
+  transform: translateY(-2px);
+}
 .requirements {
   margin: 0.25rem 0 0;
   padding-left: 1.2rem;
@@ -584,12 +660,6 @@ async function onSendVerificationEmail() {
 .requirements li.ok {
   color: rgba(var(--v-theme-primary));
 }
-:deep(.v-messages__message) {
-  color: #000;
-}
-:deep(.v-input--error .v-messages__message) {
-  color: var(--v-theme-error);
-}
 .alert-content {
   display: flex;
   justify-content: space-between;
@@ -597,3 +667,4 @@ async function onSendVerificationEmail() {
   width: 100%;
 }
 </style>
+

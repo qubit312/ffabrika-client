@@ -321,15 +321,15 @@ onMounted(async () => {
                   </div>
                 </div>
               </VTimelineItem>
-
-              <div v-if="!timelineItems.length" class="text-center text-medium-emphasis py-6">
-                Операций ещё не было
-              </div>
             </VTimeline>
           </VCardText>
-
-          <VDivider />
+          <VCardText v-if="!timelineItems.length">              
+            <div  class="text-center text-medium-emphasis py-6">
+              Операций ещё не было
+            </div>
+          </VCardText>
           <VCardActions class="justify-center">
+          
             <VBtn
               v-if="latestChzAll.length > TIMELINE_COLLAPSED"
               variant="text"

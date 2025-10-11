@@ -1,7 +1,5 @@
-// Write your overrides
-/* assets/styles/variables/_vuetify.scss */
 $theme-colors: (
-  'primary': #000000, // Устанавливаем основной цвет темы
+  'primary': #000000, 
 );
 
 :root {
@@ -22,10 +20,48 @@ $theme-colors: (
   inline-size: 20px;
   block-size: 20px;
   background: url('/icons/chz.svg') center / contain no-repeat;
-  color: transparent !important; /* скрываем «tabler-circle» */
+  color: transparent !important; 
 }
 .layout-vertical-nav .v-list-item .v-icon.nav-icon--chz svg,
 .layout-vertical-nav .v-list-item .v-icon.nav-icon--chz i {
-  display: none !important; /* на всякий */
+  display: none !important; 
 }
 
+.v-snackbar__content{
+  font-size: 18px !important;
+  line-height: 1.5 !important; 
+  padding: 16px 24px !important;
+}
+
+.hoverable {
+  display: inline-block;
+  border-radius: 6px;
+  padding: 2px 6px;
+  transition: background-color 0.2s ease;
+  margin-left: -6px;
+
+  &:hover {
+    background-color: rgba(var(--v-theme-on-surface), 0.08);
+
+    transition:  0.2s ease;
+  }
+}
+.hoverable-revert {
+  display: inline-block;
+  border-radius: 6px;
+  padding: 2px 6px;
+  transition: background-color 0.2s ease;
+
+  &:hover {
+    background-color: rgba(var(--v-theme-on-surface), 0.08);
+
+    transition:  0.2s ease;
+  }
+}
+
+.divider-hoverable {
+  margin-right: 6px;
+}
+
+
+        

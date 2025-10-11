@@ -66,6 +66,14 @@ const deleteItemConfirm = async () => {
   await handleDelete(selectedDeleteId.value)
   selectedDeleteId.value = null
 }
+const imageDialog = ref(false)
+const imageDialogUrl = ref<string | null>(null)
+
+function openImageDialog(url: string) {
+  imageDialogUrl.value = url
+  imageDialog.value = true
+}
+
 
 const itemsPerPage = ref<number>(25)
 const page = ref<number>(1)
@@ -251,13 +259,29 @@ function getWbCategoryName(category: {id: number, name: string} | null): string 
   return category.name
 }
 
+
+
 function conciseSizes(item: any): string {
   const arr = (item?.sizes ?? [])
     .map((s: any) => s?.value)
-    .filter((v: any) => !!v)
+    .filter((v: any) => !!v);
 
-  if (arr.length > 2) return `${arr.slice(0, 2).join(', ')}…`
-  return arr.join(', ')
+  if (arr.length === 0) return '';
+  const maxLength = 17;
+  let result = arr.join(', ');
+  if (result.length > maxLength) {
+    let temp = '';
+    let count = 0;
+    for (let i = 0; i < arr.length; i++) {
+      const next = temp + (temp ? ', ' : '') + arr[i];
+      if (next.length > maxLength) break;
+      temp = next;
+      count++;
+    }
+    result = arr.slice(0, count).join(', ');
+    if (count < arr.length) result += '…';
+  }
+  return result;
 }
 
 async function copyArticle(article?: string | number | null) {
@@ -287,13 +311,26 @@ async function copyArticle(article?: string | number | null) {
     }
   }
 }
+function filterByCategory(category: { id: number; name: string } | null) {
+  if (!category?.name) return
+  searchCategory.value = category.name
+  page.value = 1
+}
+
 </script>
 
 <template>
   <div>
     <VCard title="Товары" class="mb-6">
-      <VDivider />
 
+      <VSnackbar
+        v-model="snackbar.visible"
+        :color="snackbar.color"
+        :timeout="snackbar.timeout"
+        location="top right"
+      >
+        {{ snackbar.text }}
+      </VSnackbar>
       <div class="d-flex flex-wrap gap-4 ma-6">
         <div class="d-flex align-center">
           <AppTextField
@@ -356,33 +393,54 @@ async function copyArticle(article?: string | number | null) {
               v-if="item.main_image_url"
               :src="item.main_image_url"
               alt="Фото"
-              class="prodcell__img"
+              class="prodcell__img cursor-pointer"
+              @click="openImageDialog(item.main_image_url)"
             />
+
             <div v-else class="prodcell__img prodcell__img--placeholder">
               <VIcon icon="tabler-photo" size="22" />
             </div>
 
             <div class="d-flex flex-column">
               <div class="d-flex align-center gap-2">
-                <RouterLink :to="{ name: 'product-details-id', params: { id: item.id } }" class="text-high-emphasis">
+                <RouterLink :to="{ name: 'product-details-id', params: { id: item.id } }" class="text-high-emphasis hoverable">
                   {{ item.name }}
                 </RouterLink>
               </div>
 
               <div class="mt-1 text-caption text-medium-emphasis d-flex align-center flex-wrap gap-1">
                 <template v-if="getWbCategoryName(item.wb_category)">
-                  <span class="text-truncate">{{ getWbCategoryName(item.wb_category) }}</span>
+                  <span
+                    class="text-truncate cursor-pointer hoverable"
+                    title="Фильтровать по категории"
+                    @click="filterByCategory(item.wb_category)"
+                  >
+                    {{ getWbCategoryName(item.wb_category) }}
+                  </span>
                   <span class="mx-1 text-disabled">•</span>
                 </template>
+
                 <template v-if="item.article">
                   <span
-                    class="cursor-pointer user-select-none d-inline-flex align-center"
-                    title="Скопировать артикул"
-                    @click="copyArticle(item.article)"
+                    class="user-select-none d-inline-flex align-center"
                   >
-                    {{ item.article }}
-                    <VIcon size="14" class="ms-1" icon="tabler-copy" />
+                    <RouterLink
+                      :to="{ name: 'product-details-id', params: { id: item.id } }"
+                      class="text-high-emphasis cursor-pointer hoverable-revert"
+                      style="text-decoration: none;"
+                    >
+                      {{ item.article }}
+                    </RouterLink>
+                  
+                    <VIcon
+                      size="14"
+                      class="ms-1 cursor-pointer"
+                      icon="tabler-copy"
+                      title="Скопировать артикул"
+                      @click.stop="copyArticle(item.article)"
+                    />
                   </span>
+
                 </template>
               </div>
 
@@ -435,13 +493,13 @@ async function copyArticle(article?: string | number | null) {
               <template #activator="{ props }">
                 <span
                   v-bind="props"
-                  class="cursor-pointer"
+                  class="cursor-pointer hoverable-revert"
                   @click="toggleTooltip(index)"
                 >
-                  {{ conciseSizes(item) }}
+                  {{ conciseSizes(item) || '—' }}
                 </span>
               </template>
-
+            
               <VTable density="compact" class="text-no-wrap">
                 <thead>
                   <tr>
@@ -563,6 +621,41 @@ async function copyArticle(article?: string | number | null) {
       />
     </div>
   </VNavigationDrawer>
+<VDialog
+  v-model="imageDialog"
+  transition="scale-transition"
+  :scrim="true"
+  @click:outside="imageDialog = false"
+  class="image-dialog"
+>
+  <div
+    class="d-flex justify-center align-center"
+  >
+    <transition name="zoom-fade">
+      <div
+        v-if="imageDialogUrl"
+        class="position-relative"
+        @click="imageDialog = false"
+      >
+        <IconBtn
+          @click.stop="imageDialog = false"
+          class="position-absolute close-btn"
+          style="top: 12px; right: 12px; z-index: 2; color: black;"
+        >
+          <VIcon icon="tabler-x" />
+        </IconBtn>
+
+        <img
+          :src="imageDialogUrl"
+          alt="Фото товара"
+          class="dialog-image"
+        />
+      </div>
+    </transition>
+  </div>
+</VDialog>
+
+
 </template>
 
 <style lang="scss">
@@ -575,8 +668,8 @@ async function copyArticle(article?: string | number | null) {
 }
 
 .prodcell__img {
-  inline-size: 55px;
-  block-size: 75px;
+  inline-size: 65px;
+  block-size: 83px;
   object-fit: cover;
   border-radius: 8px;
 }
@@ -631,4 +724,67 @@ async function copyArticle(article?: string | number | null) {
   padding: 0 !important;
   box-shadow: rgba(0, 0, 0, 0.17) 7px 6px 2px 1px;
 }
+.image-dialog {
+  .v-overlay__content {
+    background: transparent !important;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .dialog-image {
+    max-width: 90vw;
+    max-height: 85vh;
+    object-fit: contain;
+    border-radius: 10px;
+    cursor: zoom-out;
+  }
+
+  /* Zoom-in + fade эффект */
+  .zoom-fade-enter-active {
+    animation: zoomFadeIn 0.25s ease-out forwards;
+  }
+  .zoom-fade-leave-active {
+    animation: zoomFadeOut 0.2s ease-in forwards;
+  }
+
+  @keyframes zoomFadeIn {
+    from {
+      opacity: 0;
+      transform: scale(0.8);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes zoomFadeOut {
+    from {
+      opacity: 1;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: scale(0.9);
+    }
+  }
+
+    .close-btn {
+    background: rgba(0, 0, 0, 0.55) !important;
+    color: white !important;
+    backdrop-filter: blur(3px);
+    border-radius: 50%;
+    transition: background 0.2s ease;
+  }
+
+  .close-btn:hover {
+    background: rgba(0, 0, 0, 0.75) !important;
+  }
+
+  .v-icon {
+    color: white !important;
+  }
+}
+
 </style>

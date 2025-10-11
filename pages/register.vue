@@ -239,8 +239,10 @@ async function onSubmit() {
                         <NuxtLink
                           :to="{ path: '/offer', query: { from: 'register' } }"
                           class="text-primary"
+                          target="_blank"
                           @click.stop
                           @mousedown.stop
+
                         >
                           Публичной оферты
                         </NuxtLink>
