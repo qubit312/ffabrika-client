@@ -260,10 +260,9 @@ function goToLabels(size: ProductSizeWithLabels, used: boolean) {
           class="me-2"
         />
         <span v-else class="text-high-emphasis ">
-                  <span
-            class=" cursor-pointer hoverable"
-         
-          > {{ sizeCounts[item.id]?.total ?? item.available_labels_count ?? 0 }}</span>
+          <span class=" cursor-pointer hoverable"> 
+            {{ sizeCounts[item.id]?.total ?? item.available_labels_count ?? 0 }}
+          </span>
           <span class="divider-hoverable">/</span>
           <span
             class="text-primary cursor-pointer hoverable"

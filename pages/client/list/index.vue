@@ -184,10 +184,10 @@ onMounted(fetchClients)
         <!-- name  -->
         <template #item.name="{ item }">
           <div
-            class="d-flex align-center gap-x-4"
-            style="cursor: pointer;"
+            class="d-flex align-center gap-x-4 pointer"
+            
           >
-            <div class="d-flex flex-column">
+            <div class="d-flex flex-column hoverable">
               <RouterLink :to="{ name: 'client-details-id', params: { id: item.id } }">
                 {{ item.name }}
               </RouterLink>
@@ -197,22 +197,22 @@ onMounted(fetchClients)
 
         <!-- type -->
         <template #item.type="{ item }">
-          <span class="text-body-1 text-high-emphasis">{{ typeCaption[item.type] }}</span>
+          <span class="text-body-1 text-high-emphasis hoverable pointer">{{ typeCaption[item.type] }}</span>
         </template>
 
         <!-- phone -->
         <template #item.phone="{ item }">
-          <span class="text-body-1 text-high-emphasis">{{ item.phone }}</span>
+          <span class="text-body-1 text-high-emphasis hoverable pointer">{{ item.phone }}</span>
         </template>
 
         <!-- email -->
         <template #item.email="{ item }">
-          <span class="text-body-1 text-high-emphasis">{{ item.email }}</span>
+          <span class="text-body-1 text-high-emphasis hoverable pointer">{{ item.email }}</span>
         </template>
 
         <!-- telegram -->
         <template #item.telegram="{ item }">
-          <span class="text-body-1 text-high-emphasis">{{ item.telegram }}</span>
+          <span class="text-body-1 text-high-emphasis hoverable pointer">{{ item.telegram }}</span>
         </template>
 
         <!-- Actions -->

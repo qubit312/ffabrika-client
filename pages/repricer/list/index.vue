@@ -214,7 +214,7 @@ const resetFilters = () => {
         >
         <!-- Колонка названия -->
         <template #item.name="{ item }">
-          <div class="d-flex align-center">
+          <div class="d-flex align-center pointer hoverable">
             <RouterLink :to="{ name: 'repricer-details-id', params: { id: item.id } }">
               {{ item.name }}
             </RouterLink>
@@ -232,18 +232,22 @@ const resetFilters = () => {
         </template>
 
         <!-- Колонка типа -->
-        <template #item.type="{ item }">
-          <span>{{ getTypeText(item.type) }}</span>
+        <template #item.type="{ item }" >
+          <div class="hoverable pointer">
+            <span>{{ getTypeText(item.type) }}</span>
+          </div>
         </template>
 
         <!-- Колонка товаров -->
         <template #item.products="{ item }">
-          <span>{{ item.products }}</span>
+          <div class="hoverable pointer">
+            <span>{{ item.products }}</span>
+          </div>
         </template>
 
         <!-- Колонка даты создания -->
         <template #item.created_at="{ item }">
-            <div>
+            <div class="hoverable pointer">
             {{ formatDate(item.created_at) }}
             </div>
         </template>
