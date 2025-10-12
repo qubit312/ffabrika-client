@@ -1,3 +1,4 @@
+```vue
 <script setup lang="ts">
 import { useBreadcrumbs } from '@/composables/useBreadcrumbs'
 import { useFieldState } from '@/composables/useFieldState'
@@ -44,6 +45,8 @@ const { isAdmin } = useCurrentUser()
 const loading = ref(false)
 const isFormInitialized = ref(false)
 const originalForm = ref<Client | null>(null)
+const isEdit = ref(false)
+const isSaving = ref(false)
 
 const snackbar = ref(false)
 const snackMessage = ref('')
@@ -70,21 +73,18 @@ const form = reactive<Client>({
   deleted_at: null,
 })
 
-type Rule = (v: any) => true | string
-const submitted = ref(false)
-const formRef = ref<InstanceType<typeof VForm> | null>(null)
-const changeTypeBtnVisible = computed(() => form.id && !form.is_fulfillment && isAdmin.value)
+const copiedField = ref<string | null>(null)
 
-const isCreate = computed(() => mode.value === 'create')
-const currentTitle = computed(() => form.name)
-const { items: clientCrumbs } = useBreadcrumbs(
-  'Клиенты',
-  { name: 'client-list' },
-  currentTitle,
-  isCreate,
-)
+const copyToClipboard = (text: string, field: string) => {
+  if (text) {
+    navigator.clipboard.writeText(text)
+    copiedField.value = field
+    setTimeout(() => {
+      copiedField.value = null
+    }, 2000)
+  }
+}
 
-// === Input handlers ===
 const onInnInput = (v: string) => {
   form.tin = v.replace(/[^0-9]/g, '').slice(0, form.type === 'INDIVIDUAL' ? 12 : 10)
 }
@@ -115,7 +115,6 @@ const onTelegramInput = (v: string) => {
   form.telegram = value
 }
 
-// 20.00/20,00 -> 20 (0-20)
 function toVatPercent(v: any): string {
   if (v === null || v === undefined || v === '') return ''
   const n = Number(String(v).replace(',', '.'))
@@ -131,7 +130,20 @@ const onBankInput = (v: string) => {
   form.bank = String(v || '').replace(/[^A-Za-zА-Яа-я\s"'\-«»]/g, '')
 }
 
-// === Rules ===
+type Rule = (v: any) => true | string
+const submitted = ref(false)
+const formRef = ref<InstanceType<typeof VForm> | null>(null)
+const changeTypeBtnVisible = computed(() => form.id && !form.is_fulfillment && isAdmin.value)
+
+const isCreate = computed(() => mode.value === 'create')
+const currentTitle = computed(() => form.name)
+const { items: clientCrumbs } = useBreadcrumbs(
+  'Клиенты',
+  { name: 'client-list' },
+  currentTitle,
+  isCreate,
+)
+
 const tinRules = computed<Rule[]>(() => [required, innRule(() => form.type)])
 const psrnRules = computed<Rule[]>(() => [
   requiredIf(() => form.type === 'INDIVIDUAL'),
@@ -148,10 +160,8 @@ const bankRules: Rule[] = [bankNameRule]
 const nameRules: Rule[] = [required]
 const typeRules: Rule[] = [required]
 const legalAddressRules: Rule[] = []
-const notesRules: Rule[] = []
-const preferredContactRules: Rule[] = []
 
-// === Server → Form mapping ===
+
 function mapServerResponseToForm(serverData: any): void {
   form.id = serverData.id || 0
   form.name = serverData.name || ''
@@ -176,10 +186,9 @@ function mapServerResponseToForm(serverData: any): void {
   submitted.value = false
 }
 
-// === Dirty tracking (без deep-watch + JSON.stringify) ===
 const fieldsToTrack: (keyof Client)[] = [
-  'name','type','phone','email','telegram','tin','psrn','account',
-  'bank','correspondent_account','bic','legal_address','vat'
+  'name', 'type', 'phone', 'email', 'telegram', 'tin', 'psrn', 'account',
+  'bank', 'correspondent_account', 'bic', 'legal_address', 'vat'
 ]
 const isDirty = computed(() => {
   if (!originalForm.value) return false
@@ -233,7 +242,7 @@ async function onSubmit() {
     return
   }
 
-  loading.value = true
+  isSaving.value = true
   const dto = buildSubmitPayload(form) as CreateClientDto
 
   const response = mode.value === 'edit'
@@ -252,6 +261,7 @@ async function onSubmit() {
     if (mode.value === 'edit') {
       originalForm.value = structuredClone(toRaw(form))
       mode.value = 'view'
+      isEdit.value = false
       submitted.value = false
     }
 
@@ -262,19 +272,26 @@ async function onSubmit() {
   }
 
   snackbar.value = true
-  loading.value = false
+  isSaving.value = false
 }
 
 onMounted(() => {
   if (primaryId > 0) {
     fetchClient(primaryId)
     fetchBrands()
+  } else {
+    isEdit.value = true 
   }
 })
+
+function startEdit() {
+  isEdit.value = true
+}
 
 function cancelEdit() {
   if (originalForm.value) {
     Object.assign(form, structuredClone(toRaw(originalForm.value)))
+    isEdit.value = false
     mode.value = 'view'
     submitted.value = false
   }
@@ -335,7 +352,6 @@ const submitBrand = async () => {
   }
 }
 
-
 const setAsFulfillment = async () => {
   loading.value = true
   try {
@@ -358,23 +374,19 @@ const setAsFulfillment = async () => {
   }
 }
 
-// === Field states (без повторных вычислений в шаблоне) ===
-const nameState  = useFieldState(nameRules,  computed(()=>form.name),  submitted)
-const typeState  = useFieldState(typeRules,  computed(()=>form.type),  submitted)
-const phoneState = useFieldState(phoneRules, computed(()=>form.phone), submitted)
-const emailState = useFieldState(emailRules, computed(()=>form.email), submitted)
-const tgState    = useFieldState(telegramRules, computed(()=>form.telegram), submitted)
-
-const tinState   = useFieldState(tinRules, computed(()=>form.tin), submitted)
-const psrnState  = useFieldState(psrnRules, computed(()=>form.psrn), submitted)
-const accState   = useFieldState(accountRules, computed(()=>form.account), submitted)
-const bankState  = useFieldState(bankRules, computed(()=>form.bank), submitted)
-const corrState  = useFieldState(corrAccountRules, computed(()=>form.correspondent_account), submitted)
-const bicState   = useFieldState(bicRules, computed(()=>form.bic), submitted)
-const vatState   = useFieldState(vatRules, computed(()=>form.vat), submitted)
-
-const legalState = useFieldState(legalAddressRules, computed(()=>form.legal_address), submitted)
-
+const nameState  = useFieldState(nameRules,  computed(() => form.name),  submitted)
+const typeState  = useFieldState(typeRules,  computed(() => form.type),  submitted)
+const phoneState = useFieldState(phoneRules, computed(() => form.phone), submitted)
+const emailState = useFieldState(emailRules, computed(() => form.email), submitted)
+const tgState    = useFieldState(telegramRules, computed(() => form.telegram), submitted)
+const tinState   = useFieldState(tinRules, computed(() => form.tin), submitted)
+const psrnState  = useFieldState(psrnRules, computed(() => form.psrn), submitted)
+const accState   = useFieldState(accountRules, computed(() => form.account), submitted)
+const bankState  = useFieldState(bankRules, computed(() => form.bank), submitted)
+const corrState  = useFieldState(corrAccountRules, computed(() => form.correspondent_account), submitted)
+const bicState   = useFieldState(bicRules, computed(() => form.bic), submitted)
+const vatState   = useFieldState(vatRules, computed(() => form.vat), submitted)
+const legalState = useFieldState(legalAddressRules, computed(() => form.legal_address), submitted)
 </script>
 
 <template>
@@ -387,63 +399,78 @@ const legalState = useFieldState(legalAddressRules, computed(()=>form.legal_addr
           <span class="text-h4 font-weight-medium">
             {{ mode === 'create' ? 'Вы создаете нового клиента' : form.name }}
           </span>
-          <!-- TO DO -->
-          <VBtn 
-            v-if="changeTypeBtnVisible" 
-            class="ms-4" 
-            size="small" 
-            variant="outlined" 
-            color="primary" 
+          <VBtn
+            v-if="changeTypeBtnVisible"
+            class="ms-4"
+            size="small"
+            variant="outlined"
+            color="primary"
             @click="setAsFulfillment"
           >
             Назначить фулфилментом
           </VBtn>
         </div>
         <div class="d-flex gap-4 align-center flex-wrap">
-          <VBtn v-if="mode === 'edit'" variant="outlined" color="primary" @click="cancelEdit">
+          <VBtn v-if="isEdit" variant="outlined" color="primary" @click="cancelEdit">
             Отменить
           </VBtn>
-          <VBtn v-if="mode !== 'edit'" variant="outlined" color="primary" @click="router.back()">
+          <VBtn v-if="!isEdit && mode !== 'create'" variant="outlined" color="primary" @click="router.back()">
             Закрыть
           </VBtn>
-          <VBtn v-if="mode != 'view'" color="primary" @click="onSubmit">
+          <VBtn v-if="!isEdit" color="primary" @click="startEdit">
+            Редактировать
+          </VBtn>
+          <VBtn v-if="isEdit" color="primary" :loading="isSaving" @click="onSubmit">
             Сохранить
           </VBtn>
         </div>
       </div>
 
       <VRow>
-        <VCol md="3">
+        <VCol md="4">
+          <!-- Контакты -->
           <VCard class="mb-6">
-            <VCardText>
+            <VCardTitle>Контакты</VCardTitle>
+            <VCardText class="pa-6 pt-0">
               <VRow>
-                <VCol cols="12" md="12">
-                  <AppTextField
-                    v-model="form.name"
-                    label="Название"
-                    placeholder="Введите название клиента"
-                    outlined
-                    :rules="nameRules"
-                    v-bind="nameState"
-                  />
+                <VCol cols="12" md="12" v-if="!isEdit && mode !== 'create'">
+                  <VList density="default">
+                    <VListItem @click="copyToClipboard(form.phone, 'phone')">
+                      <VListItemTitle>Телефон</VListItemTitle>
+                      <VListItemSubtitle>
+                        <VTooltip :model-value="copiedField === 'phone'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'phone'">
+                          <template #activator="{ props }">
+                            <span v-bind="props">{{ form.phone || 'Не указано' }}</span>
+                          </template>
+                          {{ copiedField === 'phone' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+                        </VTooltip>
+                      </VListItemSubtitle>
+                    </VListItem>
+                    <VListItem @click="copyToClipboard(form.email, 'email')">
+                      <VListItemTitle>Email</VListItemTitle>
+                      <VListItemSubtitle>
+                        <VTooltip :model-value="copiedField === 'email'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'email'">
+                          <template #activator="{ props }">
+                            <span v-bind="props">{{ form.email || 'Не указано' }}</span>
+                          </template>
+                          {{ copiedField === 'email' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+                        </VTooltip>
+                      </VListItemSubtitle>
+                    </VListItem>
+                    <VListItem @click="copyToClipboard(form.telegram, 'telegram')">
+                      <VListItemTitle>Telegram</VListItemTitle>
+                      <VListItemSubtitle>
+                        <VTooltip :model-value="copiedField === 'telegram'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'telegram'">
+                          <template #activator="{ props }">
+                            <span v-bind="props">{{ form.telegram || 'Не указано' }}</span>
+                          </template>
+                          {{ copiedField === 'telegram' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+                        </VTooltip>
+                      </VListItemSubtitle>
+                    </VListItem>
+                  </VList>
                 </VCol>
-
-                <VCol cols="12" md="12">
-                  <AppSelect
-                    v-model="form.type"
-                    :items="typeOptions"
-                    item-title="label"
-                    item-value="value"
-                    label="Тип клиента"
-                    placeholder="Выберите тип"
-                    clearable
-                    outlined
-                    :rules="typeRules"
-                    v-bind="typeState"
-                  />
-                </VCol>
-
-                <VCol cols="12" md="12">
+                <VCol cols="12" md="12" v-else>
                   <AppTextField
                     :model-value="form.phone"
                     label="Телефон"
@@ -454,9 +481,6 @@ const legalState = useFieldState(legalAddressRules, computed(()=>form.legal_addr
                     v-bind="phoneState"
                     @update:modelValue="onPhoneInput"
                   />
-                </VCol>
-
-                <VCol cols="12" md="12">
                   <AppTextField
                     v-model="form.email"
                     label="Email"
@@ -464,9 +488,6 @@ const legalState = useFieldState(legalAddressRules, computed(()=>form.legal_addr
                     :rules="emailRules"
                     v-bind="emailState"
                   />
-                </VCol>
-
-                <VCol cols="12" md="12">
                   <AppTextField
                     :model-value="form.telegram"
                     label="Telegram"
@@ -481,8 +502,9 @@ const legalState = useFieldState(legalAddressRules, computed(()=>form.legal_addr
             </VCardText>
           </VCard>
 
+          <!-- Мои бренды -->
           <VCard title="Мои бренды" class="mb-6">
-            <VCardText>
+            <VCardText class="pa-6 pt-0">
               <VRow>
                 <VCol md="12" class="pt-0 pb-0">
                   <VList class="pt-0 pb-0">
@@ -500,7 +522,6 @@ const legalState = useFieldState(legalAddressRules, computed(()=>form.legal_addr
                     </template>
                   </AppTextField>
                 </VCol>
-
                 <VCol md="12">
                   <VBtn color="primary" @click="submitBrand">
                     <VIcon start :icon="editedBrandVisible ? 'tabler-check' : 'tabler-plus'" />
@@ -512,11 +533,151 @@ const legalState = useFieldState(legalAddressRules, computed(()=>form.legal_addr
           </VCard>
         </VCol>
 
-        <VCol md="9">
+        <VCol md="8">
+          <!-- Реквизиты -->
           <VCard class="mb-6">
-            <VCardText>
+            <VCardTitle>Реквизиты</VCardTitle>
+            <VCardText class="pa-6 pt-0">
               <VRow>
-                <VCol cols="12" md="6">
+                <VCol cols="12" md="6" v-if="!isEdit && mode !== 'create'">
+                  <VList density="default">
+                    <VListItem @click="copyToClipboard(form.name, 'name')">
+                      <VListItemTitle>Название</VListItemTitle>
+                      <VListItemSubtitle>
+                        <VTooltip :model-value="copiedField === 'name'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'name'">
+                          <template #activator="{ props }">
+                            <span v-bind="props">{{ form.name || 'Не указано' }}</span>
+                          </template>
+                          {{ copiedField === 'name' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+                        </VTooltip>
+                      </VListItemSubtitle>
+                    </VListItem>
+                    <VListItem @click="copyToClipboard(typeOptions.find(t => t.value === form.type)?.label || '', 'type')">
+                      <VListItemTitle>Тип</VListItemTitle>
+                      <VListItemSubtitle>
+                        <VTooltip :model-value="copiedField === 'type'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'type'">
+                          <template #activator="{ props }">
+                            <span v-bind="props">{{ typeOptions.find(t => t.value === form.type)?.label || 'Не указано' }}</span>
+                          </template>
+                          {{ copiedField === 'type' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+                        </VTooltip>
+                      </VListItemSubtitle>
+                    </VListItem>
+                    <VListItem @click="copyToClipboard(form.tin, 'tin')">
+                      <VListItemTitle>ИНН</VListItemTitle>
+                      <VListItemSubtitle>
+                        <VTooltip :model-value="copiedField === 'tin'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'tin'">
+                          <template #activator="{ props }">
+                            <span v-bind="props">{{ form.tin || 'Не указано' }}</span>
+                          </template>
+                          {{ copiedField === 'tin' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+                        </VTooltip>
+                      </VListItemSubtitle>
+                    </VListItem>
+                    <VListItem @click="copyToClipboard(form.psrn, 'psrn')">
+                      <VListItemTitle>ОГРНИП</VListItemTitle>
+                      <VListItemSubtitle>
+                        <VTooltip :model-value="copiedField === 'psrn'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'psrn'">
+                          <template #activator="{ props }">
+                            <span v-bind="props">{{ form.psrn || 'Не указано' }}</span>
+                          </template>
+                          {{ copiedField === 'psrn' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+                        </VTooltip>
+                      </VListItemSubtitle>
+                    </VListItem>
+                    <VListItem @click="copyToClipboard(form.account, 'account')">
+                      <VListItemTitle>Счёт</VListItemTitle>
+                      <VListItemSubtitle>
+                        <VTooltip :model-value="copiedField === 'account'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'account'">
+                          <template #activator="{ props }">
+                            <span v-bind="props">{{ form.account || 'Не указано' }}</span>
+                          </template>
+                          {{ copiedField === 'account' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+                        </VTooltip>
+                      </VListItemSubtitle>
+                    </VListItem>
+                  </VList>
+                </VCol>
+                <VCol cols="12" md="6" v-if="!isEdit && mode !== 'create'">
+                  <VList density="default">
+                    <VListItem @click="copyToClipboard(form.correspondent_account, 'correspondent_account')">
+                      <VListItemTitle>Корр. счёт</VListItemTitle>
+                      <VListItemSubtitle>
+                        <VTooltip :model-value="copiedField === 'correspondent_account'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'correspondent_account'">
+                          <template #activator="{ props }">
+                            <span v-bind="props">{{ form.correspondent_account || 'Не указано' }}</span>
+                          </template>
+                          {{ copiedField === 'correspondent_account' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+                        </VTooltip>
+                      </VListItemSubtitle>
+                    </VListItem>
+                    <VListItem @click="copyToClipboard(form.bank, 'bank')">
+                      <VListItemTitle>Банк</VListItemTitle>
+                      <VListItemSubtitle>
+                        <VTooltip :model-value="copiedField === 'bank'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'bank'">
+                          <template #activator="{ props }">
+                            <span v-bind="props">{{ form.bank || 'Не указано' }}</span>
+                          </template>
+                          {{ copiedField === 'bank' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+                        </VTooltip>
+                      </VListItemSubtitle>
+                    </VListItem>
+                    <VListItem @click="copyToClipboard(form.bic, 'bic')">
+                      <VListItemTitle>БИК</VListItemTitle>
+                      <VListItemSubtitle>
+                        <VTooltip :model-value="copiedField === 'bic'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'bic'">
+                          <template #activator="{ props }">
+                            <span v-bind="props">{{ form.bic || 'Не указано' }}</span>
+                          </template>
+                          {{ copiedField === 'bic' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+                        </VTooltip>
+                      </VListItemSubtitle>
+                    </VListItem>
+                    <VListItem @click="copyToClipboard(form.vat, 'vat')">
+                      <VListItemTitle>НДС</VListItemTitle>
+                      <VListItemSubtitle>
+                        <VTooltip :model-value="copiedField === 'vat'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'vat'">
+                          <template #activator="{ props }">
+                            <span v-bind="props">{{ form.vat ? `${form.vat}%` : 'Не указано' }}</span>
+                          </template>
+                          {{ copiedField === 'vat' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+                        </VTooltip>
+                      </VListItemSubtitle>
+                    </VListItem>
+                    <VListItem @click="copyToClipboard(form.legal_address, 'legal_address')">
+                      <VListItemTitle>Юридический адрес</VListItemTitle>
+                      <VListItemSubtitle>
+                        <VTooltip :model-value="copiedField === 'legal_address'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'legal_address'">
+                          <template #activator="{ props }">
+                            <span v-bind="props">{{ form.legal_address || 'Не указано' }}</span>
+                          </template>
+                          {{ copiedField === 'legal_address' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+                        </VTooltip>
+                      </VListItemSubtitle>
+                    </VListItem>
+                  </VList>
+                </VCol>
+                <VCol cols="12" md="6" v-if="isEdit || mode === 'create'">
+                  <AppTextField
+                    v-model="form.name"
+                    label="Название"
+                    placeholder="Введите название клиента"
+                    outlined
+                    :rules="nameRules"
+                    v-bind="nameState"
+                  />
+                  <AppSelect
+                    v-model="form.type"
+                    :items="typeOptions"
+                    item-title="label"
+                    item-value="value"
+                    label="Тип клиента"
+                    placeholder="Выберите тип"
+                    clearable
+                    outlined
+                    :rules="typeRules"
+                    v-bind="typeState"
+                  />
                   <AppTextField
                     :model-value="form.tin"
                     label="ИНН"
@@ -527,9 +688,6 @@ const legalState = useFieldState(legalAddressRules, computed(()=>form.legal_addr
                     v-bind="tinState"
                     @update:modelValue="onInnInput"
                   />
-                </VCol>
-
-                <VCol cols="12" md="6">
                   <AppTextField
                     :model-value="form.psrn"
                     label="ОГРНИП"
@@ -540,9 +698,6 @@ const legalState = useFieldState(legalAddressRules, computed(()=>form.legal_addr
                     v-bind="psrnState"
                     @update:modelValue="onOgrnipInput"
                   />
-                </VCol>
-
-                <VCol cols="12" md="6">
                   <AppTextField
                     :model-value="form.account"
                     label="Счёт"
@@ -554,19 +709,7 @@ const legalState = useFieldState(legalAddressRules, computed(()=>form.legal_addr
                     @update:modelValue="onAccountInput"
                   />
                 </VCol>
-
-                <VCol cols="12" md="6">
-                  <AppTextField
-                    :model-value="form.bank"
-                    label="Банк"
-                    outlined
-                    :rules="bankRules"
-                    v-bind="bankState"
-                    @update:modelValue="onBankInput"
-                  />
-                </VCol>
-
-                <VCol cols="12" md="6">
+                <VCol cols="12" md="6" v-if="isEdit || mode === 'create'">
                   <AppTextField
                     :model-value="form.correspondent_account"
                     label="Корр. счёт"
@@ -577,9 +720,14 @@ const legalState = useFieldState(legalAddressRules, computed(()=>form.legal_addr
                     v-bind="corrState"
                     @update:modelValue="onCorrAccountInput"
                   />
-                </VCol>
-
-                <VCol cols="12" md="6">
+                  <AppTextField
+                    :model-value="form.bank"
+                    label="Банк"
+                    outlined
+                    :rules="bankRules"
+                    v-bind="bankState"
+                    @update:modelValue="onBankInput"
+                  />
                   <AppTextField
                     :model-value="form.bic"
                     label="БИК"
@@ -590,9 +738,6 @@ const legalState = useFieldState(legalAddressRules, computed(()=>form.legal_addr
                     v-bind="bicState"
                     @update:modelValue="onBicInput"
                   />
-                </VCol>
-
-                <VCol cols="12" md="6">
                   <AppTextField
                     :model-value="form.vat"
                     label="НДС(%)"
@@ -603,9 +748,6 @@ const legalState = useFieldState(legalAddressRules, computed(()=>form.legal_addr
                     v-bind="vatState"
                     @update:modelValue="onVatInput"
                   />
-                </VCol>
-
-                <VCol cols="12" md="6">
                   <AppTextField
                     v-model="form.legal_address"
                     label="Юридический адрес"
@@ -629,14 +771,32 @@ const legalState = useFieldState(legalAddressRules, computed(()=>form.legal_addr
   </div>
 </template>
 
-<style scoped>
-/* Обычные сообщения (messages) — чёрные */
-:deep(.v-messages__message) {
-  color: #000; /* или var(--v-theme-on-surface) */
+<style scoped lang="scss">
+.view-mode .v-list-item {
+  transition: background-color 0.2s ease;
+  border-radius: 4px;
+  margin-bottom: 4px;
 }
-
-/* Когда инпут в ошибке — оставляем красный от темы */
+.view-mode .v-list-item:hover {
+  background-color: var(--v-theme-surface-variant);
+}
+:deep(.v-messages__message) {
+  color: #000;
+}
 :deep(.v-input--error .v-messages__message) {
   color: var(--v-theme-error);
+}
+.v-card {
+  border-radius: 8px;
+}
+.v-card-title {
+  padding: 24px 24px 0;
+}
+.v-btn {
+  border-radius: 6px;
+  transition: transform 0.2s ease;
+}
+.v-btn:hover {
+  transform: translateY(-2px);
 }
 </style>

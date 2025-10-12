@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import PrintLabelDialog from '@/components/dialogs/PrintLabelDialog.vue';
+import UpdateChzLabel from '@/components/dialogs/UpdateChzLabel.vue';
 import { computed, defineExpose, defineProps, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useLabelEvents } from '../composables/useLabelBus';
@@ -221,26 +223,26 @@ function goToLabels(size: ProductSizeWithLabels, used: boolean) {
   >
     <template #no-data />
     <template #bottom />
-<!-- колонка Баркод -->
-<template #item.barcode="{ item }">
-  <span class="hoverable cursor-pointer">
-    {{ item.barcode || '—' }}
-  </span>
-</template>
+    <!-- колонка Баркод -->
+    <template #item.barcode="{ item }">
+      <span class="hoverable cursor-pointer">
+        {{ item.barcode || '—' }}
+      </span>
+    </template>
 
-<!-- колонка Размер -->
-<template #item.value="{ item }">
-  <span class="hoverable cursor-pointer">
-    {{ item.value || '—' }}
-  </span>
-</template>
+    <!-- колонка Размер -->
+    <template #item.value="{ item }">
+      <span class="hoverable cursor-pointer">
+        {{ item.value || '—' }}
+      </span>
+    </template>
 
-<!-- колонка Рос. Размер -->
-<template #item.tech_size="{ item }">
-  <span class="hoverable cursor-pointer">
-    {{ item.tech_size || '—' }}
-  </span>
-</template>
+    <!-- колонка Рос. Размер -->
+    <template #item.tech_size="{ item }">
+      <span class="hoverable cursor-pointer">
+        {{ item.tech_size || '—' }}
+      </span>
+    </template>
 
     <template #header.labels="{ column }">
       <VTooltip open-delay="400">
@@ -252,37 +254,21 @@ function goToLabels(size: ProductSizeWithLabels, used: boolean) {
     </template>
 
     <template #item.labels="{ item }">
-      <div class="d-flex align-center">
-        <VProgressCircular
-          v-if="loadingCounts[item.id]"
-          indeterminate
-          size="18"
-          class="me-2"
-        />
-        <span v-else class="text-high-emphasis ">
-                  <span
-            class=" cursor-pointer hoverable"
-         
-          > {{ sizeCounts[item.id]?.total ?? item.available_labels_count ?? 0 }}</span>
-          <span class="divider-hoverable">/</span>
-          <span
-            class="text-primary cursor-pointer hoverable"
-            @click="goToLabels(item, true)"
-            title="Показать использованные метки"
-          >
-            {{ item.used_count ?? 0 }}
-          </span>
-                  <span class="divider-hoverable">/</span>
-          <span
-            class="text-primary cursor-pointer hoverable"
-            @click="goToLabels(item, false)"
-            title="Показать неиспользованные метки"
-          >
-            {{ item.available_count ?? 0 }}
-          </span>
+      <span class="text-high-emphasis ">
+        <span class="pointer hoverable">
+          {{ item.total_count ?? 0 }}
         </span>
-      </div>
+        /
+        <span class="text-primary cursor-pointer hoverable-revert" @click="goToLabels(item, true)">
+          {{ item.used_count ?? 0 }}
+        </span>
+        /
+        <span class="text-primary cursor-pointer  hoverable-revert" @click="goToLabels(item, false)">
+          {{ item.available_count ?? 0 }}
+        </span>
+      </span>
     </template>
+
 
     <template #item.actions="{ item }">
       <div class="d-flex gap-1">

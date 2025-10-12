@@ -132,7 +132,7 @@ onMounted(async () => {
   <div class="d-flex flex-column gap-6">
     <VAlert v-if="errorText" type="error" variant="tonal">{{ errorText }}</VAlert>
 
-    <VCard class="mb-2">
+    <VCard>
       <VCardText class="d-flex flex-wrap align-center justify-space-between gap-4">
         <div>
           <div class="text-h6 font-weight-medium">Добро пожаловать в FF-WMS 🚀</div>
@@ -347,4 +347,8 @@ onMounted(async () => {
 
 <style scoped lang="scss">
 .kpi-card { min-height: 112px; }
+
+.v-row + .v-row {
+    margin-top: -12px;
+}
 </style>
