@@ -9,7 +9,7 @@ const platforms = [{ title: 'Wildberries', value: 'WB' as const }]
 
 const formRef = ref<any>(null)
 const saving = ref(false)
-const showToken = ref(false)
+
 const form = reactive<CreateMarketplaceAccountDto>({
   platform: 'WB' as MarketplaceAccount['platform'],
   name: '',
@@ -68,15 +68,17 @@ async function onSubmit() {
       return
     }
 
-    if (data.value) {
-      const newAccount = data.value
-      rows.value.unshift(newAccount)
+if (data.value) {
+  const newAccount = data.value
+  rows.value.unshift(newAccount)
 
-      form.name = ''
-      form.api_token_enc = ''
-      showToken.value = false
-      formRef.value?.resetValidation?.()
-    } else {
+  notify('Магазин успешно добавлен')  // ← вот эта строка
+
+  form.name = ''
+  form.api_token_enc = ''
+  formRef.value?.resetValidation?.()
+}
+ else {
       // error.value = 'Сервер вернул пустой ответ'
     }
   } catch (err: any) {
@@ -99,13 +101,12 @@ const importResult = reactive({
   updated: 0,
   errors: [] as string[]
 })
+const importingId = ref<number | null>(null)
 
 const importProduct = async (id: number) => {
+  importingId.value = id
   try {
-    importLoading.value = true
-    const dto = {
-      'marketplace_account_id': id
-    }
+    const dto = { marketplace_account_id: id }
     const { data, error } = await importWbProduct(dto)
     if (error.value) throw new Error(error.value.message || 'Ошибка при импорте товаров')
 
@@ -126,9 +127,10 @@ const importProduct = async (id: number) => {
       errors: [e instanceof Error ? e.message : 'Неизвестная ошибка']
     })
   } finally {
-    importLoading.value = false
+    importingId.value = null
   }
 }
+
 
 async function simulateCheck(id: number) {
   loadingCheckId.value = id;
@@ -190,6 +192,34 @@ async function removeRow(id: number) {
     deletingId.value = null
   }
 }
+
+const confirmDeleteDialog = ref(false)
+const deleteTargetId = ref<number | null>(null)
+
+function askDelete(id: number) {
+  deleteTargetId.value = id
+  confirmDeleteDialog.value = true
+}
+
+const snack = reactive({ show: false, text: '', color: 'success' as 'success' | 'error' })
+const notify = (text: string, color: 'success' | 'error' = 'success') => {
+  snack.text = text
+  snack.color = color
+  snack.show = true
+}
+
+
+async function confirmDelete() {
+  if (!deleteTargetId.value) return
+  deletingId.value = deleteTargetId.value
+  await removeRow(deleteTargetId.value)
+  confirmDeleteDialog.value = false
+  notify('Магазин успешно удалён')
+  deletingId.value = null
+  deleteTargetId.value = null
+}
+
+
 
 const renameDialog = ref(false)
 const renameValue = ref('')
@@ -277,27 +307,32 @@ onMounted(load)
                   hide-details
                 />
               </VCol>
-
               <VCol cols="12">
                 <VTextField
                   v-model="form.name"
                   label="Название магазина (обязательное поле)"
                   :rules="[rules.required]"
+                  autocomplete="off"
+                  autocorrect="off"
+                  autocapitalize="off"
+                  spellcheck="false"
                 />
               </VCol>
-
+              
               <VCol cols="12">
-                <VTextField
+                <VTextarea
                   v-model="form.api_token_enc"
-                  :type="showToken ? 'text' : 'password'"
                   label="Создайте токен и укажите его в этом поле"
                   placeholder="Введите API-токен"
-                  :append-inner-icon="showToken ? 'tabler-eye-off' : 'tabler-eye'"
-                  @click:append-inner="showToken = !showToken"
+                  auto-grow
+                  rows="3"
                   :rules="[rules.required, rules.tokenMin]"
+                  autocomplete="off"
+                  autocorrect="off"
+                  autocapitalize="off"
+                  spellcheck="false"
                 />
               </VCol>
-
               <VCol cols="12">
                 <VBtn block color="primary" size="large" :loading="saving" type="submit">
                   Подключить
@@ -356,33 +391,54 @@ onMounted(load)
             >
               Проверить Подключение
             </VBtn>
-
+            <VBtn
+              size="small"
+              color="secondary"
+              variant="flat"
+              prepend-icon="tabler-download"
+              :loading="importingId === row.id"
+              @click="importProduct(row.id)"
+            >
+              Импортировать товары
+            </VBtn>
             <IconBtn class="me-1" @click="openRename(row)">
               <VIcon icon="tabler-edit" />
             </IconBtn>
-
-            <IconBtn class="me-1" @click="removeRow(row.id)">
+            <IconBtn class="me-1" @click="askDelete(row.id)">
               <VIcon icon="tabler-trash" />
             </IconBtn>
-
-            <VMenu>
-              <template #activator="{ props }">
-                <IconBtn v-bind="props"><VIcon icon="tabler-dots-vertical" /></IconBtn>
-              </template>
-              <VList>
-                <VListItem @click="importProduct(row.id)">
-                  <template #prepend><VIcon icon="tabler-activity" class="me-2" /></template>
-                  <VListItemTitle>Импортировать товары</VListItemTitle>
-                </VListItem>
-
-              </VList>
-            </VMenu>
           </div>
         </VSheet>
       </div>
     </VCardText>
   </VCard>
-
+  <VDialog v-model="confirmDeleteDialog" max-width="400">
+    <VCard>
+      <VCardTitle class="text-h6">Удалить магазин?</VCardTitle>
+      <VCardText>
+        Это действие необратимо. Магазин и связанные данные будут удалены.
+      </VCardText>
+      <VCardActions>
+        <VSpacer />
+        <VBtn
+          variant="tonal"
+          color="secondary"
+          @click="confirmDeleteDialog = false"
+          :disabled="!!deletingId"
+        >
+          Отмена
+        </VBtn>
+        <VBtn
+          color="error"
+          :loading="!!deletingId"
+          :disabled="!!deletingId"
+          @click="confirmDelete"
+        >
+          Удалить
+        </VBtn>
+      </VCardActions>
+    </VCard>
+  </VDialog>
   <VDialog v-model="renameDialog" max-width="500">
     <VCard>
       <VCardTitle class="text-h6">Обновить магазин</VCardTitle>
@@ -401,45 +457,99 @@ onMounted(load)
     </VCard>
   </VDialog>
 
-  <VDialog v-model="importResult.show" max-width="600" persistent>
-    <VCard>
-      <VCardTitle class="d-flex justify-space-between align-center">
-        <span>Результаты импорта</span>
-        <VBtn icon variant="text" @click="importResult.show = false">
-          <VIcon>tabler-x</VIcon>
+  <VDialog v-model="importResult.show" max-width="520" transition="scale-transition" persistent>
+    <VCard
+      class="rounded-l pa-4"
+      :color="importResult.success ? 'success-container' : 'error-container'"
+      elevation="12"
+    >
+      <div class="text-center mb-2">
+        <VAvatar
+          size="72"
+          class="mb-3 elevation-4"
+          :color="importResult.success ? 'success' : 'error'"
+        >
+          <VIcon
+            size="40"
+            :icon="importResult.success ? 'tabler-check' : 'tabler-alert-circle'"
+            color="white"
+          />
+        </VAvatar>
+
+        <h3 class="text-h6 font-weight-bold mb-1">
+          {{ importResult.success ? 'Импорт завершён успешно!' : 'Импорт завершён с ошибками' }}
+        </h3>
+        <p class="text-medium-emphasis mb-4">
+          {{ importResult.success
+            ? 'Все данные успешно обработаны и добавлены в систему.'
+            : 'Некоторые товары не удалось импортировать.' }}
+        </p>
+      </div>
+
+      <VSheet
+        class="pa-4 rounded-lg mb-4"
+        color="surface"
+        elevation="1"
+      >
+        <VRow>
+          <VCol cols="4" sm="4" class="d-flex flex-column align-center justify-center text-center">
+            <div class="text-body-2 text-medium-emphasis">Обработано товаров</div>
+            <div class="text-h6 font-weight-medium">{{ importResult.total_processed }}</div>
+          </VCol>
+          <VCol cols="4" sm="4" class="d-flex flex-column align-center justify-center text-center">
+            <div class="text-body-2 text-medium-emphasis">Создано</div>
+            <div class="text-h6 text-success font-weight-medium">{{ importResult.created }}</div>
+          </VCol>
+          <VCol cols="4" sm="4" class="d-flex flex-column align-center justify-center text-center">
+            <div class="text-body-2 text-medium-emphasis">Обновлено</div>
+            <div class="text-h6 text-info font-weight-medium">{{ importResult.updated }}</div>
+          </VCol>
+        </VRow>
+      </VSheet>
+
+      <VAlert
+        v-if="importResult.errors.length"
+        type="error"
+        variant="tonal"
+        density="comfortable"
+        border="start"
+        class="mb-4"
+      >
+        <template #title>Ошибки импорта</template>
+        <ul class="error-list">
+          <li v-for="(error, i) in importResult.errors" :key="i">{{ error }}</li>
+        </ul>
+      </VAlert>
+
+      <VAlert
+        v-else
+        type="success"
+        variant="tonal"
+        density="comfortable"
+        border="start"
+        class="mb-4"
+      >
+        Все товары успешно обработаны!
+      </VAlert>
+
+      <VCardActions class="justify-center">
+        <VBtn
+          color="primary"
+          variant="flat"
+          size="large"
+          rounded="lg"
+          prepend-icon="tabler-check"
+          @click="importResult.show = false"
+        >
+          Отлично
         </VBtn>
-      </VCardTitle>
-
-      <VCardText>
-        <VList>
-          <VListItem>
-            <VListItemTitle class="font-weight-medium">
-              Обработано товаров: {{ importResult.total_processed }}
-            </VListItemTitle>
-          </VListItem>
-          <VListItem><VListItemTitle>Создано: {{ importResult.created }}</VListItemTitle></VListItem>
-          <VListItem><VListItemTitle>Обновлено: {{ importResult.updated }}</VListItemTitle></VListItem>
-        </VList>
-
-        <VAlert v-if="importResult.errors.length" type="error" class="mt-4">
-          <VList>
-            <VListItem v-for="(error, index) in importResult.errors" :key="index" class="pa-0">
-              <VListItemTitle class="text-error">{{ error }}</VListItemTitle>
-            </VListItem>
-          </VList>
-        </VAlert>
-
-        <VAlert v-else type="success" class="mt-4">
-          Все товары успешно обработаны!
-        </VAlert>
-      </VCardText>
-
-      <VCardActions>
-        <VSpacer />
-        <VBtn color="primary" @click="importResult.show = false">Закрыть</VBtn>
       </VCardActions>
     </VCard>
   </VDialog>
+  <VSnackbar v-model="snack.show" :color="snack.color" location="top end" timeout="2500">
+    {{ snack.text }}
+  </VSnackbar>
+
 </template>
 
 <style scoped lang="scss">

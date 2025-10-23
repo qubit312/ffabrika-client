@@ -88,6 +88,7 @@ function mapServerResponseToForm(serverData: any): void {
   form.created_at = serverData.created_at || ''
   form.updated_at = serverData.updated_at || ''
   form.has_chestny_znak = !!serverData.has_chestny_znak
+  form.is_wb_import = Boolean(serverData.is_wb_import)
 
   // @ts-ignore
   form.sizes = Array.isArray(serverData.sizes) ? serverData.sizes : []
@@ -303,7 +304,7 @@ const fetchCategories = async () => {
           Маркировка
         </VBtn>
         <VBtn
-          v-if="form.article"
+          v-if="form.is_wb_import && form.article"
           color="wb"
           variant="flat"
           :href="`https://www.wildberries.ru/catalog/${form.article}/detail.aspx`"
@@ -313,6 +314,7 @@ const fetchCategories = async () => {
           <img src="/icons/wb-icon.svg" alt="WB" class="wb-icon me-2" />
           Открыть на WB
         </VBtn>
+
         <VBtn v-if="mode === 'edit'" variant="outlined" color="primary" @click="cancelEdit">
           Отменить
         </VBtn>

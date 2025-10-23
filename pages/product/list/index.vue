@@ -323,7 +323,7 @@ function filterByCategory(category: { id: number; name: string } | null) {
 <template>
   <div>
     <VCard title="Товары" class="mb-6">
-
+      <VDivider />
       <VSnackbar
         v-model="snackbar.visible"
         :color="snackbar.color"
@@ -741,7 +741,6 @@ function filterByCategory(category: { id: number; name: string } | null) {
     cursor: zoom-out;
   }
 
-  /* Zoom-in + fade эффект */
   .zoom-fade-enter-active {
     animation: zoomFadeIn 0.25s ease-out forwards;
   }

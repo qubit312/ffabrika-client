@@ -7,15 +7,16 @@ const router = useRouter()
 const { isAdmin } = useCurrentUser()
 
 const sections = computed(() => ([
-  { value: '/account/personal',      label: 'Мои данные',            icon: 'tabler-users' },
+   /*{ value: '/account/personal',      label: 'Мои данные',            icon: 'tabler-users' }, */
+     { value: '/account/users',         label: 'Участники',             icon: 'tabler-users-group' },
   { value: '/account/requisites',    label: 'Реквизиты',             icon: 'tabler-file-text' },
-  { value: '/account/users',         label: 'Участники',             icon: 'tabler-users-group' },
-  { value: '/account/shops',         label: 'Магазины',              icon: 'tabler-building-store' },
+
+  /*{ value: '/account/shops',         label: 'Магазины',              icon: 'tabler-building-store' },*/
   /*{ value: '/account/notifications', label: 'Уведомления',           icon: 'tabler-bell' },*/
-  ...(isAdmin.value ? [
+  /*...(isAdmin.value ? [
     { value: '/account/legal', label: 'Юридические документы', icon: 'tabler-file-description' },
     { value: '/account/all-users', label: 'Пользователи', icon: 'tabler-users-group'},
-  ] : []),
+  ] : []),*/
 ]))
 
 const go = (path: string) => { if (route.path !== path) router.push(path) }

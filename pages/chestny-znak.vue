@@ -251,31 +251,38 @@ function openLabels(productId: number, sizeId: number, sizeValue: string, used: 
         </template>
 
         <template #item.product_name="{ item }">
+         <span class="pointer hoverable">
           <RouterLink :to="{ name: 'product-details-id', params: { id: item.id } }" class="text-primary">
             {{ item.product_name }}
           </RouterLink>
+          </span>
         </template>
 
         <template #item.size_value="{ item }">
+        <span class="pointer hoverable">
           {{ item.size_value || '—' }}
+          </span>
         </template>
 
         <template #item.barcode="{ item }">
-          <span>{{ item.barcode || '—' }}</span>
+        <span class="pointer hoverable">
+          {{ item.barcode || '—' }}</span>
         </template>
 
         <template #item.total="{ item }">
+        <span class="pointer hoverable">
           <strong>{{ item.total }}</strong>
+          </span>
         </template>
 
         <template #item.used="{ item }">
-          <span class="text-high-emphasis cursor-pointer" @click="openLabels(item.product_id, item.size_id, item.size_value, true)">
+          <span class="text-high-emphasis pointer hoverable" @click="openLabels(item.product_id, item.size_id, item.size_value, true)">
             {{ item.used }}
           </span>
         </template>
 
         <template #item.unused="{ item }">
-          <span class="text-high-emphasis cursor-pointer" @click="openLabels(item.product_id, item.size_id, item.size_value, false)">
+          <span class="text-high-emphasis pointer hoverable" @click="openLabels(item.product_id, item.size_id, item.size_value, false)">
             {{ item.unused }}
           </span>
         </template>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import UserAvatar from '@/components/UserAvatar.vue'
 import { updateClientUserRole } from '@/services/clientUsers'
-import avatarFallback from '@images/avatars/avatar-1.png'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import {
   createRole as apiCreateRole,
@@ -21,7 +21,6 @@ definePageMeta({
   requiresAdmin: true,
   middleware: ['super-admin-only']
 })
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
 
 const snack = reactive({ show: false, text: '', color: 'success' as 'success' | 'error' })
 const notify = (t: string, c: 'success' | 'error' = 'success') => { snack.text = t; snack.color = c; snack.show = true }
@@ -66,9 +65,28 @@ const pageRows = computed(() => {
   const start = (page.value - 1) * itemsPerPage.value
   return filtered.value.slice(start, start + itemsPerPage.value)
 })
-function userAvatarUrl(u: User) {
-  return u?.avatar ? `${API_BASE}/storage/${u.avatar}` : avatarFallback
+
+const currentUserId = ref<number | null>(null)                      
+const currentUserEmail = ref<string | null>(null) 
+onMounted(async () => {
+  await Promise.all([fetchUsers(), fetchRoles(), fetchPermissions()])
+
+  const idStr = localStorage.getItem('user_id')
+  if (idStr) {
+    const n = Number(idStr)
+    if (Number.isFinite(n)) currentUserId.value = n
+  }
+  const email = localStorage.getItem('user_email')
+  if (email) currentUserEmail.value = email.toLowerCase()
+})
+
+const isCurrent = (u: { user_id?: number; email?: string }) => {    
+  return (
+    (currentUserId.value != null && u.user_id === currentUserId.value) ||
+    (!!currentUserEmail.value && (u.email || '').toLowerCase() === currentUserEmail.value)
+  )
 }
+
 async function fetchUsers() {
   loading.value = true
   try {
@@ -459,25 +477,40 @@ const getGroupHeaderEmail = (item) => {
           </VChip>
         </div>
       </template>
-
       <template #item.name="{ item }">
         <div v-if="groupUser === 'user'" class="d-flex align-center">
           <VIcon start icon="tabler-building" />
-          <RouterLink :to="{ name: 'client-details-id', params: { id: item.client_id } }" class="text-high-emphasis">      
+          <RouterLink :to="{ name: 'client-details-id', params: { id: item.client_id } }" class="text-high-emphasis">
             <span class="font-weight-medium">{{ item.client_name }}</span>
           </RouterLink>
         </div>
+      
         <div v-else class="d-flex align-center">
-          <VAvatar size="36" class="me-3" variant="tonal" color="primary">
-            <VImg :src="userAvatarUrl(item)" />
-          </VAvatar>
+          <UserAvatar
+            :name="item.name"
+            :last-name="''"
+            size="36"
+            rounded="circle"
+            :font-size="16"
+            class="me-3"
+          />
           <div class="d-flex flex-column">
-            <span class="font-weight-medium">{{ item.name }}</span>
+            <span class="font-weight-medium d-flex align-center">
+              {{ item.name }}
+              <VChip
+                v-if="isCurrent(item)"
+                size="x-small"
+                color="success"
+                variant="flat"
+                class="ms-2"
+              >
+                Это вы
+              </VChip>
+            </span>
             <small class="text-medium-emphasis">{{ item.email }}</small>
           </div>
         </div>
       </template>
-
       <template #item.role="{ item }">
         <div class="d-flex align-center flex-wrap gap-1">
           <template v-if="item.roles && item.roles.length">
@@ -511,40 +544,44 @@ const getGroupHeaderEmail = (item) => {
       <template #data-table-group="{ props, item }">
         <td>
           <div class="d-flex align-center gap-2">
-            <VBtn
-              v-bind="props"
-              variant="text"
-              density="comfortable"
-              class="flex-shrink-0"
-            >
-              <VIcon
-                class="flip-in-rtl"
-                :icon="getIcon(props)"
-              />
+            <VBtn v-bind="props" variant="text" density="comfortable" class="flex-shrink-0">
+              <VIcon class="flip-in-rtl" :icon="getIcon(props)" />
             </VBtn>
-
-            <VAvatar v-if="groupUser === 'user'" size="36" variant="tonal" color="primary" class="flex-shrink-0">
-              <VImg :src="avatarFallback" />
-            </VAvatar>
+            <template v-if="groupUser === 'user'">
+              <UserAvatar
+                :name="getGroupHeaderName(item)"
+                :last-name="''"
+                size="36"
+                rounded="circle"
+                :font-size="16"
+                class="flex-shrink-0 me-2"
+              />
+            </template>
+          
             <div class="d-flex flex-column min-width-0">
-              <span class="font-weight-medium text-truncate">{{ getGroupHeaderName(item)}}
-                <VChip 
-                  size="x-small" 
-                  class="ms-1" 
-                  variant="tonal" 
-                  color="primary"
+              <span class="font-weight-medium text-truncate d-flex align-center">
+                {{ getGroupHeaderName(item) }}
+                <VChip
+                  v-if="groupUser === 'user' && currentUserId !== null && item.value === currentUserId"
+                  size="x-small"
+                  color="success"
+                  variant="flat"
+                  class="ms-2"
                 >
+                  Это вы
+                </VChip>
+              
+                <VChip size="x-small" class="ms-1" variant="tonal" color="primary">
                   ID: {{ item.value }}
                 </VChip>
               </span>
-
+            
               <small class="text-medium-emphasis text-truncate">{{ getGroupHeaderEmail(item) }}</small>
             </div>
-            
           </div>
-          
         </td>
       </template>
+
       
       <template #bottom>  
         <VCardText class="pt-2">

@@ -1,6 +1,5 @@
-
 <script setup lang="ts">
-import avatarFallback from '@images/avatars/avatar-1.png'
+import UserAvatar from '@/components/UserAvatar.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { changePassword, getProfile, sendVerificationEmail, updateProfile } from '~/services/profile'
@@ -27,38 +26,6 @@ const copiedField = ref<string | null>(null)
 const emailVerified = ref(true)
 const emailVerifiedDialog = ref(false)
 const emailVerifiedLoading = ref(false)
-
-const defaultAvatar = avatarFallback as string
-const avatarUrl = ref<string>(localStorage.getItem('user_avatar_url') || defaultAvatar)
-const originalAvatar = ref<string>(avatarUrl.value)
-const fileInput = ref<HTMLInputElement | null>(null)
-const avatarBase64 = ref<string | null>(null)
-
-const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
-
-const pickFile = () => isEdit.value && fileInput.value?.click()
-const onFile = (e: Event) => {
-  if (!isEdit.value) return
-  const file = (e.target as HTMLInputElement).files?.[0]
-  if (!file) return
-  const isImage = /image\/(png|jpeg|jpg|gif)/i.test(file.type)
-  const okSize = file.size <= 800 * 1024
-  if (!isImage || !okSize) return notify('Разрешены JPG, GIF или PNG. Максимальный размер 800 КБ', 'error')
-
-  const reader = new FileReader()
-  reader.onload = () => {
-    const dataUrl = String(reader.result || '')
-    avatarBase64.value = dataUrl
-    avatarUrl.value = dataUrl
-  }
-  reader.readAsDataURL(file)
-}
-const resetAvatar = () => {
-  if (!isEdit.value) return
-  avatarUrl.value = originalAvatar.value
-  avatarBase64.value = null
-  if (fileInput.value) fileInput.value.value = ''
-}
 
 const form = reactive({
   name: localStorage.getItem('user_name') || '',
@@ -131,28 +98,20 @@ async function loadProfile() {
     if (!error.value && data.value?.success) {
       const u = data.value.data
       form.name = u.name || ''
+      form.lastName = u.last_name || ''   // подтягиваем фамилию из API
       form.email = u.email || ''
       form.address = u.address || ''
       form.phone = u.phone ? formatRuPhone(stripDigits(u.phone)) : ''
       form.telegram = u.telegram || ''
       emailVerified.value = u.email_verified
-
-      if (u.avatar) {
-        const url = `${API_BASE_URL}/storage/${u.avatar}`
-        localStorage.setItem('user_avatar_url', url)
-        avatarUrl.value = url
-      }
-      originalAvatar.value = avatarUrl.value
     }
-  } catch { }
+  } catch { /* ignore */ }
 }
 onMounted(loadProfile)
 
-const startEdit = () => { originalAvatar.value = avatarUrl.value; isEdit.value = true }
+const startEdit = () => { isEdit.value = true }
 const cancel = () => {
   loadProfile()
-  avatarBase64.value = null
-  if (fileInput.value) fileInput.value.value = ''
   isEdit.value = false
   submitted.value = false
 }
@@ -166,13 +125,13 @@ async function saveProfile() {
   try {
     const payload: any = {
       name: form.name,
+      last_name: form.lastName || null, // сохраняем фамилию
       email: form.email,
       address: form.address || null,
       phone: form.phone ? stripDigits(form.phone) : null,
       telegram: form.telegram || null,
       change_password: false,
     }
-    if (avatarBase64.value) payload.avatar = avatarBase64.value
 
     const { data, error } = await updateProfile(payload)
     if (error.value || !data.value?.success) throw new Error(data.value?.message || 'Не удалось сохранить')
@@ -190,14 +149,6 @@ async function saveProfile() {
       emailVerified.value = true
     }
 
-    if (data.value.data?.avatar) {
-      const url = `${API_BASE_URL}/storage/${data.value.data.avatar}`
-      localStorage.setItem('user_avatar_url', url)
-      avatarUrl.value = url
-    }
-
-    avatarBase64.value = null
-    if (fileInput.value) fileInput.value.value = ''
     isEdit.value = false
     submitted.value = false
     notify('Изменения сохранены')
@@ -279,9 +230,7 @@ const copyToClipboard = (text: string, field: string) => {
   if (text) {
     navigator.clipboard.writeText(text)
     copiedField.value = field
-    setTimeout(() => {
-      copiedField.value = null
-    }, 2000) 
+    setTimeout(() => { copiedField.value = null }, 2000)
   }
 }
 </script>
@@ -292,22 +241,16 @@ const copyToClipboard = (text: string, field: string) => {
     <VDivider />
     <VCardText class="pt-2">
       <div class="d-flex align-center mb-4">
-        <VAvatar rounded size="100" class="me-6">
-          <VImg :src="avatarUrl" />
-        </VAvatar>
-        <div v-if="isEdit" class="d-flex flex-wrap gap-4 align-center">
-          <VBtn size="small" color="primary" @click="pickFile">
-            <span class="d-none d-sm-block">Загрузить фото</span>
-            <VIcon class="d-sm-none" icon="tabler-cloud-upload" />
-          </VBtn>
-          <input ref="fileInput" type="file" accept=".jpeg,.png,.jpg,.gif" hidden @change="onFile" />
-          <VBtn size="small" variant="tonal" color="secondary" @click="resetAvatar">
-            <span class="d-none d-sm-block">Сбросить</span>
-            <VIcon class="d-sm-none" icon="tabler-refresh" />
-          </VBtn>
-        </div>
+        <UserAvatar
+          :name="form.name"
+          :last-name="form.lastName"
+          size="100"
+          rounded
+          :font-size="40"           
+          class="me-6"
+        />
+
       </div>
-      <p v-if="isEdit" class="text-body-1 mt-2">Разрешены JPG, GIF или PNG. Максимальный размер 800 КБ</p>
 
       <VRow v-if="!emailVerified">
         <VCol cols="12" md="6">
@@ -354,19 +297,18 @@ const copyToClipboard = (text: string, field: string) => {
               </VListItem>
               <VListItem @click="copyToClipboard(form.email, 'email')">
                 <VListItemTitle>
-                E-mail                                
-                <VTooltip :text="emailVerified ? 'Почта подтверждена' : 'Почта не подтверждена'" class="ml-4">
-                  <template #activator="{ props }">
-                    <VIcon v-bind="props" :icon="emailVerified ? 'tabler-circle-check' : 'tabler-circle-x'" :color="emailVerified ? 'success' : 'warning'" size="24" />
-                  </template>
-                </VTooltip>      
+                  E-mail
+                  <VTooltip :text="emailVerified ? 'Почта подтверждена' : 'Почта не подтверждена'" class="ml-4">
+                    <template #activator="{ props }">
+                      <VIcon v-bind="props" :icon="emailVerified ? 'tabler-circle-check' : 'tabler-circle-x'" :color="emailVerified ? 'success' : 'warning'" size="24" />
+                    </template>
+                  </VTooltip>
                 </VListItemTitle>
                 <VListItemSubtitle>
                   <VTooltip :model-value="copiedField === 'email'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'email'">
                     <template #activator="{ props }">
                       <span v-bind="props" class="d-flex align-center">
                         {{ form.email || 'Не указано' }}
-
                       </span>
                     </template>
                     {{ copiedField === 'email' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
@@ -667,4 +609,3 @@ const copyToClipboard = (text: string, field: string) => {
   width: 100%;
 }
 </style>
-

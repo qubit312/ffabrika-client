@@ -47,7 +47,7 @@ const authThemeImg = useGenerateImageVariant(
 )
 const authThemeMask = useGenerateImageVariant(authV2MaskLight, authV2MaskDark)
 
-const PWD_POLICY: PasswordPolicy = { min: 6, requireLower: true, requireDigit: true }
+const PWD_POLICY: PasswordPolicy = { min: 11, requireLower: true, requireDigit: true }
 const rules = {
   required,
   email: emailRule,
@@ -71,17 +71,28 @@ const showPwdHelp = computed(() => {
 
 function sleep(ms: number) { return new Promise(res => setTimeout(res, ms)) }
 
+
 async function onSubmit() {
   errorMessage.value = ''
   successMessage.value = ''
   submitted.value = true
+
+  if (!form.agreeOffer) {
+    snackbar.value = {
+      visible: true,
+      text: 'Вы должны принять условия публичной оферты',
+      color: 'error',
+      timeout: 2500,
+    }
+    return
+  }
 
   const localOk =
     rules.required(form.name) === true &&
     rules.required(form.email) === true &&
     rules.email(form.email) === true &&
     rules.password(form.password) === true &&
-        rules.repeat(form.password_repeat) === true &&
+    rules.repeat(form.password_repeat) === true &&
     rules.agree(form.agreeOffer) === true
 
   if (!localOk) {
@@ -124,6 +135,7 @@ async function onSubmit() {
     loading.value = false
   }
 }
+
 </script>
 
 <template>
@@ -230,7 +242,6 @@ async function onSubmit() {
                   <VCheckbox
                     v-model="form.agreeOffer"
                     :rules="agreeRules"
-                    :error="submitted && !form.agreeOffer"
                     density="comfortable"
                   >
                     <template #label>
@@ -242,7 +253,6 @@ async function onSubmit() {
                           target="_blank"
                           @click.stop
                           @mousedown.stop
-
                         >
                           Публичной оферты
                         </NuxtLink>
@@ -251,7 +261,7 @@ async function onSubmit() {
                   </VCheckbox>
                 </VCol>
 
-                <VBtn block type="submit" :loading="loading" :disabled="!form.agreeOffer">Зарегистрироваться</VBtn>
+                <VBtn block type="submit" :loading="loading" >Зарегистрироваться</VBtn>
 
                 <div v-if="!isInvited" class="d-flex align-center justify-center mt-4">
                   <span class="me-1 text-medium-emphasis">Уже есть аккаунт?</span>

@@ -7,7 +7,6 @@ import { ref } from 'vue'
 import SupportModal from '@/components/SupportModal.vue'
 import ClientSelector from '@/layouts/components/ClientSelector.vue'
 import Footer from '@/layouts/components/Footer.vue'
-import NavbarThemeSwitcher from '@/layouts/components/NavbarThemeSwitcher.vue'
 import Notifications from '@/layouts/components/Notifications.vue'
 import UserProfile from '@/layouts/components/UserProfile.vue'
 import NavBarI18n from '@core/components/I18n.vue'
@@ -34,7 +33,7 @@ const isSupportOpen = ref(false)
           />
         </IconBtn>
 
-        <NavbarThemeSwitcher />
+        <!-- <NavbarThemeSwitcher /> -->
 
         <VSpacer />
         <VBtn

@@ -149,7 +149,7 @@ const resetFilters = () => {
 
 <template>
   <div>
-    <VCard title="Организации">
+    <VCard title="Репрайсер">
     <VDivider />
 
     <div class="d-flex flex-wrap gap-4 ma-6">
