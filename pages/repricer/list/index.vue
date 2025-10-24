@@ -83,7 +83,7 @@ const formatDate = (date: string) => {
 }
 
 const goToCreateStrategy = () => {
-  router.push('/repricer/create')
+  router.push('/repricer/details/0')
 }
 
 const editStrategy = (strategy: any) => {
@@ -170,14 +170,20 @@ const resetFilters = () => {
 
     <!-- Таблица стратегий -->
     <VCard>
-        <VDataTable
-            :headers="headers"
-            :items="strategies"
-            :search="search"
-            :loading="loading"
-            :items-per-page="10"
-            class="elevation-1"
-        >
+      <VDataTable
+        :headers="headers"
+        :items="strategies"
+        :search="search"
+        :loading="loading"
+        :items-per-page="10"
+        class="elevation-1"
+      >
+        <template #loading>
+          <div class="d-flex justify-center pa-8 align-center" style="min-height: 300px">
+            <VProgressCircular indeterminate size="40" />
+          </div>
+        </template>
+
         <!-- Колонка названия -->
         <template #item.name="{ item }">
           <div class="d-flex align-center pointer hoverable">
@@ -256,21 +262,17 @@ const resetFilters = () => {
 
         <!-- Пустое состояние -->
         <template #no-data>
-            <div class="text-center py-8">
-            <VIcon
-                icon="mdi-chart-line"
-                size="64"
-                color="grey-lighten-1"
-                class="mb-4"
-            />
-            <h3 class="text-h6 mb-2">Стратегии не найдены</h3>
-            <p class="text-medium-emphasis mb-4">
-                Создайте свою первую стратегию переоценки
-            </p>
-            <VBtn color="primary" @click="goToCreateStrategy">
-                Создать стратегию
-            </VBtn>
+          <div class="d-flex justify-center py-8 align-center" style="min-height: 300px">
+            <div>
+              <h3 class="text-h6 mb-2">Стратегии не найдены</h3>
+              <p class="text-medium-emphasis mb-4">
+                  Создайте свою первую стратегию переоценки
+              </p>
+              <VBtn color="primary" @click="goToCreateStrategy">
+                  Создать стратегию
+              </VBtn>
             </div>
+          </div>
         </template>
         </VDataTable>
     </VCard>
