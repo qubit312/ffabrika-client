@@ -1,8 +1,15 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { deleteStrategy, getStrategies, updateStrategy } from '@/services/pricingStrategies'
+import type { PricingStrategy } from '@/types/pricingStrategy'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
+
+
+const strategies = ref<PricingStrategy[]>([])
+const loading = ref(false)
+
 
 // Поиск и фильтры
 const search = ref('')
@@ -17,79 +24,33 @@ const statusItems = [
 
 const typeItems = [
   { title: 'Все типы', value: 'all' },
-  { title: 'Конкурентная', value: 'competitive' },
-  { title: 'Маржинальная', value: 'margin' },
-  { title: 'Правила', value: 'rules' },
+  { title: 'Изменение скидок по времени', value: 'time_discount' },
 ]
 
 // Заголовки таблицы
 const headers = [
   { title: 'Название стратегии', key: 'name', sortable: true },
   { title: 'Тип', key: 'type', sortable: true },
-  { title: 'Товаров', key: 'products', sortable: true },
+  { title: 'Кол-во товаров', key: 'items_count', sortable: true },
   { title: 'Дата создания', key: 'created_at', sortable: true },
   { title: 'Статус', key: 'status', sortable: true },
   { title: 'Действия', key: 'actions', sortable: false },
 ]
 
-// Моковые данные
-const strategies = ref([
-  {
-    id: 1,
-    name: 'Конкурентная переоценка',
-    description: 'Слежение за ценами конкурентов',
-    status: 'active',
-    type: 'competitive',
-    products: 245,
-    created_at: '2024-01-15',
-  },
-  {
-    id: 2,
-    name: 'Маржинальная стратегия',
-    description: 'Поддержание маржи 25%',
-    status: 'paused',
-    type: 'margin',
-    products: 128,
-    created_at: '2024-01-10',
-  },
-  {
-    id: 3,
-    name: 'Правила переоценки',
-    description: 'Сезонное изменение цен',
-    status: 'paused',
-    type: 'rules',
-    products: 0,
-    created_at: '2024-01-20',
-  },
-  {
-    id: 4,
-    name: 'Автоматическая коррекция',
-    description: 'Корректировка на основе спроса',
-    status: 'active',
-    type: 'competitive',
-    products: 89,
-    created_at: '2024-01-18',
-  },
-])
-
-// Вспомогательные функции
-const getStrategyColor = (type: string) => {
-  const colors: Record<string, string> = {
-    competitive: 'blue',
-    margin: 'green',
-    rules: 'orange',
+const fetchStrategies = async () => {
+  loading.value = true
+  try {
+    const { data } = await getStrategies({
+      status: statusFilter.value !== 'all' ? statusFilter.value : undefined,
+      type: typeFilter.value !== 'all' ? typeFilter.value : undefined,
+    })
+    strategies.value = data.value.data
+  } finally {
+    loading.value = false
   }
-  return colors[type] || 'grey'
 }
 
-const getStrategyIcon = (type: string) => {
-  const icons: Record<string, string> = {
-    competitive: 'mdi-trending-up',
-    margin: 'mdi-chart-areaspline',
-    rules: 'mdi-cog',
-  }
-  return icons[type] || 'mdi-chart-line'
-}
+onMounted(fetchStrategies)
 
 const getStatusColor = (status: string) => {
   const colors: Record<string, string> = {
@@ -109,18 +70,18 @@ const getStatusText = (status: string) => {
 
 const getTypeText = (type: string) => {
   const texts: Record<string, string> = {
-    competitive: 'Конкурентная',
-    margin: 'Маржинальная',
-    rules: 'Правила',
+    time_discount: 'Смена скидок по времени',
   }
   return texts[type] || type
 }
 
 const formatDate = (date: string) => {
-  return new Date(date).toLocaleDateString('ru-RU')
+  if (date) {
+    return new Date(date).toLocaleDateString('ru-RU')
+  }
+  return ''
 }
 
-// Методы
 const goToCreateStrategy = () => {
   router.push('/repricer/create')
 }
@@ -129,27 +90,29 @@ const editStrategy = (strategy: any) => {
   router.push(`/repricer/details/${strategy.id}`)
 }
 
-const toggleStrategy = (strategy: any) => {
-  strategy.status = strategy.status === 'active' ? 'paused' : 'active'
+const toggleStrategy = async (strategy: PricingStrategy) => {
+  const newStatus = strategy.status === 'active' ? 'paused' : 'active'
+  const { data } = await updateStrategy(strategy.id, { status: newStatus })
+  strategy.status = data.value.status
 }
 
-const deleteStrategy = (strategy: any) => {
-  const index = strategies.value.findIndex(s => s.id === strategy.id)
-  if (index !== -1) {
-    strategies.value.splice(index, 1)
-  }
+const removeStrategy = async (strategy: PricingStrategy) => {
+  if (!confirm(`Удалить стратегию "${strategy.name}"?`)) return
+  await deleteStrategy(strategy.id)
+  strategies.value = strategies.value.filter(s => s.id !== strategy.id)
 }
 
 const resetFilters = () => {
   search.value = ''
   statusFilter.value = 'all'
   typeFilter.value = 'all'
+  fetchStrategies()
 }
 </script>
 
 <template>
   <div>
-    <VCard title="Репрайсер">
+    <VCard title="Организации">
     <VDivider />
 
     <div class="d-flex flex-wrap gap-4 ma-6">
@@ -165,6 +128,7 @@ const resetFilters = () => {
           class="ms-2"
           v-model="statusFilter"
           :items="statusItems"
+          @change="fetchStrategies"
           placeholder="Статус"
           density="comfortable"
           style="inline-size: 200px;"
@@ -174,6 +138,7 @@ const resetFilters = () => {
           class="ms-2"
           v-model="typeFilter"
           :items="typeItems"
+          @change="fetchStrategies"
           placeholder="Тип стратегии"
           density="comfortable"
           style="inline-size: 200px;"
@@ -209,6 +174,7 @@ const resetFilters = () => {
             :headers="headers"
             :items="strategies"
             :search="search"
+            :loading="loading"
             :items-per-page="10"
             class="elevation-1"
         >
@@ -239,16 +205,16 @@ const resetFilters = () => {
         </template>
 
         <!-- Колонка товаров -->
-        <template #item.products="{ item }">
+        <template #item.items_count="{ item }">
           <div class="hoverable pointer">
-            <span>{{ item.products }}</span>
+            <span>{{ item.items_count }}</span>
           </div>
         </template>
 
         <!-- Колонка даты создания -->
         <template #item.created_at="{ item }">
             <div class="hoverable pointer">
-            {{ formatDate(item.created_at) }}
+            {{ formatDate(item.created_at || '') }}
             </div>
         </template>
 
@@ -281,7 +247,7 @@ const resetFilters = () => {
               size="small"
               variant="text"
               color="error"
-              @click="deleteStrategy(item)"
+              @click="removeStrategy(item)"
             >
               <VIcon icon="tabler-trash" size="small" />
             </VBtn>

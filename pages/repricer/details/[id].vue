@@ -1,17 +1,20 @@
-
 <script setup lang="ts">
+import { createStrategy, deleteStrategyItem, getStrategy, getStrategyItems, updateStrategy, updateStrategyItem } from '@/services/pricingStrategies'
+import type { CreateStrategyDto, PricingStrategy, StrategyItem, StrategyStatus, StrategyType } from '@/types/pricingStrategy'
 import type { CustomInputContent } from '@core/types'
-import { computed, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useDebounceFn } from '@vueuse/core'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
+const router = useRouter()
 const isEdit = computed(() => route.name === 'repricer-edit')
 
 const radioContent: CustomInputContent[] = [
   {
     title: 'Изменение скидок по времени',
-    desc: 'Автоматическое изменение скидок в заданное время суток или по расписанию',
-    value: 'basic',
+    desc: 'Автоматическое изменение скидок по расписанию',
+    value: 'time_discount',
   },
 ]
 
@@ -19,343 +22,228 @@ const selectedRadio = ref('basic')
 const productHeaders = [
   { title: 'Товар', key: 'name', sortable: true },
   { title: 'Остаток', key: 'stock', sortable: true, align: 'center' as const },
-  { title: 'Текущая скидка', key: 'current_discount', sortable: true, align: 'center' as const },
+  { title: 'Скидка', key: 'discount', sortable: true, align: 'center' as const },
   { title: 'Временная скидка', key: 'temp_discount', sortable: true, align: 'center' as const },
-  { title: 'Дата начала', key: 'start_time', sortable: false },
-  { title: 'Дата завершения', key: 'end_time', sortable: false },
+  { title: 'Начала', key: 'starts_at', sortable: false },
+  { title: 'Завершение', key: 'ends_at', sortable: false },
   { title: 'Статус', key: 'status', sortable: true },
   { title: 'Действия', key: 'actions', sortable: false },
 ]
 
-// Глобальное задание времени для всех товаров
-// Диалоги для массового задания начала и конца
+const strategy = ref<PricingStrategy | null>(null)
+const strategyName = ref('')
+const strategyType = ref<StrategyType>('time_discount')
+const strategyStatus = ref<StrategyStatus>('active')
+
 const isSetStartDialogOpen = ref(false)
 const isSetEndDialogOpen = ref(false)
 const globalStartTime = ref('09:00')
 const globalEndTime = ref('18:00')
 
-// Применение только начала
+const sortField = ref<string>('stock')
+const sortOrder = ref<'asc' | 'desc'>('asc')
+
 const applyGlobalStart = () => {
   products.value.forEach(item => {
-    item.start_time = globalStartTime.value
+    item.starts_at = globalStartTime.value
   })
   isSetStartDialogOpen.value = false
 }
 
-// Применение только конца
+const fetchStrategy = async () => {
+  const id = Number(route.params.id)
+  if (!id) return
+
+  try {
+    const { data } = await getStrategy(id)
+    strategy.value = data.value
+    strategyName.value = data.value.name
+    strategyType.value = data.value.type
+    strategyStatus.value = data.value.status
+    console.log(data.value)
+    sortField.value = data.value.order_by_field
+    sortOrder.value = data.value.order_direction
+  } catch (e) {
+    console.error('Ошибка при загрузке стратегии', e)
+  }
+}
+
+
 const applyGlobalEnd = () => {
   products.value.forEach(item => {
-    item.end_time = globalEndTime.value
+    item.ends_at = globalEndTime.value
   })
   isSetEndDialogOpen.value = false
 }
 
-// 🔹 Параметры сортировки (используются в обработке)
-const sortField = ref<string>('stock')
-const sortOrder = ref<'asc' | 'desc'>('asc')
-
-// 🔹 Доступные поля сортировки
 const sortFields = [
   { title: 'Остаток', value: 'stock' },
-  { title: 'Текущая скидка', value: 'current_discount' },
+  { title: 'Скидка', value: 'discount' },
   { title: 'Временная скидка', value: 'temp_discount' },
   { title: 'Категория', value: 'category' },
   { title: 'Название', value: 'name' },
 ]
 
-// 🔹 Для отладки/будущей интеграции
+const updateStrategySort = useDebounceFn(async () => {
+  const strategyId = Number(route.params.id)
+  if (!strategyId || strategyId === 0) return
+
+  try {
+    const { data, error } = await updateStrategy(strategyId, {
+      order_by_field: sortField.value,
+      order_direction: sortOrder.value,
+    })
+    if (!data.value || error.value) {
+      console.error('Ошибка при обновлении сортировки стратегии', error.value)
+    }
+  } catch (e) {
+    console.error('Ошибка при обновлении сортировки стратегии', e)
+  }
+}, 800)
+
 watch([sortField, sortOrder], () => {
-  console.log('Выбрана сортировка:', {
-    field: sortField.value,
-    order: sortOrder.value,
-  })
+  updateStrategySort()
 })
 
-const allProducts = [
-  {
-    id: 1,
-    name: 'Футболка хлопковая',
-    article: 'T001',
-    category: 'Одежда',
-    color: 'Белый',
-    main_image_url: '',
-    stock: 45,
-    current_discount: 10,
-    temp_discount: 15,
-    start_time: '09:00',
-    end_time: '18:00',
-    status: 'active'
-  },
-  {
-    id: 2,
-    name: 'Джинсы классические',
-    article: 'J002',
-    category: 'Одежда',
-    color: 'Синий',
-    main_image_url: '',
-    stock: 23,
-    current_discount: 5,
-    temp_discount: 20,
-    start_time: '10:00',
-    end_time: '22:00',
-    status: 'active'
-  },
-  {
-    id: 3,
-    name: 'Кроссовки спортивные',
-    article: 'S003',
-    category: 'Обувь',
-    color: 'Черный',
-    main_image_url: '',
-    stock: 12,
-    current_discount: 44,
-    temp_discount: 25,
-    start_time: '08:30',
-    end_time: '20:30',
-    status: 'active'
-  },
-  {
-    id: 4,
-    name: 'Куртка зимняя',
-    article: 'J004',
-    category: 'Одежда',
-    color: 'Красный',
-    main_image_url: '',
-    stock: 8,
-    current_discount: 15,
-    temp_discount: 30,
-    start_time: '12:00',
-    end_time: '15:00',
-    status: 'active'
-  },
-  {
-    id: 5,
-    name: 'Рубашка офисная',
-    article: 'S005',
-    category: 'Одежда',
-    color: 'Бежевый',
-    main_image_url: '',
-    stock: 34,
-    current_discount: 55,
-    temp_discount: 10,
-    start_time: '14:00',
-    end_time: '16:00',
-    status: 'active'
-  },
-  {
-    id: 11,
-    name: 'Рубашка с коротким рукавом',
-    article: 'S077',
-    category: 'Одежда',
-    color: 'Бежевый',
-    main_image_url: '',
-    stock: 34,
-    current_discount: 66,
-    temp_discount: 10,
-    start_time: '14:00',
-    end_time: '16:00',
-    status: 'active'
-  },
-  {
-    id: 6,
-    name: 'Брюки классические',
-    article: 'P006',
-    category: 'Одежда',
-    color: 'Белый',
-    main_image_url: '',
-    stock: 15,
-    current_discount: 12,
-  },
-  {
-    id: 7,
-    name: 'Футболка поло',
-    article: 'T007',
-    category: 'Одежда',
-    color: 'Белый',
-    main_image_url: '',
-    stock: 28,
-    current_discount: 10,
-  },
-  {
-    id: 8,
-    name: 'Кроссовки беговые',
-    article: 'S008',
-    category: 'Обувь',
-    color: 'Белый',
-    main_image_url: '',
-    stock: 7,
-    current_discount: 5,
-  },
-  {
-    id: 9,
-    name: 'Толстовка с капюшоном',
-    article: 'H009',
-    category: 'Одежда',
-    color: 'Белый',
-    main_image_url: '',
-    stock: 20,
-    current_discount: 10,
-  },
-  {
-    id: 10,
-    name: 'Шорты спортивные',
-    article: 'S010',
-    category: 'Одежда',
-    color: 'Белый',
-    main_image_url: '',
-    stock: 32,
-    current_discount: 15,
-  },
-  {
-    id: 12,
-    name: 'Шорты спортивные синие',
-    article: 'S011',
-    category: 'Одежда',
-    color: 'Синий',
-    main_image_url: '',
-    stock: 32,
-    current_discount: 15,
-  },
-]
+const products = ref<StrategyItem[]>([])
+const productsLength = ref<number>(0)
 
-const products = ref(allProducts.slice(0, 6))
-
-const availableProducts = computed(() => {
-  const usedIds = products.value.map(p => p.id)
-  return allProducts.filter(p => !usedIds.includes(p.id))
-})
-
-const addSelectedProducts = () => {
-  const productsToAdd = availableProducts.value.filter(p => 
-    selectedProducts.value.includes(p.id)
-  ).map(p => ({
-    ...p,
-    temp_discount: 0,
-    start_time: '09:00',
-    end_time: '18:00',
-    status: 'active'
-  }))
-  
-  products.value.push(...productsToAdd)
-  selectedProducts.value = []
-  isAddProductsModalOpen.value = false
+const fetchProducts = async () => {
+  loading.value = true
+  try {
+    const strategyId = Number(route.params.id)
+    const { data } = await getStrategyItems(strategyId)
+    products.value = data.value.data
+    productsLength.value = data.value.total
+  } finally {
+    loading.value = false
+  }
 }
 
-// Метод удаления товара
-const deleteItem = () => {
-  if (itemToDelete.value) {
-    const index = products.value.findIndex(p => p.id === itemToDelete.value.id)
-    if (index !== -1) {
-      products.value.splice(index, 1)
-    }
+onMounted(async () => {
+  await fetchStrategy()
+  if (route.params.id !== '0') await fetchProducts()
+})
+
+
+const saveStrategy = async () => {
+  const id = Number(route.params.id)
+  const payload: CreateStrategyDto = {
+    name: strategyName.value,
+    type: strategyType.value,
+    status: strategyStatus.value,
   }
-  isDeleteDialogOpen.value = false
-  itemToDelete.value = null
+
+  try {
+    if (id === 0) {
+      const { data } = await createStrategy(payload)
+      strategy.value = data.value
+      router.push(`/repricer/details/${data.value.id}`)
+    } else {
+      await updateStrategy(id, payload)
+    }
+  } catch (e) {
+    console.error('Ошибка при сохранении стратегии', e)
+  }
+}
+
+
+const deleteItem = async () => {
+  if (!itemToDelete.value) return
+  try {
+    await deleteStrategyItem(itemToDelete.value.id)
+    products.value = products.value.filter(p => p.id !== itemToDelete.value?.id)
+  } catch (e) {
+    console.error('Ошибка при удалении товара', e)
+  } finally {
+    isDeleteDialogOpen.value = false
+    itemToDelete.value = null
+  }
 }
 
 const itemsPerPage = ref(5)
 const page = ref(1)
-const availableProductsPerPage = ref(5)
-const availableProductsPage = ref(1)
 
-// Вспомогательные функции
 const copyArticle = (article: string) => {
   navigator.clipboard.writeText(article)
-  // Можно добавить уведомление об успешном копировании
 }
 
-const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleDateString('ru-RU')
+const updateDiscount = async (item: StrategyItem) => {
+  const discountValue = Math.round(Number(item.temp_discount) || 0)
+  item.temp_discount = discountValue
+
+  try {
+    await updateStrategyItem(item.id, {
+      temp_discount: discountValue,
+    })
+  } catch (e) {
+    console.error('Ошибка при обновлении скидки', e)
+  }
 }
 
-const formatPrice = (price: number) => {
-  return new Intl.NumberFormat('ru-RU', {
-    style: 'currency',
-    currency: 'RUB'
-  }).format(price)
+const formatTime = (time?: string | null): string | null => {
+  if (!time) return null
+  return time.length > 5 ? time.slice(0, 5) : time // "09:00:00" → "09:00"
 }
 
-const updateDiscount = (item: any) => {
-  console.log(`Обновлена скидка для товара ${item.name}: ${item.temp_discount}%`)
-}
+const updateTime = async (item: StrategyItem, field: 'starts_at' | 'ends_at') => {
+  const startsAt = formatTime(item.starts_at) || ''
+  const endsAt = formatTime(item.ends_at) || ''
 
-const updateTime = (item: any, field: string) => {
-  console.log(`Обновлено время ${field} для товара ${item.name}: ${item[field]}`)
-  // Проверка корректности времени
-  if (field === 'start_time' && item.end_time) {
-    if (item.start_time > item.end_time) {
-      console.warn('Время начала позже времени окончания')
-    }
+  if (field === 'starts_at' && endsAt && startsAt > endsAt) {
+    console.warn('Время начала позже времени окончания')
+    return
+  }
+
+  try {
+    await updateStrategyItem(item.id, {
+      starts_at: startsAt,
+      ends_at: endsAt,
+    })
+  } catch (e) {
+    console.error('Ошибка при обновлении времени', e)
   }
 }
 
 const timeOptions = computed(() => {
-  const options = []
+  const options: { title: string; value: string }[] = []
+
   for (let hour = 0; hour < 24; hour++) {
     for (let minute = 0; minute < 60; minute += 30) {
       const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
-      const totalMinutes = hour * 60 + minute
       options.push({
         title: timeString,
-        value: totalMinutes
+        value: timeString, // <-- вместо totalMinutes
       })
     }
   }
+
   return options
 })
 
+const normalizeTime = (time?: string) => time ? time.slice(0, 5) : ''
+
 const currentStep = ref(1)
 const loading = ref(false)
-const handleNext = () => {
-  if (currentStep.value === 1) {
-    loading.value = true
-    currentStep.value++
-    loading.value = false
-  } else {
-    currentStep.value++
-  }
-}
-
 const isAddProductsModalOpen = ref(false)
 
-// Фильтры
-const searchQuery = ref('')
+const nameFilter = ref('')
 const categoryFilter = ref('')
 const articleFilter = ref('')
-
-// Выбранные товары
 const selectedProducts = ref([])
-
-// Заголовки таблицы выбора
-const selectionHeaders = [
-  { title: 'Товар', key: 'name', sortable: true },
-  { title: 'Категория', key: 'category', sortable: true },
-  { title: 'Остаток', key: 'stock', sortable: true, align: 'center' as const },
-  { title: 'Текущая скидка', key: 'current_discount', sortable: true, align: 'center' as const },
-]
-
-// Опции фильтров
-const categories = computed(() => {
-  return [...new Set(availableProducts.value.map(p => p.category))].map(c => ({ title: c, value: c }))
-})
-
-const colors = computed(() => {
-  return [...new Set(availableProducts.value.map(p => p.color))].map(c => ({ title: c, value: c }))
-})
 
 watch(() => selectedProducts.value, (val) => {
   console.log(val)
 })
 
-
-const resetFilters = () => {
-  searchQuery.value = ''
-  categoryFilter.value = ''
-  articleFilter.value = ''
-}
-
-const toggleStrategy = (strategy: any) => {
-  strategy.status = strategy.status === 'active' ? 'paused' : 'active'
+const toggleStatus = async (item: StrategyItem) => {
+  const newStatus = item.status === 'active' ? 'paused' : 'active'
+  try {
+    await updateStrategyItem(item.id, { status: newStatus })
+    item.status = newStatus
+  } catch (e) {
+    console.error('Ошибка при обновлении статуса', e)
+  }
 }
 
 const getStatusVisibleName = (status: string) => {
@@ -378,14 +266,13 @@ const getStatusColor = (status: string) => {
   return colors[status] || 'grey'
 }
 
-const itemToDelete = ref(null)
+const itemToDelete = ref<StrategyItem | null>(null)
 const isDeleteDialogOpen = ref(false)
 
-const confirmDelete = (item) => {
+const confirmDelete = (item: StrategyItem) => {
   itemToDelete.value = item
   isDeleteDialogOpen.value = true
 }
-
 
 </script>
 
@@ -398,15 +285,15 @@ const confirmDelete = (item) => {
         </h1>
         
         <VStepper v-model="currentStep" editable>
-          <VStepperHeader style="max-width: 800px;">
+          <VStepperHeader style="max-width: 500px;">
             <VStepperItem 
               title="Настройка" 
               :value="1"
             >
-            <template #icon>
-              <VIcon size="20" icon="tabler-settings" />
-            </template>
-          </VStepperItem>
+              <template #icon>
+                <VIcon size="20" icon="tabler-settings" />
+              </template>
+            </VStepperItem>
             <VDivider></VDivider>
             <VStepperItem 
               title="Товары" 
@@ -416,7 +303,7 @@ const confirmDelete = (item) => {
                 <VIcon size="20" icon="tabler-package" />
               </template>  
             </VStepperItem>
-            <VDivider></VDivider>
+            <!-- <VDivider></VDivider>
             <VStepperItem 
               title="История" 
               :value="3"
@@ -424,7 +311,7 @@ const confirmDelete = (item) => {
               <template #icon>
                 <VIcon size="20" icon="tabler-history" />
               </template>    
-            </VStepperItem>
+            </VStepperItem> -->
           </VStepperHeader>
 
           <VStepperWindow>
@@ -436,18 +323,33 @@ const confirmDelete = (item) => {
                 </p>
                 <VRow>
                   <VCol md="4">
-                    <AppTextField label="Название стратегии" />
+                    <AppTextField v-model="strategyName" label="Название стратегии" />
+                  </VCol>
+                  <VCol md="3">
+                    <AppSelect
+                      v-model="strategyStatus"
+                      :items="[
+                        { title: 'Активна', value: 'active' },
+                        { title: 'Пауза', value: 'paused' }
+                      ]"
+                      label="Статус"
+                    />
                   </VCol>
                 </VRow>
                 <VRow>
                   <VCol>
                     <CustomRadios
-                      v-model:selected-radio="selectedRadio"
+                      v-model:selected-radio="strategyType"
                       :radio-content="radioContent"
                       :grid-column="{ sm: '3', cols: '12' }"
                     />
                   </VCol>
                 </VRow>
+                <div class="mt-4">
+                  <VBtn color="primary" @click="saveStrategy">
+                    {{ route.params.id === '0' ? 'Создать стратегию' : 'Сохранить изменения' }}
+                  </VBtn>
+                </div>
               </VCard>
             </VStepperWindowItem>
 
@@ -461,18 +363,21 @@ const confirmDelete = (item) => {
                 <div class="d-flex flex-wrap gap-4 ma-6">
                   <div class="d-flex align-center">
                     <AppTextField
+                      v-model="nameFilter"
                       placeholder="Введите название"
                       style="inline-size: 200px;"
                       class="me-3"
                       clearable
                     />
                     <AppTextField
+                      v-model="categoryFilter"
                       placeholder="Введите категорию"
                       style="inline-size: 200px;"
                       class="me-3"
                       clearable
                     />
                     <AppTextField
+                      v-model="articleFilter"
                       placeholder="Введите артикул"
                       style="inline-size: 200px;"
                       class="me-3"
@@ -550,10 +455,9 @@ const confirmDelete = (item) => {
                     </div>
                   </template>
 
-                  <!-- Кнопка в заголовке "Дата начала" -->
-                  <template #header.start_time>
-                    <div class="d-flex align-center justify-space-between">
-                      <span>Дата начала</span>
+                  <template #header.starts_at>
+                    <div style="width: 120px;" class="d-flex align-center justify-space-between">
+                      <span>Начало</span>
                       <VTooltip>
                         <template #activator="{ props }">
                           <VBtn
@@ -573,10 +477,9 @@ const confirmDelete = (item) => {
                     </div>
                   </template>
 
-                  <!-- Кнопка в заголовке "Дата завершения" -->
-                  <template #header.end_time>
-                    <div class="d-flex align-center justify-space-between">
-                      <span>Дата завершения</span>
+                  <template #header.ends_at>
+                    <div style="width: 120px;" class="d-flex align-center justify-space-between">
+                      <span>Завершение</span>
                       <VTooltip>
                         <template #activator="{ props }">
                           <VBtn
@@ -605,8 +508,8 @@ const confirmDelete = (item) => {
                   <template #item.name="{ item }">
                     <div class="prodcell d-flex align-start gap-3">
                       <img
-                        v-if="item.main_image_url"
-                        :src="item.main_image_url"
+                        v-if="item.product?.image"
+                        :src="item.product?.image"
                         alt="Фото"
                         class="prodcell__img"
                       />
@@ -617,37 +520,35 @@ const confirmDelete = (item) => {
                       <div class="d-flex flex-column">
                         <div class="d-flex align-center gap-2">
                           <RouterLink :to="{ name: 'product-details-id', params: { id: item.id } }" class="text-high-emphasis">
-                            {{ item.name }}
+                            {{ item.product?.name }}
                           </RouterLink>
                         </div>
 
                         <div class="mt-1 text-caption text-medium-emphasis d-flex align-center flex-wrap gap-1">
-                          <template v-if="item.category">
-                            <span class="text-truncate">{{ item.category }}</span>
+                          <template v-if="item.product?.vendor_code">
+                            <span class="text-truncate">{{ item.product?.vendor_code }}</span>
                             <span class="mx-1 text-disabled">•</span>
                           </template>
-                          <template v-if="item.article">
+                          <template v-if="item.product?.article">
                             <span
                               class="cursor-pointer user-select-none d-inline-flex align-center"
                               title="Скопировать артикул"
-                              @click="copyArticle(item.article)"
+                              @click="copyArticle(item.product?.article)"
                             >
-                              {{ item.article }}
+                              {{ item.product?.article }}
                               <VIcon size="14" class="ms-1" icon="tabler-copy" />
                             </span>
                           </template>
                         </div>
                         <div class="mt-1 text-caption text-medium-emphasis d-flex align-center flex-wrap gap-1">
-                          <template v-if="item.category">
-                            <span class="text-truncate">{{ item.color }}</span>
-                          </template>
+                          <span class="text-truncate">{{ item.product?.color }}</span>
                         </div>
                       </div>
                     </div>
                   </template>
 
                   <template #item.stock="{ item }">
-                    <span class="font-weight-medium">{{ item.stock }} шт.</span>
+                    <span class="font-weight-medium">{{ item.total_qty }} шт.</span>
                   </template>
 
                   <template #item.status="{ item }">
@@ -656,9 +557,9 @@ const confirmDelete = (item) => {
                     </VChip>
                   </template>
 
-                  <template #item.current_discount="{ item }">
-                    <span v-if="item.current_discount" >
-                      {{ item.current_discount }}%
+                  <template #item.discount="{ item }">
+                    <span v-if="item.discount" >
+                      {{ item.discount }}%
                     </span>
                     <span v-else>—</span>
                   </template>
@@ -674,32 +575,33 @@ const confirmDelete = (item) => {
                         min="0"
                         max="100"
                         hide-spin-buttons
-                        style="max-width: 80px;"
-                        @update:model-value="updateDiscount(item)"
+                        style="max-width: 90px;"
+                        @blur="updateDiscount(item)"
                       />
                     </div>
                   </template>
 
-                  <template #item.start_time="{ item }">
+                  <template #item.starts_at="{ item }">
                     <VSelect
-                      v-model="item.start_time"
+                      v-model="item.starts_at"
+                      :value="normalizeTime(item.starts_at)"
                       :items="timeOptions"
                       density="compact"
                       variant="outlined"
                       prepend-inner-icon="tabler-clock-hour-3"
-                      @update:model-value="updateTime(item, 'start_time')"
+                      @update:model-value="updateTime(item, 'starts_at')"
                     />
                   </template>
 
-                  <template #item.end_time="{ item }">
+                  <template #item.ends_at="{ item }">
                     <VSelect
-                      v-model="item.end_time"
+                      v-model="item.ends_at"
+                      :value="normalizeTime(item.ends_at)"
                       :items="timeOptions"
                       density="compact"
                       variant="outlined"
                       prepend-inner-icon="tabler-clock-hour-3"
-                      placeholder="Выберите время"
-                      @update:model-value="updateTime(item, 'end_time')"
+                      @update:model-value="updateTime(item, 'ends_at')"
                     />
                   </template>
 
@@ -712,7 +614,7 @@ const confirmDelete = (item) => {
                             size="small"
                             variant="text"
                             :color="item.status === 'active' ? 'warning' : 'success'"
-                            @click="toggleStrategy(item)"
+                            @click="toggleStatus(item)"
                             v-bind="props"
                           >
                             <VIcon
@@ -750,7 +652,7 @@ const confirmDelete = (item) => {
                         <VPagination
                           v-model="page"
                           :total-visible="5"
-                          :length="Math.ceil(products.length / itemsPerPage)"
+                          :length="Math.ceil(productsLength / itemsPerPage)"
                         />
                       </div>
                     </VCardText>
@@ -759,14 +661,14 @@ const confirmDelete = (item) => {
               </VCard>
             </VStepperWindowItem>
 
-            <VStepperWindowItem :value="3">
+            <!-- <VStepperWindowItem :value="3">
               <VCard>
                 <VCardText>
                   <h3 class="text-h6 mb-4">Шаг 3: История</h3>
                   <p>Контент для шага истории или другого. В РАЗРАБОТКЕ. Что здесь отобразить?</p>
                 </VCardText>
               </VCard>
-            </VStepperWindowItem>
+            </VStepperWindowItem> -->
           </VStepperWindow>
 
           <VStepperActions>
@@ -775,13 +677,13 @@ const confirmDelete = (item) => {
             </template>
             
             <template #next>
-              <VBtn 
+              <!-- <VBtn 
                 color="primary" 
                 :loading="loading"
                 @click="handleNext"
               >
                 Далее
-              </VBtn>
+              </VBtn> -->
             </template>
             
             <VBtn variant="outlined" @click="$router.back()">
@@ -793,176 +695,11 @@ const confirmDelete = (item) => {
     </VRow>
   </VContainer>
 
-  <VDialog
+  <AddProductsDialog
     v-model="isAddProductsModalOpen"
-    max-width="1200"
-    scrollable
-  >
-    <VCard>
-      <VCardTitle class="d-flex justify-space-between align-center">
-        <span>Выбор товаров</span>
-        <VBtn
-          icon
-          variant="text"
-          @click="isAddProductsModalOpen = false"
-        >
-          <VIcon icon="tabler-x" />
-        </VBtn>
-      </VCardTitle>
-
-      <VCardText>
-        <!-- Фильтры -->
-        <VRow class="mb-4">
-          <VCol cols="12" sm="6" md="4">
-            <VTextField
-              v-model="searchQuery"
-              placeholder="Поиск по названию..."
-              prepend-inner-icon="tabler-search"
-              density="comfortable"
-              hide-details
-            />
-          </VCol>
-          <VCol cols="12" sm="6" md="3">
-            <VTextField
-              v-model="categoryFilter"
-              :items="categories"
-              placeholder="Категория"
-              density="comfortable"
-              hide-details
-            />
-          </VCol>
-          <VCol cols="12" sm="6" md="3">
-            <VTextField
-              v-model="articleFilter"
-              placeholder="Артикул"
-              density="comfortable"
-              hide-details
-            />
-          </VCol>
-          <VCol cols="12" sm="6" md="2">
-            <VBtn
-              variant="tonal"
-              block
-              @click="resetFilters"
-            >
-              Сбросить
-            </VBtn>
-          </VCol>
-        </VRow>
-
-        <!-- Таблица товаров для выбора -->
-        <VDataTable
-          :headers="selectionHeaders"
-          :items="availableProducts"
-          v-model="selectedProducts"
-          :search="searchQuery"
-          show-select
-          class="text-no-wrap product-table"
-          :items-per-page="availableProductsPerPage"
-          :page="availableProductsPage"
-        >
-          <template #item.name="{ item }">
-            <div class="prodcell d-flex align-start gap-3">
-              <img
-                v-if="item.main_image_url"
-                :src="item.main_image_url"
-                alt="Фото"
-                class="prodcell__img"
-              />
-              <div v-else class="prodcell__img prodcell__img--placeholder">
-                <VIcon icon="tabler-photo" size="22" />
-              </div>
-
-              <div class="d-flex flex-column">
-                <div class="d-flex align-center gap-2">
-                  <RouterLink :to="{ name: 'product-details-id', params: { id: item.id } }" class="text-high-emphasis">
-                    {{ item.name }}
-                  </RouterLink>
-                </div>
-
-                <div class="mt-1 text-caption text-medium-emphasis d-flex align-center flex-wrap gap-1">
-                  <template v-if="item.category">
-                    <span class="text-truncate">{{ item.category }}</span>
-                    <span class="mx-1 text-disabled">•</span>
-                  </template>
-                  <template v-if="item.article">
-                    <span
-                      class="cursor-pointer user-select-none d-inline-flex align-center"
-                      title="Скопировать артикул"
-                      @click="copyArticle(item.article)"
-                    >
-                      {{ item.article }}
-                      <VIcon size="14" class="ms-1" icon="tabler-copy" />
-                    </span>
-                  </template>
-                </div>
-                <div class="mt-1 text-caption text-medium-emphasis d-flex align-center flex-wrap gap-1">
-                  <template v-if="item.category">
-                    <span class="text-truncate">{{ item.color }}</span>
-                  </template>
-                </div>
-              </div>
-            </div>
-          </template>
-
-          <template #item.stock="{ item }">
-            <span :class="{'text-error': item.stock === 0}">
-              {{ item.stock }} шт.
-            </span>
-          </template>
-
-          <template #item.current_discount="{ item }">
-            <span
-              v-if="item.current_discount"
-              size="small"
-              color="orange"
-              variant="flat"
-            >
-              {{ item.current_discount }}%
-            </span>
-            <span v-else>—</span>
-          </template>
-          <template #bottom>
-            <VCardText class="pt-2">
-              <div class="d-flex flex-wrap justify-center justify-sm-space-between gap-y-2 mt-2">
-                <div class="d-flex align-center gap-2">
-                  <span>Записей на странице</span>
-                  <VSelect
-                    v-model="availableProductsPerPage"
-                    :items="[5, 10, 25, 50]"
-                    style="max-inline-size: 8rem;min-inline-size: 5rem;"
-                  />
-                </div>
-
-                <VPagination
-                  v-model="availableProductsPage"
-                  :total-visible="5"
-                  :length="Math.ceil(availableProducts.length / availableProductsPerPage)"
-                />
-              </div>
-            </VCardText>
-          </template>
-        </VDataTable>
-      </VCardText>
-
-      <VCardActions>
-        <VSpacer />
-        <VBtn
-          variant="outlined"
-          @click="isAddProductsModalOpen = false"
-        >
-          Отмена
-        </VBtn>
-        <VBtn
-          color="primary"
-          :disabled="selectedProducts.length === 0"
-          @click="addSelectedProducts"
-        >
-          Добавить выбранные ({{ selectedProducts.length }})
-        </VBtn>
-      </VCardActions>
-    </VCard>
-  </VDialog>
+    :strategy-id="Number(route.params.id)"
+    @added="fetchProducts"
+  />
 
   <VDialog v-model="isDeleteDialogOpen" max-width="500">
     <VCard>
@@ -971,7 +708,12 @@ const confirmDelete = (item) => {
       </VCardTitle>
       <VDivider />
       <VCardText>
-        Удалить из списка товар "{{ itemToDelete?.name }}"?
+        <span v-if="itemToDelete?.product?.name">
+          Удалить из списка товар "{{ itemToDelete?.product?.name }}"?
+        </span>
+        <span v-else>
+          Удалить из списка товар?
+        </span>
       </VCardText>
       <VCardActions>
         <VSpacer />
