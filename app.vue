@@ -2,6 +2,8 @@
 import ScrollToTop from '@core/components/ScrollToTop.vue'
 import initCore from '@core/initCore'
 import { initConfigStore, useConfigStore } from '@core/stores/config'
+import 'quill/dist/quill.snow.css'
+
 import { hexToRgb } from '@layouts/utils'
 import { useTheme } from 'vuetify'
 

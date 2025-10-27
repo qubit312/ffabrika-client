@@ -1,93 +1,125 @@
 <script setup lang="ts">
-import { useLegalDocs } from '@core/stores/legalDocs'
-
-const store = useLegalDocs()
-store.load()
+import {
+  deleteSystemTextById,
+  listSystemTexts,
+  type SystemText,
+} from '@/services/systemTexts'
+import { computed, ref, unref } from 'vue'
+import { useRouter } from 'vue-router'
 
 const router = useRouter()
 
-const addDialog = ref(false)
-const addTitle = ref('')
-const addFile = ref<File | null>(null)
+const { data, pending, refresh, error } = await useAsyncData<SystemText[]>(
+  'system-texts',
+  () => listSystemTexts(),
+  { default: () => [] }
+)
 
-const onPickFile = (e: Event) => {
-  addFile.value = (e.target as HTMLInputElement).files?.[0] || null
+const items = computed<SystemText[]>(() => unref(data) ?? [])
+
+const openDoc = (key: string) => router.push(`/legal/${encodeURIComponent(key)}`)
+const addNew = () => router.push('/legal/new')
+
+const confirmOpen = ref(false)
+const deleting = ref(false)
+const target = ref<SystemText | null>(null)
+
+const askDelete = (item: SystemText) => {
+  target.value = item
+  confirmOpen.value = true
 }
 
-const createDoc = async () => {
-  if (!addTitle.value.trim()) return
-  let fileUrl: string | undefined
-  if (addFile.value) fileUrl = URL.createObjectURL(addFile.value)
-  const id = store.addDoc({
-    title: addTitle.value.trim(),
-    content: !addFile.value ? '' : undefined,
-    fileName: addFile.value?.name,
-    fileUrl,
-  })
-  addDialog.value = false
-  addTitle.value = ''
-  addFile.value = null
-  router.push(`/account/legal/${id}`)
+const doDelete = async () => {
+  if (!target.value?.id) return
+  deleting.value = true
+  try {
+    await deleteSystemTextById(target.value.id)
+    confirmOpen.value = false
+    target.value = null
+    await refresh()
+  } finally {
+    deleting.value = false
+  }
 }
 
-const openDoc = (id: string) => router.push(`/account/legal/${id}`)
-const removeDoc = (id: string) => store.removeDoc(id)
+const fmtDate = (iso?: string) => {
+  if (!iso) return ''
+  const normalized = iso.replace(/\.\d+Z$/, 'Z')
+  const d = new Date(normalized)
+  return isNaN(d.getTime()) ? iso : d.toLocaleString('ru-RU')
+}
 </script>
 
 <template>
   <VCard>
     <VCardTitle class="d-flex justify-space-between align-center">
       <span>Юридические документы</span>
-      <VBtn color="primary" prepend-icon="tabler-plus" @click="addDialog = true">
+      <VBtn color="primary" prepend-icon="tabler-plus" @click="addNew">
         Добавить документ
       </VBtn>
     </VCardTitle>
+
     <VDivider />
+
+    <VAlert v-if="error" type="error" variant="tonal" class="ma-4">
+      Ошибка загрузки списка
+    </VAlert>
 
     <VTable class="text-no-wrap">
       <thead>
         <tr>
+          <th style="width:280px">Ключ</th>
           <th>Название</th>
           <th style="width:220px">Обновлён</th>
           <th style="width:180px" class="text-right">Действия</th>
         </tr>
       </thead>
       <tbody>
-        <tr v-for="d in store.docs" :key="d.id">
+        <tr v-if="pending">
+          <td colspan="4">Загрузка…</td>
+        </tr>
+
+        <tr v-for="d in items" :key="d.id ?? d.key">
+          <td><code>{{ d.key }}</code></td>
           <td>{{ d.title }}</td>
-          <td>{{ new Date(d.updatedAt).toLocaleString() }}</td>
+          <td>{{ fmtDate(d.updated_at) }}</td>
           <td class="text-right">
-            <VBtn variant="text" size="small" @click="openDoc(d.id)">Открыть</VBtn>
-            <VBtn variant="text" size="small" color="error" @click="removeDoc(d.id)">Удалить</VBtn>
+            <VBtn variant="text" size="small" @click="openDoc(d.key)">Открыть</VBtn>
+            <VBtn
+              variant="text"
+              size="small"
+              color="error"
+              @click="askDelete(d)"
+            >
+              Удалить
+            </VBtn>
           </td>
         </tr>
-        <tr v-if="!store.docs.length">
-          <td colspan="3" class="text-medium-emphasis">Пока нет документов</td>
+
+        <tr v-if="!pending && !items.length">
+          <td colspan="4" class="text-medium-emphasis">Пока нет документов</td>
         </tr>
       </tbody>
     </VTable>
   </VCard>
 
-  <VDialog v-model="addDialog" max-width="560">
+  <VDialog v-model="confirmOpen" max-width="520" persistent>
     <VCard>
-      <VCardTitle>Новый документ</VCardTitle>
+      <VCardTitle class="d-flex align-center">
+        <VIcon icon="tabler-alert-triangle" class="mr-2" color="error" />
+        Подтверждение удаления
+      </VCardTitle>
       <VDivider />
       <VCardText>
-        <VTextField v-model="addTitle" label="Название" autofocus />
-        <VFileInput
-          label="Файл (необязательно)"
-          accept=".pdf,.txt,.doc,.docx"
-          prepend-icon="tabler-file"
-          @change="onPickFile"
-        />
-        <p class="text-medium-emphasis mt-2">
-          Или оставьте без файла и задайте текст на странице документа.
-        </p>
+        Удалить документ
+        <strong v-if="target">{{ target.title }}</strong>
+
+        ? Это действие необратимо.
       </VCardText>
       <VCardActions>
         <VSpacer />
-        <VBtn variant="text" @click="addDialog=false">Отмена</VBtn>
-        <VBtn color="primary" :disabled="!addTitle.trim()" @click="createDoc">Создать</VBtn>
+        <VBtn variant="tonal" @click="confirmOpen = false" :disabled="deleting">Отмена</VBtn>
+        <VBtn color="error" :loading="deleting" @click="doDelete">Удалить</VBtn>
       </VCardActions>
     </VCard>
   </VDialog>
