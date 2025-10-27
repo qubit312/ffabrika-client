@@ -1,5 +1,5 @@
 import { useApi } from '../composables/useApi'
-import { FilterRequest } from '../types/filter'
+import type { FilterRequest } from '../types/filter'
 import type { CreateWbProductDto, UpdateWbProductDto, WbProduct } from '../types/product'
 
 export function createProduct(dto: CreateWbProductDto) {

@@ -1,4 +1,5 @@
 import { useApi } from '@/composables/useApi';
+import type { FilterRequest } from '@/types/filter';
 import type {
   AddStrategyItemDto,
   CreateStrategyDto,
@@ -7,6 +8,7 @@ import type {
   StrategyItem,
   UpdateStrategyDto,
   UpdateStrategyItemDto,
+  UpdateStrategyItemTimeDto
 } from '@/types/pricingStrategy';
 
 export function getStrategies(params?: { type?: string; status?: string; perPage?: number }) {
@@ -49,22 +51,22 @@ export function runStrategy(id: number, wbToken?: string) {
   })
 }
 
-export function getStrategyItems(id: number, perPage = 50) {
-  return useApi<{ data: StrategyItem[] }>(`/api/pricing-strategies/${id}/items`, {
-    method: 'GET',
-    params: { perPage },
+export function getStrategyItems(id: number, payload?: FilterRequest) {
+  return useApi<{ data: StrategyItem[] }>(`/api/pricing-strategies/${id}/get-items`, {
+    method: 'POST',
+    body: payload,
   })
 }
 
-export function getAvailableStrategyItems(id: number, perPage = 50) {
+export function getAvailableStrategyItems(id: number, payload?: FilterRequest) {
   return useApi<{ data: StrategyItem[] }>(`/api/pricing-strategies/${id}/available-items`, {
-    method: 'GET',
-    params: { perPage },
+    method: 'POST',
+    body: payload,
   })
 }
 
 export function addStrategyItems(id: number, items: AddStrategyItemDto[]) {
-  return useApi<{ added: number }>(`/api/pricing-strategies/${id}/items`, {
+  return useApi<{ added: number }>(`/api/pricing-strategies/${id}/add-items`, {
     method: 'POST',
     body: { items },
   })
@@ -72,6 +74,13 @@ export function addStrategyItems(id: number, items: AddStrategyItemDto[]) {
 
 export function updateStrategyItem(id: number, data: Partial<UpdateStrategyItemDto>) {
   return useApi<{ success: boolean }>(`/api/strategy-items/${id}`, {
+    method: 'PATCH',
+    body: data,
+  })
+}
+
+export function updateStrategyItemTime(id: number, data: UpdateStrategyItemTimeDto) {
+  return useApi<{ updated: number }>(`/api/pricing-strategies/${id}/update-time`, {
     method: 'PATCH',
     body: data,
   })

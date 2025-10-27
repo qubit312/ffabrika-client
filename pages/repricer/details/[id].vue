@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { createStrategy, deleteStrategyItem, getStrategy, getStrategyItems, updateStrategy, updateStrategyItem } from '@/services/pricingStrategies'
+import { createStrategy, deleteStrategyItem, getStrategy, getStrategyItems, updateStrategy, updateStrategyItem, updateStrategyItemTime } from '@/services/pricingStrategies'
+import type { FilterRequest } from '@/types/filter'
 import type { CreateStrategyDto, PricingStrategy, StrategyItem, StrategyStatus, StrategyType } from '@/types/pricingStrategy'
 import type { CustomInputContent } from '@core/types'
-import { useDebounceFn } from '@vueuse/core'
+import { useDebounce, useDebounceFn } from '@vueuse/core'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -18,7 +19,6 @@ const radioContent: CustomInputContent[] = [
   },
 ]
 
-const selectedRadio = ref('basic')
 const productHeaders = [
   { title: 'Товар', key: 'name', sortable: true },
   { title: 'Остаток', key: 'stock', sortable: true, align: 'center' as const },
@@ -40,14 +40,27 @@ const isSetEndDialogOpen = ref(false)
 const globalStartTime = ref('09:00')
 const globalEndTime = ref('18:00')
 
+const snackVisible = ref(false)
+const snackMessage = ref('')
+const snackColor = ref<'success' | 'error'>('success')
+
 const sortField = ref<string>('stock')
 const sortOrder = ref<'asc' | 'desc'>('asc')
 
-const applyGlobalStart = () => {
-  products.value.forEach(item => {
-    item.starts_at = globalStartTime.value
-  })
-  isSetStartDialogOpen.value = false
+const sortBy = ref<{ key: string, order: 'asc' | 'desc' } | null>(null)
+const itemsPerPage = ref(10)
+const page = ref(1)
+
+const onOptionsUpdate = (options: any) => {
+  page.value = options.page
+  itemsPerPage.value = options.itemsPerPage
+
+  if (options.sortBy?.length > 0) {
+    sortBy.value = options.sortBy[0]
+  } else {
+    sortBy.value = null
+  }
+  fetchProducts()
 }
 
 const fetchStrategy = async () => {
@@ -60,7 +73,7 @@ const fetchStrategy = async () => {
     strategyName.value = data.value.name
     strategyType.value = data.value.type
     strategyStatus.value = data.value.status
-    console.log(data.value)
+
     sortField.value = data.value.order_by_field
     sortOrder.value = data.value.order_direction
   } catch (e) {
@@ -68,13 +81,66 @@ const fetchStrategy = async () => {
   }
 }
 
+const applyGlobalEnd = async () => {
+  const id = Number(route.params.id)
+  if (!id) return
 
-const applyGlobalEnd = () => {
-  products.value.forEach(item => {
-    item.ends_at = globalEndTime.value
-  })
-  isSetEndDialogOpen.value = false
+  try {
+    const data = {
+      field: 'ends_at',
+      value: globalEndTime.value
+    }
+
+    const { data: response } = await updateStrategyItemTime(id, data)
+    
+    if (response.value?.updated) {     
+      showSuccessNotification(`Обновлено элементов: ${response.value.updated}`)
+      fetchProducts()
+    }
+    
+    isSetEndDialogOpen.value = false
+  } catch (error) {
+    console.error('Error updating end time:', error)
+    showErrorNotification('Ошибка при обновлении времени окончания')
+  }
 }
+
+const applyGlobalStart = async () => {
+  const id = Number(route.params.id)
+  if (!id) return
+
+  try {
+    const data = {
+      field: 'starts_at',
+      value: globalStartTime.value
+    }
+
+    const { data: response } = await updateStrategyItemTime(id, data)
+    
+    if (response.value?.updated) {
+      showSuccessNotification(`Обновлено элементов: ${response.value.updated}`)
+      fetchProducts()
+    }
+    
+    isSetStartDialogOpen.value = false
+  } catch (error) {
+    console.error('Error updating start time:', error)
+    showErrorNotification('Ошибка при обновлении времени начала')
+  }
+}
+
+const showErrorNotification = (message: string) => {
+  snackVisible.value = true
+  snackMessage.value = message
+  snackColor.value = 'error'
+}
+
+const showSuccessNotification = (message: string) => {
+  snackVisible.value = true
+  snackMessage.value = message
+  snackColor.value = 'success'
+}
+
 
 const sortFields = [
   { title: 'Остаток', value: 'stock' },
@@ -112,7 +178,20 @@ const fetchProducts = async () => {
   loading.value = true
   try {
     const strategyId = Number(route.params.id)
-    const { data } = await getStrategyItems(strategyId)
+
+    const requestBody: FilterRequest = {
+      page: page.value,
+      per_page: itemsPerPage.value,
+      sort_by: sortBy.value?.key || 'name',
+      sort_dir: sortBy.value?.order || 'asc',
+      filters: [
+        ...(searchName.value ? [{ field: 'name', op: 'like' as const, value: searchName.value }] : []),
+        ...(searchArticle.value ? [{ field: 'article', op: 'like' as const, value: searchArticle.value }] : []),
+        ...(searchCategory.value ? [{ field: 'category', op: 'like' as const, value: searchCategory.value }] : []),
+      ],
+    }
+
+    const { data } = await getStrategyItems(strategyId, requestBody)
     products.value = data.value.data
     productsLength.value = data.value.total
   } finally {
@@ -161,17 +240,20 @@ const deleteItem = async () => {
   }
 }
 
-const itemsPerPage = ref(5)
-const page = ref(1)
-
 const copyArticle = (article: string) => {
   navigator.clipboard.writeText(article)
 }
 
 const updateDiscount = async (item: StrategyItem) => {
+  if (item.status === 'applied') return
   const discountValue = Math.round(Number(item.temp_discount) || 0)
-  item.temp_discount = discountValue
 
+  if (discountValue >= 100 || discountValue < 0) {
+    showErrorNotification('Скидка должна быть от 1 до 99')
+    return
+  }
+
+  item.temp_discount = discountValue
   try {
     await updateStrategyItem(item.id, {
       temp_discount: discountValue,
@@ -183,10 +265,12 @@ const updateDiscount = async (item: StrategyItem) => {
 
 const formatTime = (time?: string | null): string | null => {
   if (!time) return null
-  return time.length > 5 ? time.slice(0, 5) : time // "09:00:00" → "09:00"
+  return time.length > 5 ? time.slice(0, 5) : time
 }
 
 const updateTime = async (item: StrategyItem, field: 'starts_at' | 'ends_at') => {
+  if (item.status === 'applied') return
+
   const startsAt = formatTime(item.starts_at) || ''
   const endsAt = formatTime(item.ends_at) || ''
 
@@ -213,7 +297,7 @@ const timeOptions = computed(() => {
       const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
       options.push({
         title: timeString,
-        value: timeString, // <-- вместо totalMinutes
+        value: timeString,
       })
     }
   }
@@ -227,17 +311,41 @@ const currentStep = ref(1)
 const loading = ref(false)
 const isAddProductsModalOpen = ref(false)
 
-const nameFilter = ref('')
-const categoryFilter = ref('')
-const articleFilter = ref('')
-const selectedProducts = ref([])
+const searchName = ref<string>('')
+const debouncedQuery = useDebounce(searchName, 400)
+const searchCategory = ref<string>('') 
+const debouncedCategory = useDebounce(searchCategory, 400)
+const searchArticle = ref<string>('')
+const debouncedArticle = useDebounce(searchArticle, 400) 
 
-watch(() => selectedProducts.value, (val) => {
-  console.log(val)
+const toggleStatusDialog = ref(false)
+const toggleStatusItem = ref<StrategyItem | null>(null)
+
+const confirmStatusDialog = (item: StrategyItem) => {
+  if (item.status === 'applied') {
+    toggleStatusDialog.value = true
+    toggleStatusItem.value = item
+  } else {
+    toggleStatus(item)
+  }
+}
+
+watch([debouncedQuery, debouncedArticle, debouncedCategory], () => {
+  page.value = 1
+  fetchProducts()
 })
 
-const toggleStatus = async (item: StrategyItem) => {
-  const newStatus = item.status === 'active' ? 'paused' : 'active'
+const toggleStatus = async (item: StrategyItem | null) => {
+  toggleStatusDialog.value = false
+  if (!item) return
+
+  const currentStatus = item.status
+  let newStatus: 'active' | 'paused' | 'applied' = 'paused'
+
+  if (currentStatus === 'active') newStatus = 'paused'
+  else if (currentStatus === 'paused') newStatus = 'active'
+  else if (currentStatus === 'applied') newStatus = 'paused'
+
   try {
     await updateStrategyItem(item.id, { status: newStatus })
     item.status = newStatus
@@ -252,6 +360,8 @@ const getStatusVisibleName = (status: string) => {
       return 'Активно'
     case 'paused':
       return 'Пауза'
+    case 'applied':
+      return 'В работе'
     default:
       return status
   }
@@ -261,7 +371,7 @@ const getStatusColor = (status: string) => {
   const colors: Record<string, string> = {
     active: 'success',
     paused: 'warning',
-    draft: 'grey',
+    applied: 'info',
   }
   return colors[status] || 'grey'
 }
@@ -363,21 +473,21 @@ const confirmDelete = (item: StrategyItem) => {
                 <div class="d-flex flex-wrap gap-4 ma-6">
                   <div class="d-flex align-center">
                     <AppTextField
-                      v-model="nameFilter"
+                      v-model="searchName"
                       placeholder="Введите название"
                       style="inline-size: 200px;"
                       class="me-3"
                       clearable
                     />
                     <AppTextField
-                      v-model="categoryFilter"
+                      v-model="searchCategory"
                       placeholder="Введите категорию"
                       style="inline-size: 200px;"
                       class="me-3"
                       clearable
                     />
                     <AppTextField
-                      v-model="articleFilter"
+                      v-model="searchArticle"
                       placeholder="Введите артикул"
                       style="inline-size: 200px;"
                       class="me-3"
@@ -439,6 +549,7 @@ const confirmDelete = (item: StrategyItem) => {
                   class="text-no-wrap product-table"
                   :items-per-page="itemsPerPage"
                   :page="page"
+                  @update:options="onOptionsUpdate"
                 >
                   <template #no-data>
                     <div class="text-center py-8">
@@ -571,10 +682,11 @@ const confirmDelete = (item: StrategyItem) => {
                         type="number"
                         density="compact"
                         variant="outlined"
-                        suffix="%"
+                        :append-inner-icon="item.status == 'applied' ? 'tabler-lock' : 'tabler-percentage'"
                         min="0"
                         max="100"
                         hide-spin-buttons
+                        :readonly="item.status == 'applied'"
                         style="max-width: 90px;"
                         @blur="updateDiscount(item)"
                       />
@@ -588,7 +700,8 @@ const confirmDelete = (item: StrategyItem) => {
                       :items="timeOptions"
                       density="compact"
                       variant="outlined"
-                      prepend-inner-icon="tabler-clock-hour-3"
+                      :prepend-inner-icon="item.status == 'applied' ? 'tabler-lock' : 'tabler-clock-hour-3'"
+                      :readonly="item.status == 'applied'"
                       @update:model-value="updateTime(item, 'starts_at')"
                     />
                   </template>
@@ -600,7 +713,8 @@ const confirmDelete = (item: StrategyItem) => {
                       :items="timeOptions"
                       density="compact"
                       variant="outlined"
-                      prepend-inner-icon="tabler-clock-hour-3"
+                      :prepend-inner-icon="item.status == 'applied' ? 'tabler-lock' : 'tabler-clock-hour-3'"
+                      :readonly="item.status == 'applied'"
                       @update:model-value="updateTime(item, 'ends_at')"
                     />
                   </template>
@@ -613,17 +727,17 @@ const confirmDelete = (item: StrategyItem) => {
                             icon
                             size="small"
                             variant="text"
-                            :color="item.status === 'active' ? 'warning' : 'success'"
-                            @click="toggleStatus(item)"
+                            :color="item.status === 'active' || item.status === 'applied' ? 'warning' : 'success'"
+                            @click="confirmStatusDialog(item)"
                             v-bind="props"
                           >
                             <VIcon
-                              :icon="item.status === 'active' ? 'tabler-pause' : 'tabler-play'"
+                              :icon="item.status === 'active' || item.status === 'applied' ? 'tabler-pause' : 'tabler-play'"
                               size="small"
                             />
                           </VBtn>
                         </template>
-                        <span>{{ item.status === 'active' ? 'Приостановить' : 'Активировать' }}</span>
+                        <span>{{ item.status === 'active' || item.status === 'applied' ? 'Приостановить' : 'Активировать' }}</span>
                       </VTooltip>
                       <VBtn
                         icon
@@ -698,7 +812,7 @@ const confirmDelete = (item: StrategyItem) => {
   <AddProductsDialog
     v-model="isAddProductsModalOpen"
     :strategy-id="Number(route.params.id)"
-    @added="fetchProducts"
+    @addedProducts="fetchProducts"
   />
 
   <VDialog v-model="isDeleteDialogOpen" max-width="500">
@@ -717,8 +831,8 @@ const confirmDelete = (item: StrategyItem) => {
       </VCardText>
       <VCardActions>
         <VSpacer />
-        <VBtn variant="outlined" color="primary" @click="isDeleteDialogOpen = false">Отмена</VBtn>
-        <VBtn variant="text" color="primary" @click="deleteItem">Удалить</VBtn>
+        <VBtn variant="flat" color="primary" @click="isDeleteDialogOpen = false">Отмена</VBtn>
+        <VBtn variant="outlined" color="primary" @click="deleteItem">Удалить</VBtn>
       </VCardActions>
     </VCard>
   </VDialog>
@@ -766,6 +880,27 @@ const confirmDelete = (item: StrategyItem) => {
       </VCardActions>
     </VCard>
   </VDialog>
+
+  <VDialog v-model="toggleStatusDialog" max-width="500">
+    <VCard>
+      <VCardTitle class="text-h6">Смена статуса</VCardTitle>
+      <VDivider />
+      <VCardText>
+        <span>
+          Вы уверены, что хотите изменить статус? После изменения статуса скидка не измениться.
+        </span>
+      </VCardText>
+      <VCardActions>
+        <VSpacer />
+        <VBtn variant="flat" @click="toggleStatusDialog = false">Отмена</VBtn>
+        <VBtn variant="outlined" @click="toggleStatus(toggleStatusItem)">Продолжить</VBtn>
+      </VCardActions>
+    </VCard>
+  </VDialog>
+
+  <VSnackbar v-model="snackVisible" :timeout="3000" :color="snackColor" location="top right">
+    {{ snackMessage }}
+  </VSnackbar>
 </template>
 
 <style scoped>

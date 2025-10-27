@@ -1,27 +1,47 @@
 <script setup lang="ts">
 import { addStrategyItems, getAvailableStrategyItems } from '@/services/pricingStrategies';
+import type { FilterRequest } from '@/types/filter';
 import type { AddStrategyItemDto, StrategyItemProduct } from '@/types/pricingStrategy';
+import { useDebounce } from '@vueuse/core';
 import { defineEmits, defineProps, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
 const route = useRoute()
 
 const props = defineProps<{ modelValue: boolean; strategyId: number }>()
-const emit = defineEmits(['update:modelValue', 'added'])
-const isOpen = ref(props.modelValue)
+const emit = defineEmits<{
+  (e: 'addedProducts'): void
+  (e: 'update:modelValue', value: boolean): void
+}>()
 
+const isOpen = ref(props.modelValue)
 const availableProducts = ref<StrategyItemProduct[]>([])
 const loadingAvailable = ref(false)
 
-const availableProductsPerPage = ref(5)
-const availableProductsPage = ref(1)
+const itemsPerPage = ref(10)
+const page = ref(1)
 const selectedProducts = ref([])
 
-const searchQuery = ref('')
-const categoryFilter = ref('')
-const articleFilter = ref('')
-const sortField = ref<string>('stock')
-const sortOrder = ref<'asc' | 'desc'>('asc')
+const searchName = ref<string>('')
+const debouncedQuery = useDebounce(searchName, 400)
+const searchCategory = ref<string>('') 
+const debouncedCategory = useDebounce(searchCategory, 400)
+const searchArticle = ref<string>('')
+const debouncedArticle = useDebounce(searchArticle, 400) 
+
+const sortBy = ref<{ key: string, order: 'asc' | 'desc' } | null>(null)
+
+const onOptionsUpdate = (options: any) => {
+  page.value = options.page
+  itemsPerPage.value = options.itemsPerPage
+
+  if (options.sortBy?.length > 0) {
+    sortBy.value = options.sortBy[0]
+  } else {
+    sortBy.value = null
+  }
+  fetchAvailableProducts()
+}
 
 const selectionHeaders = [
   { title: 'Товар', key: 'name', sortable: true },
@@ -32,17 +52,6 @@ const selectionHeaders = [
 
 watch(() => props.modelValue, val => (isOpen.value = val))
 
-watch(() => selectedProducts.value, (val) => {
-  console.log(val)
-})
-
-watch([sortField, sortOrder], () => {
-  console.log('Выбрана сортировка:', {
-    field: sortField.value,
-    order: sortOrder.value,
-  })
-})
-
 watch(isOpen, val => {
     if (val) fetchAvailableProducts()
     emit('update:modelValue', val)
@@ -52,7 +61,20 @@ const fetchAvailableProducts = async () => {
   loadingAvailable.value = true
   try {
     const strategyId = Number(route.params.id)
-    const { data } = await getAvailableStrategyItems(strategyId)
+
+    const requestBody: FilterRequest = {
+      page: page.value,
+      per_page: itemsPerPage.value,
+      sort_by: sortBy.value?.key || 'name',
+      sort_dir: sortBy.value?.order || 'asc',
+      filters: [
+        ...(searchName.value ? [{ field: 'name', op: 'like' as const, value: searchName.value }] : []),
+        ...(searchArticle.value ? [{ field: 'article', op: 'like' as const, value: searchArticle.value }] : []),
+        ...(searchCategory.value ? [{ field: 'category', op: 'like' as const, value: searchCategory.value }] : []),
+      ],
+    }
+
+    const { data } = await getAvailableStrategyItems(strategyId, requestBody)
     availableProducts.value = data.value.data || []
   } finally {
     loadingAvailable.value = false
@@ -68,6 +90,7 @@ const addSelectedProducts = async () => {
   }))
 
   await addStrategyItems(strategyId, items)
+  emit('addedProducts')
   isOpen.value = false
   selectedProducts.value = []
 }
@@ -76,10 +99,15 @@ const copyArticle = (article: string) => {
   navigator.clipboard.writeText(article)
 }
 
+watch([debouncedQuery, debouncedArticle, debouncedCategory], () => {
+  page.value = 1
+  fetchAvailableProducts()
+})
+
 const resetFilters = () => {
-  searchQuery.value = ''
-  categoryFilter.value = ''
-  articleFilter.value = ''
+  searchName.value = ''
+  searchCategory.value = ''
+  searchArticle.value = ''
 }
 </script>
 
@@ -106,7 +134,7 @@ const resetFilters = () => {
         <VRow class="mb-4">
           <VCol cols="12" sm="6" md="4">
             <VTextField
-              v-model="searchQuery"
+              v-model="searchName"
               placeholder="Поиск по названию..."
               prepend-inner-icon="tabler-search"
               density="comfortable"
@@ -115,7 +143,7 @@ const resetFilters = () => {
           </VCol>
           <VCol cols="12" sm="6" md="3">
             <VTextField
-              v-model="categoryFilter"
+              v-model="searchCategory"
               placeholder="Категория"
               density="comfortable"
               hide-details
@@ -123,7 +151,7 @@ const resetFilters = () => {
           </VCol>
           <VCol cols="12" sm="6" md="3">
             <VTextField
-              v-model="articleFilter"
+              v-model="searchArticle"
               placeholder="Артикул"
               density="comfortable"
               hide-details
@@ -140,16 +168,15 @@ const resetFilters = () => {
           </VCol>
         </VRow>
 
-        <!-- Таблица товаров для выбора -->
         <VDataTable
           :headers="selectionHeaders"
           :items="availableProducts"
           v-model="selectedProducts"
-          :search="searchQuery"
           show-select
           class="text-no-wrap product-table"
-          :items-per-page="availableProductsPerPage"
-          :page="availableProductsPage"
+          :items-per-page="itemsPerPage"
+          :page="page"
+          @update:options="onOptionsUpdate"
         >
           <template #item.name="{ item }">
             <div class="prodcell d-flex align-start gap-3">
@@ -216,16 +243,16 @@ const resetFilters = () => {
                 <div class="d-flex align-center gap-2">
                   <span>Записей на странице</span>
                   <VSelect
-                    v-model="availableProductsPerPage"
+                    v-model="itemsPerPage"
                     :items="[5, 10, 25, 50]"
                     style="max-inline-size: 8rem;min-inline-size: 5rem;"
                   />
                 </div>
 
                 <VPagination
-                  v-model="availableProductsPage"
+                  v-model="page"
                   :total-visible="5"
-                  :length="Math.ceil(availableProducts.length / availableProductsPerPage)"
+                  :length="Math.ceil(availableProducts.length / itemsPerPage)"
                 />
               </div>
             </VCardText>

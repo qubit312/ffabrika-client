@@ -8,8 +8,12 @@ type ChzApiItem = {
   id: number
   size_id: number
   code: string
+  status: string
   used: boolean
   created_at: string
+  created_by: { id: number; name: string }
+  used_at: string
+  used_by: { id: number; name: string }
   size?: { id: number; product_id: number; value: string; barcode: string }
 }
 
@@ -133,18 +137,34 @@ async function fetchAll() {
 
 onMounted(fetchAll)
 
-const headers = [
+const baseHeaders = [
   { title: 'ID', key: 'id', width: 90 },
   { title: 'Код', key: 'code', sortable: false },
-  { title: 'Создана', key: 'created_at', sortable: true },
 ]
+
+const usedHeaders = [
+  { title: 'Дата применения', key: 'used_at', sortable: true },
+  { title: 'Применил', key: 'used_by', sortable: false },
+]
+
+const createdHeaders = [
+  { title: 'Дата Создания', key: 'created_at', sortable: true },
+  { title: 'Создал', key: 'created_by', sortable: false },
+]
+
+const headers = computed(() => {
+  if (status.value === 'used') {
+    return [...baseHeaders, ...usedHeaders, createdHeaders[0]]
+  } else {
+    return [...baseHeaders, ...createdHeaders]
+  }
+})
 
 const sortBy = ref<{ key: string, order: 'asc' | 'desc' } | null>(null)
 const onOptionsUpdate = (options: any) => {
   if (options.sortBy?.length > 0) {
     const field = options.sortBy[0]
-
-    if (['created_at', 'id'].includes(field.key)) {
+    if (['used_at', 'created_at', 'id'].includes(field.key)) {
       sortBy.value = field
     } else {
       sortBy.value = null
@@ -197,8 +217,20 @@ const onOptionsUpdate = (options: any) => {
           <span class="mono hoverable pointer">{{ prettyCode(item.code) }}</span>
         </template>
 
+        <template #item.used_at="{ item }">
+          <span class="hoverable pointer">{{ new Date(item.used_at).toLocaleString() }}</span>
+        </template>
+
+        <template #item.used_by="{ item }">
+          <span class="hoverable pointer">{{ item.used_by?.name || ''  }}</span>
+        </template>
+
         <template #item.created_at="{ item }">
           <span class="hoverable pointer">{{ new Date(item.created_at).toLocaleString() }}</span>
+        </template>
+
+        <template #item.created_by="{ item }">
+          <span class="hoverable pointer">{{ item.created_by?.name || ''  }}</span>
         </template>
 
         <template #bottom>  

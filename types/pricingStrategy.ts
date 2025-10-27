@@ -40,7 +40,7 @@ export interface StrategyItemProduct {
 
 export interface StrategyItem {
   id: number
-  status: 'active' | 'paused'
+  status: 'active' | 'paused' | 'applied'
   discount: number
   temp_discount: number
   starts_at: string
@@ -54,6 +54,11 @@ export interface UpdateStrategyItemDto {
   starts_at: string
   ends_at: string
   status: 'active' | 'paused'
+}
+
+export interface UpdateStrategyItemTimeDto {
+  field: string
+  value: string
 }
 
 export interface AddStrategyItemDto {
