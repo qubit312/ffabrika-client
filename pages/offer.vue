@@ -1,88 +1,64 @@
 <script setup lang="ts">
-import { setPageLayout } from '#app'
+import { getSystemText, type SystemText } from '@/services/systemTexts'
 
-definePageMeta({
-  public: true, 
-})
+definePageMeta({ layout: 'blank', public: true })
 
-const route = useRoute()
-const router = useRouter()
+const { data, pending, error } = await useAsyncData<SystemText | null>(
+  'offer-oferta',
+  async () => {
+    try {
+      return await getSystemText('oferta')
+    } catch {
+      return null
+    }
+  },
+  { default: () => null }
+)
 
-const fromRegister = computed(() => String(route.query.from || '') === 'register')
-
-watchEffect(() => {
-  setPageLayout(fromRegister.value ? 'blank' : 'default')
-})
-
-const goBack = () => router.push('/register')
+const fmtDate = (iso?: string) => {
+  if (!iso) return ''
+  const normalized = iso.replace(/\.\d+Z$/, 'Z')
+  const d = new Date(normalized)
+  return isNaN(d.getTime()) ? iso : d.toLocaleString('ru-RU')
+}
 </script>
+
 <template>
-  <div class="oferta mx-auto px-4 py-8" style="max-width: 920px;">
-    <div v-if="fromRegister" class="mb-4 d-flex align-center">
-      <VBtn variant="text" prepend-icon="tabler-arrow-left" @click="goBack">
-        Назад к регистрации
-      </VBtn>
-    </div>
+  <VContainer class="py-8" style="max-width: 960px;">
+    <VCard>
+      <VCardTitle class="d-flex align-center justify-space-between">
+        <div class="d-flex align-center gap-3">
+          <NuxtLink to="/" class="text-none">
+            <VBtn icon="tabler-arrow-left" variant="text" />
+          </NuxtLink>
+          <span>{{ data.title }}</span>
+        </div>
 
-    <h1 class="text-h4 mb-6">Публичная оферта</h1>
-    <p class="text-medium-emphasis mb-6">
-      Актуальная редакция от {{ new Date().toLocaleDateString('ru-RU') }}.
-    </p>
 
-    <VCard variant="outlined" class="mb-6">
-      <VCardText>
-        <h2 class="text-h6 mb-3">1. Общие положения</h2>
-        <p>
-          Настоящий документ является официальным предложением (офертой) заключить договор оказания услуг
-          в соответствии со ст. 437 ГК РФ. Принимая условия, Пользователь подтверждает согласие с офертой.
-        </p>
+      </VCardTitle>
+
+      <VDivider />
+
+      <VCardText v-if="pending">Загрузка…</VCardText>
+
+      <VAlert v-else-if="error || !data" type="warning" variant="tonal" class="ma-4">
+        Документ с ключом <code>oferta</code> не найден.
+      </VAlert>
+
+      <VCardText v-else>
+        <div class="text-medium-emphasis mb-4">
+          Обновлено: {{ fmtDate(data.updated_at) }}
+        </div>
+
+        <div v-html="data.content"></div>
       </VCardText>
     </VCard>
-
-    <VCard variant="outlined" class="mb-6">
-      <VCardText>
-        <h2 class="text-h6 mb-3">2. Предмет договора</h2>
-        <p>
-          Мы предоставляем доступ к сервису для управления товарами, маркировкой и связанными функциями.
-          Конкретный перечень и тарифы могут уточняться в интерфейсе сервиса.
-        </p>
-      </VCardText>
-    </VCard>
-
-    <VCard variant="outlined" class="mb-6">
-      <VCardText>
-        <h2 class="text-h6 mb-3">3. Права и обязанности сторон</h2>
-        <ul class="mb-0">
-          <li>Пользователь обязуется соблюдать правила сервиса и действующее законодательство.</li>
-          <li>Мы обеспечиваем работу сервиса и вправе обновлять функциональность.</li>
-        </ul>
-      </VCardText>
-    </VCard>
-
-    <VCard variant="outlined" class="mb-6">
-      <VCardText>
-        <h2 class="text-h6 mb-3">4. Персональные данные</h2>
-        <p>
-          Обработка персональных данных осуществляется в соответствии с Политикой конфиденциальности.
-        </p>
-      </VCardText>
-    </VCard>
-
-    <VCard variant="outlined" class="mb-6">
-      <VCardText>
-        <h2 class="text-h6 mb-3">5. Заключительные положения</h2>
-        <p>
-          Оферта может быть изменена. Новая редакция вступает в силу с момента публикации.
-        </p>
-      </VCardText>
-    </VCard>
-
-    <div class="text-medium-emphasis">
-      Если у вас есть вопросы — свяжитесь с поддержкой.
-    </div>
-  </div>
+  </VContainer>
 </template>
 
 <style scoped>
-.oferta :deep(h2){ margin-top: .25rem; }
+@media print {
+  .v-btn, .v-card-title .v-btn, .v-card-title a { display: none !important; }
+  .v-container { padding: 0 !important; }
+}
 </style>
