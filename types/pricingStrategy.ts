@@ -1,10 +1,15 @@
 export type StrategyStatus = 'draft' | 'active' | 'paused'
 export type StrategyType = 'time_discount'
+export type StrategyAccount = {
+  id: number
+  name: string
+}
 
 export interface PricingStrategy {
   id: number
   name: string
   type: StrategyType
+  account: StrategyAccount | null
   status: StrategyStatus
   order_by_field?: string
   order_direction?: 'asc' | 'desc'
@@ -17,6 +22,7 @@ export interface PricingStrategy {
 
 export interface CreateStrategyDto {
   name: string
+  account_id: number | null
   type?: StrategyType
   status?: StrategyStatus
   order_by_field?: string

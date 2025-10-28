@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import { getMarketplaceAccounts } from '@/services/marketplaceAccounts'
 import { createStrategy, deleteStrategyItem, getStrategy, getStrategyItems, updateStrategy, updateStrategyItem, updateStrategyItemTime } from '@/services/pricingStrategies'
 import type { FilterRequest } from '@/types/filter'
-import type { CreateStrategyDto, PricingStrategy, StrategyItem, StrategyStatus, StrategyType } from '@/types/pricingStrategy'
+import type { CreateStrategyDto, PricingStrategy, StrategyAccount, StrategyItem, StrategyStatus, StrategyType } from '@/types/pricingStrategy'
 import type { CustomInputContent } from '@core/types'
 import { useDebounce, useDebounceFn } from '@vueuse/core'
 import { computed, onMounted, ref, watch } from 'vue'
@@ -34,6 +35,8 @@ const strategy = ref<PricingStrategy | null>(null)
 const strategyName = ref('')
 const strategyType = ref<StrategyType>('time_discount')
 const strategyStatus = ref<StrategyStatus>('active')
+const strategyAccountId = ref<number | null>(null)
+const accounts = ref<StrategyAccount[]>([])
 
 const isSetStartDialogOpen = ref(false)
 const isSetEndDialogOpen = ref(false)
@@ -63,6 +66,28 @@ const onOptionsUpdate = (options: any) => {
   fetchProducts()
 }
 
+async function fetchAccounts() {
+  loading.value = true
+  
+  try {
+    const { data, error: fetchError } = await getMarketplaceAccounts()
+    
+    if (fetchError.value) {
+      throw new Error(fetchError.value.message || 'Ошибка загрузки данных')
+    }
+    
+    accounts.value = (data.value || []).map((a: any) => ({
+      id: a.id,
+      name: a.name || `Кабинет #${a.id}`,
+    })) as StrategyAccount[]
+  } catch (err) {
+    accounts.value = []
+    console.error('Ошибка загрузки магазинов:', err)
+  } finally {
+    loading.value = false
+  }
+}
+
 const fetchStrategy = async () => {
   const id = Number(route.params.id)
   if (!id) return
@@ -73,6 +98,7 @@ const fetchStrategy = async () => {
     strategyName.value = data.value.name
     strategyType.value = data.value.type
     strategyStatus.value = data.value.status
+    strategyAccountId.value = data.value.account_id
 
     sortField.value = data.value.order_by_field
     sortOrder.value = data.value.order_direction
@@ -200,6 +226,7 @@ const fetchProducts = async () => {
 }
 
 onMounted(async () => {
+  await fetchAccounts()
   await fetchStrategy()
   if (route.params.id !== '0') await fetchProducts()
 })
@@ -211,6 +238,7 @@ const saveStrategy = async () => {
     name: strategyName.value,
     type: strategyType.value,
     status: strategyStatus.value,
+    account_id: strategyAccountId.value || null
   }
 
   try {
@@ -443,6 +471,18 @@ const confirmDelete = (item: StrategyItem) => {
                         { title: 'Пауза', value: 'paused' }
                       ]"
                       label="Статус"
+                    />
+                  </VCol>
+                </VRow>
+                <VRow>
+                  <VCol md="4">
+                    <AppSelect
+                      v-model="strategyAccountId"
+                      item-title="name"
+                      item-value="id"
+                      clearable
+                      :items="accounts"
+                      label="Магазин"
                     />
                   </VCol>
                 </VRow>
