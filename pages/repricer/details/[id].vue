@@ -38,10 +38,17 @@ const strategyStatus = ref<StrategyStatus>('active')
 const strategyAccountId = ref<number | null>(null)
 const accounts = ref<StrategyAccount[]>([])
 
+const _oldDiscount = ref<number | null>(null)
+const _oldStartsAt = ref<string | null>(null)
+const _oldEndsAt = ref<string | null>(null)
+const _oldStatus = ref<'active' | 'paused' | 'applied' | null>(null)
+
 const isSetStartDialogOpen = ref(false)
 const isSetEndDialogOpen = ref(false)
 const globalStartTime = ref('09:00')
 const globalEndTime = ref('18:00')
+
+const strategyLoading = ref<boolean>(false)
 
 const snackVisible = ref(false)
 const snackMessage = ref('')
@@ -89,6 +96,7 @@ async function fetchAccounts() {
 }
 
 const fetchStrategy = async () => {
+  strategyLoading.value = true 
   const id = Number(route.params.id)
   if (!id) return
 
@@ -104,6 +112,8 @@ const fetchStrategy = async () => {
     sortOrder.value = data.value.order_direction
   } catch (e) {
     console.error('Ошибка при загрузке стратегии', e)
+  } finally {
+    strategyLoading.value = false
   }
 }
 
@@ -166,7 +176,6 @@ const showSuccessNotification = (message: string) => {
   snackMessage.value = message
   snackColor.value = 'success'
 }
-
 
 const sortFields = [
   { title: 'Остаток', value: 'stock' },
@@ -233,6 +242,7 @@ onMounted(async () => {
 
 
 const saveStrategy = async () => {
+  strategyLoading.value = true
   const id = Number(route.params.id)
   const payload: CreateStrategyDto = {
     name: strategyName.value,
@@ -251,9 +261,10 @@ const saveStrategy = async () => {
     }
   } catch (e) {
     console.error('Ошибка при сохранении стратегии', e)
+  } finally {
+    strategyLoading.value = false
   }
 }
-
 
 const deleteItem = async () => {
   if (!itemToDelete.value) return
@@ -273,21 +284,36 @@ const copyArticle = (article: string) => {
 }
 
 const updateDiscount = async (item: StrategyItem) => {
-  if (item.status === 'applied') return
+  if (item.status === 'applied') {
+    if(_oldDiscount.value) item.temp_discount = _oldDiscount.value
+    return
+  }
   const discountValue = Math.round(Number(item.temp_discount) || 0)
 
   if (discountValue >= 100 || discountValue < 0) {
     showErrorNotification('Скидка должна быть от 1 до 99')
+    if(_oldDiscount.value) item.temp_discount = _oldDiscount.value
     return
   }
 
   item.temp_discount = discountValue
   try {
-    await updateStrategyItem(item.id, {
+    const { data, error } = await updateStrategyItem(item.id, {
       temp_discount: discountValue,
     })
-  } catch (e) {
+
+    if (!data.value?.success || error.value) {
+      const errorMessage = error.value?.data?.message || data.value?.message
+      showErrorNotification(errorMessage || 'Не удалось обновить скидку')
+
+      if(_oldDiscount.value) item.temp_discount = _oldDiscount.value
+    }
+  } catch (e: any) {
     console.error('Ошибка при обновлении скидки', e)
+    showErrorNotification('Ошибка при обновлении скидки')
+    if(_oldDiscount.value) {
+      item.temp_discount = _oldDiscount.value
+    }
   }
 }
 
@@ -297,23 +323,52 @@ const formatTime = (time?: string | null): string | null => {
 }
 
 const updateTime = async (item: StrategyItem, field: 'starts_at' | 'ends_at') => {
-  if (item.status === 'applied') return
+  if (item.status === 'applied') {
+    showErrorNotification('Недоступно редактирование')
+    rollbackTimeValue(item, field)
+    return
+  }
 
   const startsAt = formatTime(item.starts_at) || ''
   const endsAt = formatTime(item.ends_at) || ''
 
   if (field === 'starts_at' && endsAt && startsAt > endsAt) {
-    console.warn('Время начала позже времени окончания')
+    showErrorNotification('Время начала позже времени окончания')
+    rollbackTimeValue(item, field)
     return
   }
 
+  let payload: Record<string, any> | null = null
+  if (field === 'starts_at') payload = { starts_at: startsAt }
+  if (field === 'ends_at') payload = { ends_at: endsAt }
+
   try {
-    await updateStrategyItem(item.id, {
-      starts_at: startsAt,
-      ends_at: endsAt,
-    })
-  } catch (e) {
+    if (!payload) {
+      rollbackTimeValue(item, field)
+      showErrorNotification('Данные в запросе пустые')
+      return
+    }
+
+    const { data, error } = await updateStrategyItem(item.id, payload)
+
+    if (!data.value?.success || error.value) {
+      const errorMessage = error.value?.data?.message || data.value?.message
+      showErrorNotification(errorMessage || 'Не удалось обновить время')
+      rollbackTimeValue(item, field)
+    }
+  } catch (e: any) {
     console.error('Ошибка при обновлении времени', e)
+    showErrorNotification('Ошибка при обновлении времени')
+    rollbackTimeValue(item, field)
+  }
+}
+
+const rollbackTimeValue = (item: StrategyItem, field: 'starts_at' | 'ends_at') => {
+  if (field === 'starts_at' && _oldStartsAt.value) {
+    item.starts_at = _oldStartsAt.value
+  }
+  if (field === 'ends_at' && _oldEndsAt.value) {
+    item.ends_at = _oldEndsAt.value
   }
 }
 
@@ -375,10 +430,19 @@ const toggleStatus = async (item: StrategyItem | null) => {
   else if (currentStatus === 'applied') newStatus = 'paused'
 
   try {
-    await updateStrategyItem(item.id, { status: newStatus })
+    const { data, error } = await updateStrategyItem(item.id, { status: newStatus })
+    if (!data.value?.success || error.value) {
+      const errorMessage = error.value?.data?.message || data.value?.message
+      showErrorNotification(errorMessage || 'Не удалось обновить время')
+      if(_oldStatus.value) item.status = _oldStatus.value
+      return
+    }
+
     item.status = newStatus
   } catch (e) {
     console.error('Ошибка при обновлении статуса', e)
+    showErrorNotification('Не удалось обновить статус')
+    if(_oldStatus.value) item.status = _oldStatus.value
   }
 }
 
@@ -510,7 +574,7 @@ const confirmDelete = (item: StrategyItem) => {
                   Выберите товары для применения стратегии переоценки
                 </p>
                 
-                <div class="d-flex flex-wrap gap-4 ma-6">
+                <div class="d-flex flex-wrap gap-4 mt-6 mb-6">
                   <div class="d-flex align-center">
                     <AppTextField
                       v-model="searchName"
@@ -728,6 +792,7 @@ const confirmDelete = (item: StrategyItem) => {
                         hide-spin-buttons
                         :readonly="item.status == 'applied'"
                         style="max-width: 90px;"
+                        @focus="_oldDiscount = item.temp_discount"
                         @blur="updateDiscount(item)"
                       />
                     </div>
@@ -742,6 +807,7 @@ const confirmDelete = (item: StrategyItem) => {
                       variant="outlined"
                       :prepend-inner-icon="item.status == 'applied' ? 'tabler-lock' : 'tabler-clock-hour-3'"
                       :readonly="item.status == 'applied'"
+                      @focus="_oldStartsAt = item.starts_at"
                       @update:model-value="updateTime(item, 'starts_at')"
                     />
                   </template>
@@ -755,6 +821,7 @@ const confirmDelete = (item: StrategyItem) => {
                       variant="outlined"
                       :prepend-inner-icon="item.status == 'applied' ? 'tabler-lock' : 'tabler-clock-hour-3'"
                       :readonly="item.status == 'applied'"
+                      @focus="_oldEndsAt = item.ends_at"
                       @update:model-value="updateTime(item, 'ends_at')"
                     />
                   </template>
@@ -941,6 +1008,8 @@ const confirmDelete = (item: StrategyItem) => {
   <VSnackbar v-model="snackVisible" :timeout="3000" :color="snackColor" location="top right">
     {{ snackMessage }}
   </VSnackbar>
+
+  <CustomLoading :loading="strategyLoading"/>
 </template>
 
 <style scoped>

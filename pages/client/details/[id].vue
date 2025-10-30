@@ -7,7 +7,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { VForm } from 'vuetify/components'
 import CustomLoading from '../../../components/CustomLoading.vue'
 import { createBrand, getBrands } from '../../../services/brands'
-import { createClient, getClient, setFulfillment, updateClient } from '../../../services/clients'
+import { getClient, setFulfillment } from '../../../services/clients'
 
 import type { Brand } from '../../../types/brand'
 import type { Client, CreateClientDto } from '../../../types/client'
@@ -29,6 +29,8 @@ import {
   telegramAtUsername,
   vatPercentRule,
 } from '@/utils/validators'
+
+definePageMeta({ middleware: 'disabled' })
 
 const typeOptions = [
   { label: 'Юридическое лицо', value: 'LEGAL_ENTITY' },
@@ -232,48 +234,50 @@ async function fetchClient(id: number) {
   loading.value = false
 }
 
-async function onSubmit() {
-  submitted.value = true
-  const res = await formRef.value?.validate?.()
-  if (res && 'valid' in res && !res.valid) {
-    snackColor.value = 'error'
-    snackMessage.value = 'Проверьте заполнение полей'
-    snackbar.value = true
-    return
-  }
+// async function onSubmit() {
+//   if (mode.value === 'edit') return
 
-  isSaving.value = true
-  const dto = buildSubmitPayload(form) as CreateClientDto
+//   submitted.value = true
+//   const res = await formRef.value?.validate?.()
+//   if (res && 'valid' in res && !res.valid) {
+//     snackColor.value = 'error'
+//     snackMessage.value = 'Проверьте заполнение полей'
+//     snackbar.value = true
+//     return
+//   }
 
-  const response = mode.value === 'edit'
-    ? await updateClient(primaryId, dto)
-    : await createClient(dto)
+//   isSaving.value = true
+//   const dto = buildSubmitPayload(form) as CreateClientDto
 
-  const { data, error } = response
+//   const response = mode.value === 'edit'
+//     ? await updateClient(primaryId, dto)
+//     : await createClient(dto)
 
-  if (error.value) {
-    snackColor.value = 'error'
-    snackMessage.value = 'Ошибка сохранения клиента'
-  } else {
-    snackColor.value = 'success'
-    snackMessage.value = mode.value === 'edit' ? 'Клиент обновлён' : 'Клиент создан'
+//   const { data, error } = response
 
-    if (mode.value === 'edit') {
-      originalForm.value = structuredClone(toRaw(form))
-      mode.value = 'view'
-      isEdit.value = false
-      submitted.value = false
-    }
+//   if (error.value) {
+//     snackColor.value = 'error'
+//     snackMessage.value = 'Ошибка сохранения клиента'
+//   } else {
+//     snackColor.value = 'success'
+//     snackMessage.value = mode.value === 'edit' ? 'Клиент обновлён' : 'Клиент создан'
 
-    if (mode.value === 'create') {
-      const newId = data.value.data.id
-      router.push({ name: 'client-details-id', params: { id: newId } })
-    }
-  }
+//     if (mode.value === 'edit') {
+//       originalForm.value = structuredClone(toRaw(form))
+//       mode.value = 'view'
+//       isEdit.value = false
+//       submitted.value = false
+//     }
 
-  snackbar.value = true
-  isSaving.value = false
-}
+//     if (mode.value === 'create') {
+//       const newId = data.value.data.id
+//       router.push({ name: 'client-details-id', params: { id: newId } })
+//     }
+//   }
+
+//   snackbar.value = true
+//   isSaving.value = false
+// }
 
 onMounted(() => {
   if (primaryId > 0) {
@@ -284,9 +288,9 @@ onMounted(() => {
   }
 })
 
-function startEdit() {
-  isEdit.value = true
-}
+// function startEdit() {
+//   isEdit.value = true
+// }
 
 function cancelEdit() {
   if (originalForm.value) {
@@ -417,12 +421,12 @@ const legalState = useFieldState(legalAddressRules, computed(() => form.legal_ad
           <VBtn v-if="!isEdit && mode !== 'create'" variant="outlined" color="primary" @click="router.back()">
             Закрыть
           </VBtn>
-          <VBtn v-if="!isEdit" color="primary" @click="startEdit">
+          <!-- <VBtn v-if="!isEdit" color="primary" @click="startEdit">
             Редактировать
-          </VBtn>
-          <VBtn v-if="isEdit" color="primary" :loading="isSaving" @click="onSubmit">
+          </VBtn> -->
+          <!-- <VBtn v-if="isEdit" color="primary" :loading="isSaving" @click="onSubmit">
             Сохранить
-          </VBtn>
+          </VBtn> -->
         </div>
       </div>
 

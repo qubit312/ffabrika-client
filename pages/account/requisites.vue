@@ -181,7 +181,22 @@ const save = async () => {
 
   isSaving.value = true
   try {
-    const { data, error } = await updateClient(Number(currentClient.value?.id), org)
+    const dto = {
+      name: org.name?.trim() || '',
+      type: org.type || '',
+      email: org.email || '',
+      phone: org.phone || '',
+      telegram: org.telegram || '',
+      tin: org.tin || '',
+      psrn: org.psrn || '',
+      account: org.account || '',
+      bank: org.bank || '',
+      correspondent_account: org.correspondent_account || '',
+      bic: org.bic || '',
+      legal_address: org.legal_address || '',
+      vat: Number(org.vat) || 0,
+    }
+    const { data, error } = await updateClient(Number(currentClient.value?.id), dto)
     console.log(data)
     if (error.value) throw new Error(error.value.message)
 
@@ -433,7 +448,6 @@ onMounted(fetchClient)
           </VCol>
           <VCol cols="12" class="d-flex flex-wrap gap-4">
             <VBtn
-              type="submit"
               color="primary"
               @click="save"
               :loading="isSaving"

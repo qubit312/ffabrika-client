@@ -13,6 +13,12 @@ export function getMarketplaceAccounts() {
   })
 }
 
+export function getMarketplaceAccountsLookup() {
+  return useApi(`/api/marketplace-accounts/lookup`, {
+    method: 'GET',
+  })
+}
+
 export function createMarketplaceAccount(dto: CreateMarketplaceAccountDto) {
   return useApi<{ data: MarketplaceAccount }>('/api/marketplace-accounts', {
     method: 'POST',

@@ -4,7 +4,6 @@ import { getProductMainImage } from '@/services/productImages'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CustomLoading from '../../../components/CustomLoading.vue'
-import DefectiveLabelModal from '../../../components/dialogs/DefectiveLabelModal.vue'
 import PrintCardModule from '../../../components/dialogs/PrintCardModule.vue'
 import SizeMappingModal from '../../../components/dialogs/SizeMappingModal.vue'
 import PrinterInfo from '../../../components/PrinterInfo.vue'
@@ -541,8 +540,6 @@ function openSizeMappingModal() {
   </VSnackbar>
 
   <SizeMappingModal v-model="showFileMappingModal" :productId="markingData ? markingData.product_id ? markingData.product_id : 0 : 0" :files="allFiles" :type="uploadType" />
-
-  <DefectiveLabelModal v-model="showDefectiveModal" />
 
   <VDialog v-model="maxSizeDialogVisible" max-width="500">
     <VCard>

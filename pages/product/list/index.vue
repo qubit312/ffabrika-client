@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import LabelManager from '@/components/LabelManager.vue';
 import { useCurrentClient } from '@/composables/useCurrentClient';
+import { getMarketplaceAccountsLookup } from '@/services/marketplaceAccounts';
 import { useDebounce } from '@vueuse/core';
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { deleteProduct, getProductsWithSizes } from '../../../services/products';
 import type { FilterRequest } from '../../../types/filter';
@@ -41,10 +42,14 @@ const headers = [
 const isLoading = ref(false)
 const searchName = ref<string>('')
 const debouncedQuery = useDebounce(searchName, 400)
-const searchCategory = ref<string>('') 
+const searchCategory = ref<string>('')
 const debouncedCategory = useDebounce(searchCategory, 400)
 const searchArticle = ref<string>('')
-const debouncedArticle = useDebounce(searchArticle, 400) 
+const debouncedArticle = useDebounce(searchArticle, 400)
+const selectedAccount = ref<number | null>()
+const debouncedAccount = useDebounce(selectedAccount, 400)
+
+const accounts = ref<{ id: number, name: string }[]>([])
 
 const deleteDialog = ref(false)
 const selectedDeleteId = ref<number | null>(null)
@@ -88,7 +93,7 @@ const goToMarking = (item: any) => {
   router.push({ name: 'product-marking-id', params: { id: labelId } })
 }
 
-watch([debouncedQuery, debouncedArticle, debouncedCategory], () => {
+watch([debouncedQuery, debouncedArticle, debouncedCategory, debouncedAccount], () => {
   page.value = 1
   fetchProducts()
 })
@@ -96,6 +101,17 @@ watch([debouncedQuery, debouncedArticle, debouncedCategory], () => {
 watch([page, itemsPerPage, currentClientId], () => {
   fetchProducts()
 })
+
+const fetchAccounts = async () => {
+  const { data, error } = await getMarketplaceAccountsLookup()
+  if (error.value) {
+    console.error('Ошибка при загрузке товаров:', error.value)
+    return
+  }
+
+  const resp = data.value
+  accounts.value = resp?.data ?? []
+}
 
 const fetchProducts = async () => {
   if (!currentClientId.value) {
@@ -122,6 +138,11 @@ const fetchProducts = async () => {
 
   if (searchName.value) {
     payload.filters?.push({ field: 'name', op: 'like', value: searchName.value })
+  }
+
+  if (selectedAccount.value) {
+    console.log(selectedAccount.value)
+    payload.filters?.push({ field: 'account_id', op: 'eq', value: selectedAccount.value })
   }
 
   const { data, error } = await getProductsWithSizes(payload)
@@ -260,8 +281,6 @@ function getWbCategoryName(category: {id: number, name: string} | null): string 
   return category.name
 }
 
-
-
 function conciseSizes(item: any): string {
   const arr = (item?.sizes ?? [])
     .map((s: any) => s?.value)
@@ -312,12 +331,14 @@ async function copyArticle(article?: string | number | null) {
     }
   }
 }
+
 function filterByCategory(category: { id: number; name: string } | null) {
   if (!category?.name) return
   searchCategory.value = category.name
   page.value = 1
 }
 
+onMounted(fetchAccounts)
 </script>
 
 <template>
@@ -354,6 +375,16 @@ function filterByCategory(category: { id: number; name: string } | null) {
             style="inline-size: 200px;"
             class="me-3"
             clearable
+          />
+          <AppSelect
+            :items="accounts"
+            v-model="selectedAccount"
+            item-title="name"
+            item-value="id"
+            style="inline-size: 230px;"
+            class="me-3"
+            clearable
+            placeholder="Выбрать магазин"
           />
         </div>
 

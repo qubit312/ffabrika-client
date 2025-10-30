@@ -61,6 +61,17 @@ async function saveAndeDownloadFile() {
   })
 }
 
+async function saveAndeDownloadPreviewFile() {
+  emit('download-started', async (saveResult: boolean) => {
+    if (!saveResult) {
+      showSnackbar("Не удалось сохранить данные", false)
+      return
+    }
+    
+    await downloadPreviewFile()
+  })
+}
+
 async function downloadFile() {
   if (labelError.value) {
     let errorMessage = 'Введте число больше 0'
@@ -124,12 +135,11 @@ async function downloadFile() {
       },
       body: JSON.stringify(payload),
     })
-
     const contentType = response.headers.get('Content-Type')
     if (!response.ok) {
       if (contentType?.includes('application/json')) {
         const errorData = await response.json()
-        showSnackbar(errorData.message || 'Произошла ошибка при генерации PDF', false)
+        showSnackbar('Произошла непредвиденная ошибка. Повторите попытку позже или обратитесь к администратору.', false)
         throw new Error(errorData.message || 'Неизвестная ошибка')
       } else {
         throw new Error(`Сервер вернул ${response.status}`)
@@ -156,7 +166,7 @@ async function downloadFile() {
     link.remove()
     URL.revokeObjectURL(url)
   } catch (err: any) {
-    showSnackbar(err.message || 'Произошла непредвиденная ошибка', false)
+    showSnackbar('Произошла непредвиденная ошибка. Повторите попытку позже или обратитесь к администратору.', false)
   } finally {
     onLabelsUpdated()
     loading.value = false
@@ -165,7 +175,7 @@ async function downloadFile() {
   }
 }
 
-async function previewLabel() {
+async function downloadPreviewFile() {
   loadingPreview.value = true
 
   const size = props.size
@@ -206,7 +216,7 @@ async function previewLabel() {
     if (!response.ok) {
       if (contentType?.includes('application/json')) {
         const errorData = await response.json()
-        showSnackbar(errorData.message || 'Произошла ошибка при генерации PDF', false)
+        showSnackbar('Произошла непредвиденная ошибка. Повторите попытку позже или обратитесь к администратору.', false)
         throw new Error(errorData.message || 'Неизвестная ошибка')
       } else {
         throw new Error(`Сервер вернул ${response.status}`)
@@ -231,7 +241,7 @@ async function previewLabel() {
     link.remove()
     URL.revokeObjectURL(url)
   } catch (err: any) {
-    showSnackbar(err.message || 'Произошла непредвиденная ошибка', false)
+    showSnackbar('Произошла непредвиденная ошибка. Повторите попытку позже или обратитесь к администратору.', false)
   } finally {
     loadingPreview.value = false
     close()
@@ -300,12 +310,11 @@ async function previewLabel() {
       <VCardText class="d-flex justify-space-between align-center">
         <div>
           <VBtn
-            
             variant="outlined"
             color="grey"
             :loading="loadingPreview"
             :disabled="loadingPreview"
-            @click="previewLabel"
+            @click="saveAndeDownloadPreviewFile"
           >
             Предпросмотр <VIcon class="ms-1" size="18" icon="tabler-eye" />
           </VBtn>

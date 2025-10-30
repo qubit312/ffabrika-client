@@ -55,8 +55,12 @@ async function fetchPrinters() {
   }
 }
 
-async function openDialog(id?: number | null) {
-  dialog.value = true
+async function openDialog(id: number | null, mode: 'edit' | 'add') {
+  if (mode === 'add') {
+    resetForm()
+    dialog.value = true
+  }
+
   if (id) {
     editedPrinter.name = printerName.value
     editedPrinter.labels_count = printerLabelsCount.value
@@ -64,8 +68,8 @@ async function openDialog(id?: number | null) {
     editedPrinter.warning_threshold = printerWarningThreshold.value
     editingId.value = id
     isEditMode.value = true
-  } else {
-    // resetForm()
+    dialog.value = true
+    return
   }
 }
 
@@ -84,17 +88,23 @@ async function submitPrinter() {
   }
 
   try {
+    const payload: CreatePrinterDto = {
+      name: editedPrinter.name?.trim() || '',
+      capacity: Number(editedPrinter.capacity) || 0,
+      labels_count: Number(editedPrinter.labels_count) || 0,
+      warning_threshold: Number(editedPrinter.warning_threshold) || 0,
+    }
+
     if (isEditMode.value && editingId.value) {
-      await updatePrinter(editingId.value, editedPrinter)
+      await updatePrinter(editingId.value, payload)
       onUpdatePrinter(editingId.value)
       showSnackbar('Успешно сохранено', true)
     } else {
-      await createPrinter(editedPrinter)
+      await createPrinter(payload)
       showSnackbar('Успешно создано', true)
     }
     await fetchPrinters()
     dialog.value = false
-    // resetForm()
   } catch (e: any) {
     console.error('Ошибка сохранения принтера', e)
     const msg = e?.message || 'Произошла ошибка при сохранении'
@@ -153,7 +163,7 @@ function resetForm() {
   editedPrinter.name = ''
   editedPrinter.labels_count = 0
   editedPrinter.capacity = 1
-  editedPrinter.warning_threshold = 0
+  editedPrinter.warning_threshold = 1
   editingId.value = null
   isEditMode.value = false
 }
@@ -184,17 +194,29 @@ function resetForm() {
       <VSelect v-model="selectedPrinter" :items="printers" item-title="name" item-value="id" placeholder="Принтер"
         hide-details variant="outlined" style="max-width: 165px" @update:model-value="onUpdatePrinter">
         <template #no-data>
-          <div class="d-flex align-center justify-space-between ps-4">
+          <div class="d-flex align-center justify-space-between ps-6 pt-1">
             <span class="text-medium-emphasis">Добавить
-            <VBtn class="ms-2" icon variant="text" size="small" color="primary" @click="openDialog()">
-              <VIcon icon="tabler-plus" />
-            </VBtn>
+              <VBtn class="ms-2" icon variant="text" size="small" color="primary" @click="openDialog(null, 'add')">
+                <VIcon icon="tabler-plus" />
+              </VBtn>
             </span>
+          </div>
+        </template>
+        <template #append-item>
+          <div v-if="printers && printers.length > 0">
+            <VDivider />
+            <div class="d-flex align-center justify-space-between ps-6 pt-1">
+              <span class="text-medium-emphasis">Добавить
+                <VBtn class="ms-2" icon variant="text" size="small" color="primary" @click="openDialog(null, 'add')">
+                  <VIcon icon="tabler-plus" />
+                </VBtn>
+              </span>
+            </div>
           </div>
         </template>
       </VSelect>
 
-      <VBtn icon variant="text" @click="openDialog(selectedPrinterId)" :disabled="!selectedPrinterId">
+      <VBtn icon variant="text" @click="openDialog(selectedPrinterId, 'edit')" :disabled="!selectedPrinterId">
         <VIcon icon="tabler-edit" />
       </VBtn>
     </VCol>
@@ -211,7 +233,6 @@ function resetForm() {
         </template>
         <span>Обновить количество на {{ selectedPrinter?.capacity }}</span>
       </VTooltip>
-
     </VCol>
   </VRow>
 
@@ -230,13 +251,13 @@ function resetForm() {
 
         <AppTextField v-model.number="editedPrinter.capacity" label="Вместимость" type="number" min="1" />
 
-        <AppTextField v-model.number="editedPrinter.warning_threshold" label="Порог предупреждения" type="number" min="0" />
+        <AppTextField v-model.number="editedPrinter.warning_threshold" label="Порог предупреждения" type="number" min="1" />
       </VCardText>
 
       <VCardActions>
         <VSpacer />
-        <VBtn text @click="dialog = false">Отмена</VBtn>
-        <VBtn color="primary" @click="submitPrinter">
+        <VBtn @click="dialog = false">Отмена</VBtn>
+        <VBtn color="primary" variant="flat" @click="submitPrinter">
           {{ isEditMode ? 'Сохранить' : 'Создать' }}
         </VBtn>
       </VCardActions>

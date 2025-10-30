@@ -186,11 +186,11 @@ const resetFilters = () => {
 
         <!-- Колонка названия -->
         <template #item.name="{ item }">
-          <div class="d-flex align-center pointer hoverable">
-            <RouterLink :to="{ name: 'repricer-details-id', params: { id: item.id } }">
+          <RouterLink :to="{ name: 'repricer-details-id', params: { id: item.id } }">
+            <div class="d-flex align-center pointer hoverable">
               {{ item.name }}
-            </RouterLink>
-          </div>
+            </div>
+          </RouterLink>
         </template>
 
         <!-- Колонка статуса -->

@@ -4,7 +4,6 @@ import { getProductMainImage } from '@/services/productImages'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CustomLoading from '../../../components/CustomLoading.vue'
-import DefectiveLabelModal from '../../../components/dialogs/DefectiveLabelModal.vue'
 import PrintCardModule from '../../../components/dialogs/PrintCardModule.vue'
 import SizeMappingModal from '../../../components/dialogs/SizeMappingModal.vue'
 import PrinterInfo from '../../../components/PrinterInfo.vue'
@@ -380,9 +379,7 @@ function handleDownloadStarted(callback: (result: boolean) => void) {
   </VSnackbar>
 
   <SizeMappingModal v-model="showSizeModal" :productId="markingData ? markingData.product_id ? markingData.product_id : 0 : 0" :files="csvFiles" />
-
-  <DefectiveLabelModal v-model="showDefectiveModal" />
-
+  
   <CustomLoading :loading="loading" />
 </template>
 

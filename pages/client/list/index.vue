@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useCurrentClient } from '@/composables/useCurrentClient';
 import { computed, onMounted, ref } from 'vue';
-import { deleteClient, getClientsWithFilters } from '../../../services/clients';
+import { getClientsWithFilters } from '../../../services/clients';
 import type { FilterRequest } from '../../../types/filter';
 
 interface Client {
@@ -36,30 +36,7 @@ const searchQuery     = ref<string>('')
 
 const itemsPerPage = ref<number>(10)
 const page = ref<number>(1)
-
-const deleteDialog = ref(false)
-const selectedDeleteId = ref<number | null>(null)
-const selectedDeleteDisplayValue = ref<string>('')
-
 const copiedField = ref<string | null>(null)
-
-const confirmationText = computed(() =>
-  selectedDeleteId.value !== null
-    ? `Удалить товар ${selectedDeleteDisplayValue.value}?`
-    : ''
-)
-
-const openDeleteDialog = (id: number, name: string) => {
-  selectedDeleteId.value = id
-  selectedDeleteDisplayValue.value = name
-  deleteDialog.value = true
-}
-
-const deleteItemConfirm = async () => {
-  if (selectedDeleteId.value === null) return
-  await handleDelete(selectedDeleteId.value)
-  selectedDeleteId.value = null
-}
 
 const fetchClients = async () => {
   const { currentClientId } = useCurrentClient()
@@ -86,18 +63,6 @@ const fetchClients = async () => {
 
   clients.value = data.value || []
   isLoading.value = false
-}
-
-const handleDelete = async (id: number) => {
-  try {
-    const { error } = await deleteClient(id)
-    if (error.value) throw error.value
-    await fetchClients()
-    showSnackbarMessage('Клиент удален', 'success')
-  } catch (e) {
-    console.error('Ошибка удаления клиента:', e)
-    showSnackbarMessage('Произошла ошибка при удалении', 'error')
-  }
 }
 
 const snackbar = ref({
@@ -156,21 +121,6 @@ onMounted(fetchClients)
             clearable
             @update:modelValue="fetchClients"
           />
-        </div>
-
-        <VSpacer />
-        <div class="d-flex gap-4 flex-wrap align-center">
-          <!-- <AppSelect
-            v-model="itemsPerPage"
-            :items="[5, 10, 20, 25, 50]"
-          /> -->
-          <VBtn
-            color="primary"
-            prepend-icon="tabler-plus"
-            @click="$router.push({ name: 'client-details-id', params: { id: 0 } })"
-          >
-            Добавить клиента
-          </VBtn>
         </div>
       </div>
 
@@ -262,13 +212,9 @@ onMounted(fetchClients)
         <template #item.actions="{ item }">
           <RouterLink :to="{ name: 'client-details-id', params: { id: item.id } }">
             <IconBtn>
-              <VIcon icon="tabler-edit" />
+              <VIcon icon="tabler-external-link" />
             </IconBtn>
           </RouterLink>
-
-          <IconBtn class="ms-4" @click="openDeleteDialog(item.id, item.name)">
-            <VIcon icon="tabler-trash" value="delete" />
-          </IconBtn>
         </template>
 
         <!-- pagination -->
@@ -282,12 +228,6 @@ onMounted(fetchClients)
       </VDataTableServer>
     </VCard>
   </div>
-
-  <ConfirmDeleteDialog
-    v-model="deleteDialog"
-    :confirmation-text="confirmationText"
-    @confirm="deleteItemConfirm"
-  />
 
   <VSnackbar
     v-model="snackbar.visible"

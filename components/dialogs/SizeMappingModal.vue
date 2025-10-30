@@ -131,7 +131,6 @@ async function onSave() {
     }
   } catch (err: any) {
     console.error('Ошибка при импорте:', err)
-    showResultDialog(null)
   } finally {
     loading.value = false
   }
