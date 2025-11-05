@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import PrintLabelDialog from '@/components/dialogs/PrintLabelDialog.vue';
-import UpdateChzLabel from '@/components/dialogs/UpdateChzLabel.vue';
 import { computed, defineExpose, defineProps, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useLabelEvents } from '../composables/useLabelBus';
@@ -53,7 +52,7 @@ const editedItem = ref<ProductSizeWithLabels>({
 })
 
 const deleteConfirmationQuestion = computed(() => `Удалить размер ${editedItem.value.value}?`)
-const showLabelDialog = ref(false)
+
 const isDialogVisible = ref(false)
 
 const isLabelParent = computed(() => !!(props.label && props.label.id))
@@ -295,14 +294,7 @@ function goToLabels(size: ProductSizeWithLabels, used: boolean) {
           <span>Распечать этикетку</span>
         </VTooltip>
 
-        <VTooltip open-delay="600">
-          <template #activator="{ props }">
-            <IconBtn v-if="isLabelParent" v-bind="props" @click="showLabelDialog = true">
-              <VIcon icon="tabler-arrows-shuffle" />
-            </IconBtn>
-          </template>
-          <span>Перенести на другой товар</span>
-        </VTooltip>
+
 
         <VTooltip open-delay="600">
           <template #activator="{ props }">
@@ -376,15 +368,13 @@ function goToLabels(size: ProductSizeWithLabels, used: boolean) {
     :label="props.label"
     :size="currentItem"
     :printer="props.printer"
+    selectd-template="1"
     @printer-updated="emit('printer-updated', $event)"
     @download-started="handleDownloadStarted"
   />
 
-  <UpdateChzLabel
-    v-if="isLabelParent && props.product && props.product.id"
-    v-model="showLabelDialog"
-    :product="props.product"
-  />
+
+
 </template>
 
 

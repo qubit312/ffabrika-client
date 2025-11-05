@@ -1,74 +1,77 @@
 <script setup lang="ts">
-import type { FilterRequest } from '@/types/filter';
-import { computed, ref, watch } from 'vue';
-import { useLabelEvents } from '../../composables/useLabelBus';
-import { replaceProductSize } from '../../services/chz';
-import { getProductMainImage } from '../../services/productImages';
-import { getProductsWithSizes } from '../../services/products';
-import { getProductSizes } from '../../services/productSizes';
-import type { WbProduct } from '../../types/product';
-import type { ProductSizeWithLabels } from '../../types/productSize';
+import type { FilterRequest } from '@/types/filter'
+import { computed, nextTick, ref, watch } from 'vue'
+import { useLabelEvents } from '../../composables/useLabelBus'
+import { replaceProductSize } from '../../services/chz'
+import { getProductMainImage } from '../../services/productImages'
+import { getProductsWithSizes } from '../../services/products'
+import { getProductSizes } from '../../services/productSizes'
+import type { WbProduct } from '../../types/product'
+import type { ProductSizeWithLabels } from '../../types/productSize'
 
 interface Props {
   modelValue: boolean
   product: WbProduct
 }
 const props = defineProps<Props>()
-const emit  = defineEmits<{
-  (e: 'update:modelValue', value: boolean): void
-}>()
+const emit  = defineEmits<{ (e: 'update:modelValue', value: boolean): void }>()
+
 const dialog = ref(props.modelValue)
 const { onLabelsUpdated } = useLabelEvents()
 
 const selectedSourceProduct = ref<WbProduct|null>(null)
+const selectedTargetProduct = ref<WbProduct|null>(null)
+
 const currentClientId = ref<number|null>(null)
-const selectedTargetProduct = ref<number|null>(null)
-const sourceProducts = ref<WbProduct[]>([])
-const targetProducts = ref<WbProduct[]>([])
-const labelCount              = ref<number>(1)
-const selectedSourceSizeId    = ref<number|null>(null)
-const selectedTargetSizeId    = ref<number|null>(null)
+const sourceProducts  = ref<WbProduct[]>([])
+const targetProducts  = ref<WbProduct[]>([])
+
+const labelCount            = ref<number>(1)
+const selectedSourceSizeId  = ref<number|null>(null)
+const selectedTargetSizeId  = ref<number|null>(null)
+
+const formError = ref<string>('')
 
 watch(() => props.modelValue, v => (dialog.value = v))
 watch(dialog, v => emit('update:modelValue', v))
 
 
 watch(selectedSourceProduct, async (product) => {
-  const id = product?.id
-
   selectedSourceSizeId.value = null
   selectedTargetProduct.value = null
   sourceSizes.value = []
+
+  const id = product?.id
   if (id) {
     sourceProductImage.value = ''
     await fetchSizes(id, 'source')
     await fetchProductImage(id, 'source')
 
-    const clientId = product?.client_id
-    currentClientId.value = clientId || null
+    const clientId = product?.client_id ?? null
+
+    currentClientId.value = clientId
     if (clientId) {
       await fetchTargetProducts()
     } else {
       targetProducts.value = []
     }
+  } else {
+    currentClientId.value = null
   }
 })
 
 const searchQueryTP = ref<string>('')
 const searchQuerySP = ref<string>('')
+
 let debounceTimer: number | null = null
 
 watch(searchQuerySP, (val) => {
-  if (!val || val == '') {
-    return
-  }
+  if (!val) return
   handleSourceProductChange()
 })
 
 watch(searchQueryTP, (val) => {
-  if (!val || val == '') {
-    return
-  }
+  if (!val) return
   handleTargetProductChange()
 })
 
@@ -79,43 +82,38 @@ async function fetchTargetProducts() {
     sort_by: 'name',
     sort_dir: 'asc',
   }
-
-  if(clientId) {
+  if (clientId) {
     payload.filters?.push({ field: 'client_id', op: 'eq', value: clientId })
   }
+if (selectedSourceProduct.value?.id) {
+  payload.filters?.push({ field: 'id', op: 'ne', value: selectedSourceProduct.value.id })
+}
+if (selectedSourceProduct.value?.color) {
+  payload.filters?.push({ field: 'color', op: 'eq', value: selectedSourceProduct.value.color })
+}
 
-  if(selectedSourceProduct.value?.id) {
-    payload.filters?.push({ field: 'id', op: 'ne', value: selectedSourceProduct.value?.id })
-  }
-
-  if(selectedSourceProduct.value?.color) {
-    payload.filters?.push({ field: 'color', op: 'eq', value: selectedSourceProduct.value?.color })
-  }
-  
   if (searchQueryTP.value) {
     payload.filters?.push({
       group: 'or',
       filters: [
-        { field: 'name', op: 'like', value: searchQueryTP.value },
-        { field: 'article', op: 'like', value: searchQueryTP.value },
+        { field: 'name',        op: 'like', value: searchQueryTP.value },
+        { field: 'article',     op: 'like', value: searchQueryTP.value },
         { field: 'vendor_code', op: 'like', value: searchQueryTP.value }
       ]
     })
   }
-
-  // const { data, error } = await getProducts(clientId, selectedSourceProductId.value)
   const { data, error } = await getProductsWithSizes(payload)
   if (error.value) {
     console.error('Ошибка при загрузке целевых товаров:', error.value)
     return
   }
-
   targetProducts.value = data.value.data || []
 }
 
-watch(selectedTargetProduct, async (id) => {
+watch(selectedTargetProduct, async (product) => {
   selectedTargetSizeId.value = null
   targetSizes.value = []
+  const id = product?.id
   if (id) {
     targetProductImage.value = ''
     await fetchSizes(id, 'target')
@@ -123,34 +121,35 @@ watch(selectedTargetProduct, async (id) => {
   }
 })
 
+
+const sourceSizes = ref<ProductSizeWithLabels[]>([])
+const targetSizes = ref<ProductSizeWithLabels[]>([])
+
 const availableSourceQuantity = computed(() => {
   const size = sourceSizes.value.find(s => s.id === selectedSourceSizeId.value)
   return size?.available_count ?? 0
 })
 
-const sourceSizes = ref<ProductSizeWithLabels[]>([])
-const targetSizes = ref<ProductSizeWithLabels[]>([])
+const canSubmit = computed(() => {
+  return !!selectedSourceSizeId.value
+    && !!selectedTargetSizeId.value
+    && Number(labelCount.value) >= 1
+    && availableSourceQuantity.value > 0
+})
 
 async function handleTargetProductChange() {
-  if (debounceTimer) {
-    clearTimeout(debounceTimer)
-  }
-
+  if (debounceTimer) clearTimeout(debounceTimer)
   debounceTimer = window.setTimeout(() => {
     fetchTargetProducts()
   }, 400)
 }
 
 async function handleSourceProductChange() {
-  if (debounceTimer) {
-    clearTimeout(debounceTimer)
-  }
-
+  if (debounceTimer) clearTimeout(debounceTimer)
   debounceTimer = window.setTimeout(() => {
     fetchProducts()
   }, 400)
 }
-
 
 async function fetchProducts() {
   const payload: FilterRequest = {
@@ -158,22 +157,16 @@ async function fetchProducts() {
     sort_by: 'name',
     sort_dir: 'asc',
   }
-  
-  if (!searchQuerySP.value) {
-    return
-  }
-  
+  if (!searchQuerySP.value) return
   payload.filters?.push({
-      group: 'or',
-      filters: [
-        { field: 'name', op: 'like', value: searchQuerySP.value },
-        { field: 'article', op: 'like', value: searchQuerySP.value },
-        { field: 'vendor_code', op: 'like', value: searchQuerySP.value }
-      ]
-    })
-  
+    group: 'or',
+    filters: [
+      { field: 'name',        op: 'like', value: searchQuerySP.value },
+      { field: 'article',     op: 'like', value: searchQuerySP.value },
+      { field: 'vendor_code', op: 'like', value: searchQuerySP.value }
+    ]
+  })
   const { data, error } = await getProductsWithSizes(payload)
-  
   if (error.value) {
     console.error('Ошибка при загрузке товаров:', error.value)
     return
@@ -186,13 +179,13 @@ const targetProductImage = ref<string>('')
 
 async function fetchProductImage(productId: number, productType: 'target' | 'source') {
   const { data, error } = await getProductMainImage(productId)
-    if (!error.value && data.value?.data) {
-      if (productType === 'source') {
-        sourceProductImage.value = data.value.data.url
-      } else if (productType === 'target'){
-        targetProductImage.value = data.value.data.url
-      }
+  if (!error.value && data.value?.data) {
+    if (productType === 'source') {
+      sourceProductImage.value = data.value.data.url
+    } else {
+      targetProductImage.value = data.value.data.url
     }
+  }
 }
 
 async function fetchSizes(productId: number, target: 'source' | 'target') {
@@ -209,27 +202,73 @@ async function fetchSizes(productId: number, target: 'source' | 'target') {
   }
 }
 
+async function quickSearchByArticle() {
+  const p = props.product as any
+  if (!p?.article) return
+
+  const payload: FilterRequest = {
+    filters: [
+      { field: 'article', op: 'eq', value: String(p.article) },
+    ],
+    sort_by: 'name',
+    sort_dir: 'asc',
+  }
+
+  if (p?.client_id) {
+    payload.filters?.push({ field: 'client_id', op: 'eq', value: p.client_id })
+  }
+  if (p?.color) {
+    payload.filters?.push({ field: 'color', op: 'eq', value: p.color })
+  }
+
+  const { data, error } = await getProductsWithSizes(payload)
+  if (error.value) {
+    console.error('Ошибка при быстром поиске:', error.value)
+    return
+  }
+
+  sourceProducts.value = data.value.data || []
+
+  const found = sourceProducts.value.find(sp => sp.id === p.id)
+            || sourceProducts.value.find(sp => sp.article === p.article)
+
+if (found) {
+  selectedSourceProduct.value = found
+  await nextTick()
+} else if (sourceProducts.value.length === 1) {
+  selectedSourceProduct.value = sourceProducts.value[0]
+  await nextTick()
+} else {
+  formError.value = 'Товар по артикулу не найден'
+}
+
+
+  searchQuerySP.value = String(p.article)
+}
 
 async function onReplaceSize() {
-  if (!selectedSourceSizeId.value || !selectedTargetSizeId.value || labelCount.value < 1) {
-    console.error('Пожалуйста, выберите оба размера и укажите количество ≥ 1')
+  formError.value = ''
+  if (availableSourceQuantity.value <= 0) {
+    formError.value = 'Нет этикеток для переноса'
     return
   }
-
+  if (!selectedSourceSizeId.value || !selectedTargetSizeId.value || Number(labelCount.value) < 1) {
+    formError.value = 'Пожалуйста, выберите оба размера и укажите количество ≥ 1'
+    return
+  }
   if (selectedSourceSizeId.value === selectedTargetSizeId.value) {
-    console.error('Размеры откуда и куда не должны совпадать')
+    formError.value = 'Размеры откуда и куда не должны совпадать'
     return
   }
-
   const dto = {
     old_size_id: Number(selectedSourceSizeId.value),
     new_size_id: Number(selectedTargetSizeId.value),
     quantity: Number(labelCount.value),
   }
-
   const { data, error } = await replaceProductSize(dto)
   if (error.value) {
     console.error(error.value)
+    formError.value = 'Не удалось выполнить перенос'
     return
   }
   onLabelsUpdated()
@@ -238,32 +277,53 @@ async function onReplaceSize() {
 </script>
 
 <template>
-  <VDialog v-model="dialog" max-width="750">
+  <VDialog v-model="dialog" max-width="900">
     <VCard>
-      <VCardTitle>Перенос этикеток</VCardTitle>
+      <VCardTitle class="d-flex align-center mt-2">
+        <VIcon class="mr-2">tabler-arrows-shuffle</VIcon>
+        Добавить чз
+      </VCardTitle>
+
       <VCardText>
+        <VRow class="mb-4" v-if="props.product?.article">
+          <VCol cols="12">
+            <div class="text-body-2 mb-1">Быстрый поиск по текущему товару</div>
+            <VChip
+              color="primary"
+              variant="tonal"
+              class="mr-2"
+              @click="quickSearchByArticle"
+            >
+              Арт: {{ props.product.article }}
+            </VChip>
+          </VCol>
+        </VRow>
+
         <VRow dense align="start">
-          <!-- Откуда -->
+    
           <VCol class="d-flex flex-column">
             <div class="font-weight-medium mb-2">Откуда берём этикетки</div>
+
             <VLabel class="text-body-2 mb-1" style="color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity))">Товар</VLabel>
-            <VAutocomplete
-              v-model="selectedSourceProduct"
-              v-model:search="searchQuerySP"
-              :items="sourceProducts"
-              :no-filter="true"
-              :item-value="p => p"
-              item-title="name"
-              :density="selectedSourceProduct ? 'compact' : 'comfortable'"
-              :variant="selectedSourceProduct ? 'plain' : 'outlined'"  
-              menu-icon=""
-              :clearable="false"
-              placeholder="Поиск по артикулу или названию"
-              class="mb-6"
-            >
+<VAutocomplete
+  v-model="selectedSourceProduct"
+  v-model:search="searchQuerySP"
+  :items="sourceProducts"
+  :no-filter="true"
+  item-title="name"
+  item-value="id"
+  return-object
+  :density="selectedSourceProduct ? 'compact' : 'comfortable'"
+  :variant="selectedSourceProduct ? 'plain' : 'outlined'"
+  menu-icon=""
+  :clearable="false"
+  placeholder="Поиск по артикулу или названию"
+  class="mb-6"
+>
+
               <template #selection="{ item }">
-                <div class="mt-8 d-flex align-center" style="min-width: 0; overflow: hidden;">
-                  <div class="mr-2 d-flex">
+                <div class="mt-8 d-flex align-center c-default" style="min-width: 0; overflow: hidden;">
+                  <div class="mr-3 d-flex">
                     <img
                       style="border-radius: 5px; max-height: 60px;"
                       width="48"
@@ -272,39 +332,17 @@ async function onReplaceSize() {
                   </div>
                   <div class="d-flex flex-column" style="min-width: 0; overflow: hidden;">
                     <div
-                      style="
-                        font-size: 14px;
-                        font-weight: 600;
-                        white-space: nowrap;
-                        overflow: hidden;
-                        text-overflow: ellipsis;
-                      "
+                      style="font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
                     >
                       {{ item.title }}
                     </div>
-                    
                     <div 
-                      style="
-                        font-size: 13px;
-                        font-weight: 600;
-                        color: rgba(0, 0, 0, 0.55);
-                        white-space: nowrap;
-                        overflow: hidden;
-                        text-overflow: ellipsis;
-                      "
+                      style="font-size: 13px; font-weight: 600; color: rgba(0, 0, 0, 0.55); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
                     >
                       <span>{{ item.raw.color }}</span>
                     </div>
-                  
                     <div
-                      style="
-                        font-size: 13px;
-                        font-weight: 600;
-                        color: rgba(0, 0, 0, 0.55);
-                        white-space: nowrap;
-                        overflow: hidden;
-                        text-overflow: ellipsis;
-                      "
+                      style="font-size: 13px; font-weight: 600; color: rgba(0, 0, 0, 0.55); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
                     >
                       <span>{{ item.raw.article }}</span>
                       <span class="mx-1">•</span>
@@ -314,9 +352,7 @@ async function onReplaceSize() {
                 </div>
               </template>
               <template #no-data>
-                <div class="pa-4 text-grey">
-                  Начните вводить
-                </div>
+                <div class="pa-4 text-grey">Начните вводить</div>
               </template>
             </VAutocomplete>
 
@@ -325,25 +361,28 @@ async function onReplaceSize() {
               :items="sourceSizes"
               item-title="value"
               item-value="id"
-              :disabled="!selectedSourceProduct"
+            :disabled="!selectedTargetProduct"
+
               class="mt-4"
               label="Размер"
               outlined
             />
-            <div class="mt-2">Доступно: {{ availableSourceQuantity }}</div>
+
+            <div class="mt-2">
+              Доступно:
+              <span class="text-error font-weight-bold">{{ availableSourceQuantity }}</span>
+            </div>
           </VCol>
 
           <!-- Стрелка -->
-          <VCol cols="auto"
-            class="d-flex justify-center ma-2"
-            align-self="center"
-          >
+          <VCol cols="auto" class="d-flex justify-center ma-2" align-self="center">
             <VIcon size="36">tabler-arrow-right</VIcon>
           </VCol>
 
           <!-- Куда -->
-          <VCol  class="d-flex flex-column">
+          <VCol class="d-flex flex-column">
             <div class="font-weight-medium mb-2">Куда переносим</div>
+
             <VLabel class="text-body-2 mb-1" style="color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity))">Товар</VLabel>
             <VAutocomplete
               v-model="selectedTargetProduct"
@@ -361,47 +400,26 @@ async function onReplaceSize() {
             >
               <template #selection="{ item }">
                 <div class="mt-8 d-flex align-center" style="min-width: 0; overflow: hidden;">
-                  <div class="mr-2 d-flex">
+                  <div class="mr-3 d-flex">
                     <img 
-                      style="border-radius: 5px; max-height: 60px;" 
-                      width="48"
+                      style="border-radius: 6px; max-height: 90px;" 
+                      width="72"
                       :src="targetProductImage"
                     />
                   </div>
                   <div class="d-flex flex-column" style="min-width: 0; overflow: hidden;">
                     <div 
-                      style="
-                        font-size: 14px;
-                        font-weight: 600;
-                        white-space: nowrap;
-                        overflow: hidden;
-                        text-overflow: ellipsis;
-                      "
+                      style="font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
                     >
                       {{ item.title }}
                     </div>
-
                     <div 
-                      style="
-                        font-size: 13px;
-                        font-weight: 600;
-                        color: rgba(0, 0, 0, 0.55);
-                        white-space: nowrap;
-                        overflow: hidden;
-                        text-overflow: ellipsis;
-                      "
+                      style="font-size: 13px; font-weight: 600; color: rgba(0, 0, 0, 0.55); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
                     >
                       <span>{{ item.raw.color }}</span>
                     </div>
                     <div 
-                      style="
-                        font-size: 13px;
-                        font-weight: 600;
-                        color: rgba(0, 0, 0, 0.55);
-                        white-space: nowrap;
-                        overflow: hidden;
-                        text-overflow: ellipsis;
-                      "
+                      style="font-size: 13px; font-weight: 600; color: rgba(0, 0, 0, 0.55); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
                     >
                       <span>{{ item.raw.article }}</span>
                       <span class="mx-1">•</span>
@@ -411,11 +429,10 @@ async function onReplaceSize() {
                 </div>
               </template>
               <template #no-data>
-                <div class="pa-4 text-grey">
-                  Начните вводить
-                </div>
+                <div class="pa-4 text-grey">Начните вводить</div>
               </template>
             </VAutocomplete>
+
             <AppSelect
               v-model="selectedTargetSizeId"
               :items="targetSizes"
@@ -426,6 +443,7 @@ async function onReplaceSize() {
               class="mt-4"
               outlined
             />
+
             <AppTextField
               v-model="labelCount"
               type="number"
@@ -436,10 +454,28 @@ async function onReplaceSize() {
             />
           </VCol>
         </VRow>
+
+        <VAlert
+          v-if="formError"
+          type="error"
+          variant="tonal"
+          density="comfortable"
+          class="mt-4"
+        >
+          {{ formError }}
+        </VAlert>
       </VCardText>
+
       <VCardActions class="justify-end pa-6 pt-0">
         <VBtn @click="dialog = false">Отмена</VBtn>
-        <VBtn color="primary" variant="flat" @click="onReplaceSize">Сохранить</VBtn>
+        <VBtn
+          color="primary"
+          variant="flat"
+          @click="onReplaceSize"
+          :disabled="!canSubmit"
+        >
+          Перенести
+        </VBtn>
       </VCardActions>
     </VCard>
   </VDialog>

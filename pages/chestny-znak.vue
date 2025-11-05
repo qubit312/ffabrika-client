@@ -259,18 +259,18 @@ function openLabels(productId: number, sizeId: number, sizeValue: string, used: 
         </template>
 
         <template #item.size_value="{ item }">
-        <span class="pointer hoverable">
+        <span class="c-default">
           {{ item.size_value || '—' }}
           </span>
         </template>
 
         <template #item.barcode="{ item }">
-        <span class="pointer hoverable">
+        <span class="c-default">
           {{ item.barcode || '—' }}</span>
         </template>
 
         <template #item.total="{ item }">
-        <span class="pointer hoverable">
+        <span class="c-default">
           <strong>{{ item.total }}</strong>
           </span>
         </template>

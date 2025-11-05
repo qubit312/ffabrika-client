@@ -423,6 +423,15 @@ const handleImportCzFile = (result: any) => {
               <span>Честный знак</span>
               
               <div>
+
+                <VTooltip open-delay="600">
+                  <template #activator="{ props }">
+                    <IconBtn v-bind="props" @click="showLabelDialog = true"  >
+                      <VIcon icon="tabler-arrows-shuffle" />
+                    </IconBtn>
+                  </template>
+                  <span>Перенести на другой товар</span>
+                </VTooltip>
                 <VTooltip>
                   <template #activator="{ props }">
                     <IconBtn @click="showHistory = true" v-bind="props">

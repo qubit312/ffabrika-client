@@ -27,7 +27,7 @@ const productHeaders = [
   { title: 'Временная скидка', key: 'temp_discount', sortable: true, align: 'center' as const },
   { title: 'Начала', key: 'starts_at', sortable: false },
   { title: 'Завершение', key: 'ends_at', sortable: false },
-  { title: 'Статус', key: 'status', sortable: true },
+
   { title: 'Действия', key: 'actions', sortable: false },
 ]
 
@@ -549,7 +549,7 @@ const confirmDelete = (item: StrategyItem) => {
 </script>
 
 <template>
-  <VContainer>
+
     <VRow>
       <VCol>
         <h1 class="text-h4 mb-4">
@@ -597,7 +597,7 @@ const confirmDelete = (item: StrategyItem) => {
                   <VCol md="4">
                     <AppTextField v-model="strategyName" label="Название стратегии" />
                   </VCol>
-                  <VCol md="3">
+                  <VCol md="4">
                     <AppSelect
                       v-model="strategyStatus"
                       :items="[
@@ -619,7 +619,44 @@ const confirmDelete = (item: StrategyItem) => {
                       label="Магазин"
                     />
                   </VCol>
+                
+                  <VCol md="4" class="d-flex ">
+                    <AppSelect
+                      v-model="sortField"
+                      :items="sortFields"
+                      label="Поле сортировки"
+                      variant="outlined"
+                      class="me-2"
+                    />
+                  
+                    <div class="d-flex align-center mart">
+                      <VBtn
+                        value="asc"
+                        size="small"
+                        :color="sortOrder === 'asc' ? 'primary' : undefined"
+                        :variant="sortOrder === 'asc' ? 'flat' : 'outlined'"
+                        class="me-1 pe-2 ps-2"
+                        style="min-width: 15px"
+                        @click="sortOrder = 'asc'"
+                      >
+                        <VIcon icon="tabler-arrow-up" />
+                      </VBtn>
+                    
+                      <VBtn
+                        value="desc"
+                        size="small"
+                        :color="sortOrder === 'desc' ? 'primary' : undefined"
+                        :variant="sortOrder === 'desc' ? 'flat' : 'outlined'"
+                        class="pe-2 ps-2"
+                        style="min-width: 15px"
+                        @click="sortOrder = 'desc'"
+                      >
+                        <VIcon icon="tabler-arrow-down" />
+                      </VBtn>
+                    </div>
+                  </VCol>
                 </VRow>
+
                 <VRow>
                   <VCol>
                     <CustomRadios
@@ -629,6 +666,7 @@ const confirmDelete = (item: StrategyItem) => {
                     />
                   </VCol>
                 </VRow>
+                
                 <div class="mt-4">
                   <VBtn color="primary" @click="saveStrategy">
                     {{ route.params.id === '0' ? 'Создать стратегию' : 'Сохранить изменения' }}
@@ -671,40 +709,7 @@ const confirmDelete = (item: StrategyItem) => {
 
                   <VSpacer />
                   <div class="d-flex gap-4 flex-wrap align-center">
-                    <div class="d-flex flex-wrap align-center me-4">
-                      <div class="d-flex align-center">
-                        <VSelect
-                          v-model="sortField"
-                          :items="sortFields"
-                          label="Поле сортировки при обработке"
-                          variant="outlined"
-                          style="width: 220px"
-                        />
 
-                        <VBtn
-                          class="ms-2 me-1 pe-2 ps-2"
-                          value="asc"
-                          size="small"
-                          :color="sortOrder === 'asc' ? 'primary' : undefined"
-                          :variant="sortOrder === 'asc' ? 'flat' : 'outlined'"
-                          style="min-width: 15px"
-                          @click="sortOrder='asc'"
-                        >
-                          <VIcon icon="tabler-arrow-up" />
-                        </VBtn>
-                        <VBtn
-                          class="pe-2 ps-2"
-                          value="desc"
-                          size="small"
-                          :color="sortOrder === 'desc' ? 'primary' : undefined"
-                          :variant="sortOrder === 'desc' ? 'flat' : 'outlined'"
-                          style="min-width: 15px"
-                          @click="sortOrder='desc'"
-                        >
-                          <VIcon icon="tabler-arrow-down" />
-                        </VBtn>
-                      </div>
-                    </div>
                     <VBtn
                       color="primary"
                       prepend-icon="tabler-plus"
@@ -827,7 +832,12 @@ const confirmDelete = (item: StrategyItem) => {
                         </div>
                         <div class="mt-1 text-caption text-medium-emphasis d-flex align-center flex-wrap gap-1">
                           <span class="text-truncate">{{ item.product?.color }}</span>
+                          <span class="mx-1 text-disabled">•</span>
+                          <VChip :color="getStatusColor(item.status || '')" size="small">
+                            {{ getStatusVisibleName(item.status || '') }}
+                          </VChip>
                         </div>
+
                       </div>
                     </div>
                   </template>
@@ -897,36 +907,56 @@ const confirmDelete = (item: StrategyItem) => {
                   </template>
 
                   <template #item.actions="{ item }">
-                    <div class="d-flex gap-2">
-                      <VTooltip>
+                    <div class="action-menu-wrapper">
+                      <VMenu open-on-hover>
                         <template #activator="{ props }">
                           <VBtn
-                            icon
-                            size="small"
-                            variant="text"
-                            :color="item.status === 'active' || item.status === 'applied' ? 'warning' : 'success'"
-                            @click="confirmStatusDialog(item)"
                             v-bind="props"
+                            icon
+                            variant="text"
+                            class="action-menu-trigger"
                           >
-                            <VIcon
-                              :icon="item.status === 'active' || item.status === 'applied' ? 'tabler-pause' : 'tabler-play'"
-                              size="small"
-                            />
+                            <VIcon icon="tabler-dots-vertical" />
                           </VBtn>
                         </template>
-                        <span>{{ item.status === 'active' || item.status === 'applied' ? 'Приостановить' : 'Активировать' }}</span>
-                      </VTooltip>
-                      <VBtn
-                        icon
-                        size="small"
-                        variant="text"
-                        color="error"
-                        @click="confirmDelete(item)"
-                      >
-                        <VIcon icon="tabler-trash" size="small" />
-                      </VBtn>
+                      
+                        <VList density="compact">
+                          <!-- Активировать / Пауза -->
+                          <VListItem @click="confirmStatusDialog(item)">
+                            <VListItemTitle
+                              class="d-flex align-center"
+                              :class="{
+                                'text-success': item.status === 'paused',
+                                'text-warning': item.status === 'active' || item.status === 'applied',
+                              }"
+                            >
+                              <VIcon
+                                class="me-2"
+                                :color="item.status === 'paused' ? 'success'
+                                        : (item.status === 'active' || item.status === 'applied') ? 'warning' : ''"
+                                :icon="item.status === 'active' || item.status === 'applied'
+                                        ? 'tabler-pause'
+                                        : 'tabler-play'"
+                              />
+                              {{ item.status === 'active' || item.status === 'applied'
+                                ? 'Приостановить'
+                                : 'Активировать' }}
+                            </VListItemTitle>
+                          </VListItem>
+                        
+                          <!-- Удалить -->
+                          <VListItem @click="confirmDelete(item)">
+                            <VListItemTitle class="d-flex align-center text-error">
+                              <VIcon class="me-2" color="error" icon="tabler-trash" />
+                              Удалить
+                            </VListItemTitle>
+                          </VListItem>
+                        </VList>
+                      </VMenu>
                     </div>
                   </template>
+
+
 
                   <template #bottom>
                     <VCardText class="pt-2">
@@ -984,7 +1014,7 @@ const confirmDelete = (item: StrategyItem) => {
         </VStepper>
       </VCol>
     </VRow>
-  </VContainer>
+
 
   <AddProductsDialog
     v-model="isAddProductsModalOpen"
@@ -1105,5 +1135,8 @@ const confirmDelete = (item: StrategyItem) => {
   background: rgba(var(--v-theme-on-surface), 0.06);
   color: rgba(var(--v-theme-on-surface), 0.55);
   border: 1px dashed rgba(var(--v-theme-on-surface), 0.2);
+}
+.mart {
+  margin-top: 15px;
 }
 </style>

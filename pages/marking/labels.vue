@@ -4,6 +4,7 @@ import { markLabelsAsDefective } from '@/services/chz'
 import { useDebounce } from '@vueuse/core'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { getProductMainImage } from '~/services/productImages'
 import { getProduct } from '~/services/products'
 
 type ChzApiItem = {
@@ -41,6 +42,17 @@ const status = computed<'used' | 'available' | ''>(() => {
   if (raw === '0' || raw === 'false') return 'available'
   return ''
 })
+
+const productImage = ref<string | null>(null)
+const isWbImport = ref<boolean>(false)
+const hasChestnyZnakFlag = ref<boolean>(false)
+const imageDialog = ref(false)
+const imageDialogUrl = ref<string | null>(null)
+
+function openImageDialog(url: string) {
+  imageDialogUrl.value = url
+  imageDialog.value = true
+}
 
 const loading = ref(false)
 const loadingDefective = ref(false)
@@ -168,10 +180,21 @@ async function fetchAll() {
   loading.value = true
   errorMessage.value = ''
   try {
-    if (productId.value) {
-      const { data, error } = await getProduct(productId.value)
-      if (!error.value) productName.value = (data.value as any)?.name || `Товар #${productId.value}`
+if (productId.value) {
+  const { data, error } = await getProduct(productId.value)
+  if (!error.value) {
+    const prod = data.value as any
+    productName.value = prod?.name || `Товар #${productId.value}`
+    isWbImport.value = !!prod?.is_wb_import
+    hasChestnyZnakFlag.value = !!prod?.has_chestny_znak
+
+    const { data: imgData, error: imgError } = await getProductMainImage(productId.value)
+    if (!imgError.value && imgData.value?.data?.url) {
+      productImage.value = imgData.value.data.url
     }
+  }
+}
+
 
     const filterPayload: FilterPayload = {
       filters: [],
@@ -417,16 +440,57 @@ const hasActiveFilters = computed(() => {
 <template>
   <VCard>
     <VCardText>
-      <span class="v-card-title pa-0">Маркировка Честный Знак</span>
+        <div class="v-card-title pa-0 font-weight-bold">
+          <span class="text-truncate">
+            {{ status === 'used' ? 'Использованных маркировок - ' : 'Неиспользованных маркировок - ' }}
+          </span>
+          {{ totalEntities }}
+      </div>
     </VCardText>
     <VDivider />
     <VCardText>
       <div class="d-flex justify-space-between align-start mb-4">
-        <div class="text-medium-emphasis">
-          Товар: <strong>{{ productName || ('#' + productId) }}</strong>
-          <span v-if="sizeValue"> • Размер: <strong>{{ sizeValue }}</strong></span>
-          <span v-if="usedFilter !== undefined"> • {{ usedFilter ? 'Использованные' : 'Неиспользованные' }}</span>
-          <p>Количество <strong>{{totalEntities || ''}}</strong></p>
+        <div class="d-flex  gap-4 align-start mb-4">
+          <div class="prodcell__img-wrapper">
+            <img
+              v-if="productImage"
+              :src="productImage"
+              alt="Фото товара"
+              class="prodcell__img cursor-pointer"
+              @click="openImageDialog(productImage)"
+            />
+            <div v-else class="prodcell__img prodcell__img--placeholder">
+              <VIcon icon="tabler-photo" size="26" />
+            </div>
+          </div>
+
+          <div class="d-flex flex-column flex-grow-1">
+            <div
+              class="d-flex align-center gap-2 text-truncate hoverable"
+              style="max-width: 420px;"
+              :title="productName"
+            >
+              <RouterLink
+                v-if="productId"
+                :to="{ name: 'product-details-id', params: { id: productId } }"
+                class="text-high-emphasis text-truncate text-h5"
+              >
+                {{ productName }}
+              </RouterLink>
+              <span v-else class="text-high-emphasis text-h5">
+                {{ productName || ('Товар #' + productId) }}
+              </span>
+            </div>
+          
+            <div class="mt-1 text-caption text-medium-emphasis d-flex align-center flex-wrap gap-1">
+              <template v-if="sizeValue">
+                <span class="text-truncate  text-h5">Размер: {{ sizeValue }}</span>
+              
+              </template>
+            
+            </div>
+          </div>
+
         </div>
         <div>
           <VBtn variant="tonal" prepend-icon="tabler-arrow-left" @click="router.back()">Назад</VBtn>
@@ -548,6 +612,9 @@ const hasActiveFilters = computed(() => {
             <VProgressCircular indeterminate size="40" />
           </div>
         </template>
+        <template #item.id="{ item }">
+          <span class="c-default">{{ (item.id) }}</span>
+        </template>
 
         <template #item.code1="{ item }">
           <span class="mono hoverable pointer">{{ prettyGtin(item.code) }}</span>
@@ -558,19 +625,30 @@ const hasActiveFilters = computed(() => {
         </template>
 
         <template #item.used_at="{ item }">
-          <span class="hoverable pointer">{{ new Date(item.used_at).toLocaleString() }}</span>
+          <span class="c-default">{{ new Date(item.used_at).toLocaleString() }}</span>
         </template>
 
         <template #item.used_by="{ item }">
-          <span class="hoverable pointer">{{ item.used_by?.name || ''  }}</span>
+          <span class="c-default">{{ item.used_by?.name || ''  }}</span>
         </template>
 
         <template #item.created_at="{ item }">
-          <span class="hoverable pointer">{{ new Date(item.created_at).toLocaleString() }}</span>
+          <span class="c-default">{{ new Date(item.created_at).toLocaleString() }}</span>
         </template>
 
         <template #item.created_by="{ item }">
-          <span class="hoverable pointer">{{ item.created_by?.name || ''  }}</span>
+          <span class="c-default">{{ item.created_by?.name || ''  }}</span>
+        </template>
+
+        <template #item.action="{ item }">
+          <div class="text-center">
+            <VBtn
+              icon="tabler-arrow-back"
+              variant="text"
+              @click="confirmCancelUsage(item)"
+              title="Отменить использование знака"
+            />
+          </div>
         </template>
 
         <template #item.action="{ item }">
@@ -607,6 +685,40 @@ const hasActiveFilters = computed(() => {
       </VDataTableServer>
     </VCardText>
   </VCard>
+  <VDialog
+  v-model="imageDialog"
+  transition="scale-transition"
+  :scrim="true"
+  @click:outside="imageDialog = false"
+  class="image-dialog"
+>
+  <div
+    class="d-flex justify-center align-center"
+  >
+    <transition name="zoom-fade">
+      <div
+        v-if="imageDialogUrl"
+        class="position-relative"
+        @click="imageDialog = false"
+      >
+        <IconBtn
+          @click.stop="imageDialog = false"
+          class="position-absolute close-btn"
+          style="top: 12px; right: 12px; z-index: 2; color: black;"
+        >
+          <VIcon icon="tabler-x" />
+        </IconBtn>
+
+        <img
+          :src="imageDialogUrl"
+          alt="Фото товара"
+          class="dialog-image"
+        />
+      </div>
+    </transition>
+  </div>
+</VDialog>
+
 
   <VSnackbar
     v-model="snackbar.show"
