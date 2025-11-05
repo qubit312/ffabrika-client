@@ -66,16 +66,16 @@ export function importCzPdf(formData: FormData) {
   )
 }
 
-// export function markLabelsAsDefective(ids: number[], reason: string) {
-//   return useApi<{
-//     success: boolean
-//     message?: string
-//     data?: any[]
-//   }>('/api/chestny-znak-labels/defective', {
-//     method: 'POST',
-//     body: { ids, reason }
-//   })
-// }
+export function markLabelsAsDefective(ids: number[], reason: string) {
+  return useApi<{
+    success: boolean
+    message?: string
+    data?: any[]
+  }>('/api/chestny-znak-labels/defective', {
+    method: 'POST',
+    body: { ids, reason }
+  })
+}
 
 export interface ChestnyZnakLabel {
   id: number

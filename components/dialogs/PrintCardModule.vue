@@ -33,6 +33,28 @@ const clientName = computed({
   set: v => (form.value.client_name = v)
 })
 
+const manufacturer = computed({
+  get: () => form.value.manufacturer,
+  set: v => (form.value.manufacturer = v)
+})
+
+const manufactureDate = computed({
+  get: () => {
+    if (!form.value.manufacture_date) return null;
+    
+    const date = new Date(form.value.manufacture_date);
+    return date.toISOString().split('T')[0];
+  },
+  set: v => {
+    form.value.manufacture_date = v ? v : '';
+  }
+})
+
+const country = computed({
+  get: () => form.value.country,
+  set: v => (form.value.country = v)
+})
+
 const printSingleEAN = computed({
   get: () => form.value.print_single_ean13,
   set: v => {
@@ -79,6 +101,10 @@ const previewData = computed(() => {
     userId: 3,
     gtin: '0123456789012',
     serial: 'A1B2C3D4E5',
+    shortAddress: 'г. Москва',
+    manufactureDate: '01.01.2025',
+    manufacturer: 'ООО Ткань',
+    country: 'Россия',
     client: form.value.client_name,
     size: size.value,
     article: form.value.product?.article,
@@ -134,22 +160,16 @@ onMounted(() => {
         </VRadioGroup>
       </VRow>
       <VRow>
-        <VCol cols="12">
+        <VCol cols="12" class="pb-12">
           <VRow class="pb-6">
-            <VCol cols="6">
+            <VCol cols="6" class="pb-1">
               <AppTextField
                 label="Название для этикетки"
                 placeholder="Введите название товара на этикетке"
                 v-model="name"
               />
             </VCol>
-            <VCol cols="6">
-              <AppTextField
-                label="Наименование продавца"
-                v-model="clientName"
-              />
-            </VCol>
-            <VCol cols="6">
+            <VCol cols="6" class="pb-1">
               <AppSelect
                 :items="productSizeTypes"
                 v-model="productSizeType"
@@ -160,46 +180,100 @@ onMounted(() => {
               />
             </VCol>
 
-            <VCol cols="12" class="pt-0 pb-0">
-              <VSwitch
-                v-if="selectedTemplate === 2 || selectedTemplate === 3"
-                label="Печать 1 ШК"
-                v-model="printSingleEAN"
-              />
-              <VSwitch
-                v-if="selectedTemplate === 1"
-                disabled
-                label="Печать 1 ШК"
-                :model-value="false"
-              />
-            </VCol>
+            <VCol cols="6" class="pa-0">
+              <VCol cols="12" class="pb-1">
+                <VLabel class="text-body-2" style="color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));">
+                  Наименование продавца
+                  <VTooltip location="top">
+                    <template #activator="{ props }">
+                      <VBtn
+                        v-bind="props"
+                        icon
+                        size="x-small"
+                        variant="text"
+                        color="primary"
+                        class="ms-1"
+                      >
+                        <VIcon icon="tabler-help" size="20" />
+                      </VBtn>
+                    </template>
+                    <span>Короткое название организации</span>
+                  </VTooltip>
+                </VLabel>
+                <AppTextField
+                  readonly
+                  append-inner-icon="tabler-lock"
+                  v-model="clientName"
+                />
+              </VCol>
 
-            <VCol cols="12" class="pt-0 pb-0">
-              <VSwitch
-                v-if="selectedTemplate === 2 || selectedTemplate === 3"
-                label="Печать 2 ШК"
-                v-model="printDoubleEAN"
-              />
-              <VSwitch
-                v-if="selectedTemplate === 1"
-                disabled
-                label="Печать 2 ШК"
-                :model-value="false"
-              />
-            </VCol>
+              <VCol cols="12" class="mb-3">
+                <AppTextField
+                  label="Производитель"
+                  v-model="manufacturer"
+                />
+              </VCol>
 
-            <VCol cols="12" class="pt-0 pb-0">
-              <VSwitch
-                v-if="selectedTemplate === 2 || selectedTemplate === 3"
-                v-model="duplicateDM"
-                label="Дублировать ЧЗ"
-              />
-              <VSwitch
-                v-if="selectedTemplate === 1"
-                disabled
-                :model-value="false"
-                label="Дублировать ЧЗ"
-              />
+              <VRow class="ps-3 pe-3">
+                <VCol cols="6" class="pt-1">
+                  <AppTextField
+                    label="Страна"
+                    v-model="country"
+                  />
+                </VCol>
+
+                <VCol cols="6" class="pt-1">
+                  <AppTextField
+                    type="date"
+                    label="Дата производства"
+                    v-model="manufactureDate"
+                  />
+                </VCol>
+              </VRow>
+            </VCol>
+            
+            <VCol cols="6" class="pa-0 pt-8 ps-4">
+              <VCol cols="12" class="pt-0 pb-0">
+                <VSwitch
+                  v-if="selectedTemplate === 2 || selectedTemplate === 3 || selectedTemplate === 4"
+                  label="Печать 1 ШК"
+                  v-model="printSingleEAN"
+                />
+                <VSwitch
+                  v-if="selectedTemplate === 1"
+                  disabled
+                  label="Печать 1 ШК"
+                  :model-value="false"
+                />
+              </VCol>
+
+              <VCol cols="12" class="pt-0 pb-0">
+                <VSwitch
+                  v-if="selectedTemplate === 2 || selectedTemplate === 3 || selectedTemplate === 4"
+                  label="Печать 2 ШК"
+                  v-model="printDoubleEAN"
+                />
+                <VSwitch
+                  v-if="selectedTemplate === 1"
+                  disabled
+                  label="Печать 2 ШК"
+                  :model-value="false"
+                />
+              </VCol>
+
+              <VCol cols="12" class="pt-0 pb-0">
+                <VSwitch
+                  v-if="selectedTemplate === 2 || selectedTemplate === 3 || selectedTemplate === 4"
+                  v-model="duplicateDM"
+                  label="Дублировать ЧЗ"
+                />
+                <VSwitch
+                  v-if="selectedTemplate === 1"
+                  disabled
+                  :model-value="false"
+                  label="Дублировать ЧЗ"
+                />
+              </VCol>
             </VCol>
           </VRow>
         </VCol>

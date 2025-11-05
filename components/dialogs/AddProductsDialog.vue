@@ -74,8 +74,13 @@ const fetchAvailableProducts = async () => {
       ],
     }
 
-    const { data } = await getAvailableStrategyItems(strategyId, requestBody)
-    availableProducts.value = data.value.data || []
+    const { data, error } = await getAvailableStrategyItems(strategyId, requestBody)
+
+    if (error.value) {
+      availableProducts.value = []
+    } else {
+      availableProducts.value = data.value.data || []
+    }
   } finally {
     loadingAvailable.value = false
   }

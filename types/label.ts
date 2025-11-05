@@ -45,4 +45,7 @@ export interface NewLabelInterface {
   duplicate_chz: boolean
   label_template_id: number
   size_display_type: string
+  manufacturer: string
+  manufacture_date: string | null
+  country: string
 }

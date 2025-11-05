@@ -21,6 +21,7 @@ export interface Client {
 
 export interface CreateClientDto {
   name: string;
+  short_name: string;
   type: string;
   email: string;
   phone: string;
@@ -32,6 +33,7 @@ export interface CreateClientDto {
   correspondent_account: string;
   bic: string;
   legal_address: string;
+  short_address: string,
   vat: number;
 }
 
