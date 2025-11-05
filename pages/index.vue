@@ -13,7 +13,7 @@ type ChzApiItem = {
   code: string
   used: boolean
   created_at: string
-  size?: { id: number; product_id: number; value: string; barcode: string }
+  size?: { id: number; product_id: number; value: string; barcode: string; alt: string; }
 }
 type ProductLite = {
   id: number
@@ -79,7 +79,7 @@ function buildKpi() {
 }
 
 const showMoreTimeline = ref(false)
-const TIMELINE_COLLAPSED = 3
+const TIMELINE_COLLAPSED = 5
 const latestChzAll = computed(() =>
   [...chzAll.value].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 )
@@ -110,8 +110,8 @@ function fmtDate(date: string | Date | undefined) {
   return `${dd}.${mm} ${hh}:${mi}`
 }
 function goProducts() { router.push({ name: 'product-list' }) }
-function goClients() { router.push({ name: 'client-list' }) }
-function goMarking() { router.push({ name: 'marking-list' }) }
+function goMarking() { router.push({ name: 'client-list' }) }
+function goRepricer() { router.push({ name: 'repricer-list' }) }
 function goChZ() { router.push({ name: 'chestny-znak' }) }
 
 onMounted(async () => {
@@ -135,15 +135,15 @@ onMounted(async () => {
     <VCard>
       <VCardText class="d-flex flex-wrap align-center justify-space-between gap-4">
         <div>
-          <div class="text-h6 font-weight-medium">Добро пожаловать в FF-WMS 🚀</div>
-          <div class="text-body-2 text-medium-emphasis mt-1">
-            Управляйте товарами, маркировкой и клиентами — всё в одном месте.
+          <div class="text-h4 font-weight-medium">Добро пожаловать в FAST WMS 🚀</div>
+          <div class="text-body-5 text-medium-emphasis mt-1">
+            Управляйте товарами, ценами, маркировкой и честным знаком — всё в одном месте.
           </div>
         </div>
         <div class="d-flex gap-3 flex-wrap">
           <VBtn color="primary" prepend-icon="tabler-box" @click="goProducts">Товары</VBtn>
-          <VBtn variant="tonal" color="success" prepend-icon="tabler-barcode" @click="goMarking">Маркировка</VBtn>
-          <VBtn variant="outlined" color="info" prepend-icon="tabler-users" @click="goClients">Клиенты</VBtn>
+          <VBtn variant="tonal" color="success" prepend-icon="tabler-discount" @click="goRepricer">Репрайсер</VBtn>
+          
           <VBtn variant="outlined" color="primary" @click="goChZ">
             <template #prepend>
               <VIcon icon="chz" />
@@ -206,7 +206,7 @@ onMounted(async () => {
     </VRow>
 
     <VRow>
-      <VCol cols="12" md="6" class="d-flex flex-column gap-4">
+      <VCol cols="12" md="6" class="d-flex flex-column gap-6">
         <VCard>
           <VCardTitle class="text-h6">Использование этикеток ЧЗ</VCardTitle>
           <VDivider />
@@ -271,7 +271,7 @@ onMounted(async () => {
         <VCard>
           <VCardTitle class="d-flex align-center justify-space-between">
             <span class="text-h6">Последние операции ЧЗ</span>
-            <VBtn size="small" variant="tonal" color="primary" @click="goMarking">
+            <VBtn size="small" variant="tonal" color="primary" @click="goChZ">
               Открыть маркировку
             </VBtn>
           </VCardTitle>
@@ -299,13 +299,11 @@ onMounted(async () => {
 
                     <div class="mt-1">
                       <div class="text-body-2">
-                        Товар #{{ item.size?.product_id || '—' }}
+                        Товар id №{{ item.size?.product_id || '—' }}
                         · Размер: <strong>{{ item.size?.value || '—' }}</strong>
                         · Баркод: <span class="text-medium-emphasis">{{ item.size?.barcode || '—' }}</span>
                       </div>
-                      <div class="text-caption text-medium-emphasis mt-1">
-                        Код ЧЗ: {{ item.code }}
-                      </div>
+
                     </div>
                   </div>
 
