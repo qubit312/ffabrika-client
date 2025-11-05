@@ -3,6 +3,7 @@ import CustomLoading from '@/components/CustomLoading.vue'
 import FileHistoryDialog from '@/components/dialogs/FileHistoryDialog.vue'
 import PrintCardModule from '@/components/dialogs/PrintCardModule.vue'
 import SizeMappingModal from '@/components/dialogs/SizeMappingModal.vue'
+import UpdateChzLabel from '@/components/dialogs/UpdateChzLabel.vue'
 import PrinterInfo from '@/components/PrinterInfo.vue'
 import { createLabel, getLabel, updateLabel } from '@/services/labels'
 import { getPrinter } from '@/services/printers'
@@ -21,14 +22,12 @@ const snackbar = ref<boolean>(false)
 const snackMessage = ref<string>('')
 const snackColor = ref<'success' | 'error'>('success')
 
+const showLabelDialog = ref<boolean>(false)
 const showFileMappingModal = ref<boolean>(false)
 const csvFiles = ref<File[]>([])
-const testFiles = ref<File[]>([])
 const uploadType = ref<'csv' | 'pdf'>('csv')
 const pdfFiles = ref<File[]>([])
 
-const isCreate = computed(() => mode.value === 'create')
-const currentTitle = computed(() => form.name)
 const productColor = computed(() => form.product?.color || '')
 const mainImage = ref<string | null>(null)
 const breadcrumbs = computed(() => {
@@ -550,6 +549,12 @@ const handleImportCzFile = (result: any) => {
       </VCardActions>
     </VCard>
   </VDialog>
+
+  <UpdateChzLabel
+    v-if="markingData?.product"
+    v-model="showLabelDialog"
+    :product="markingData.product"
+  />
 
   <CustomLoading :loading="loading" />
 </template>

@@ -651,17 +651,6 @@ const hasActiveFilters = computed(() => {
           </div>
         </template>
 
-        <template #item.action="{ item }">
-          <div class="text-center">
-            <VBtn
-              icon="tabler-arrow-back"
-              variant="text"
-              @click="confirmCancelUsage(item)"
-              title="Отменить использование знака"
-            />
-          </div>
-        </template>
-
         <template #bottom>  
           <VCardText class="pt-2">
             <div class="d-flex flex-wrap justify-center justify-sm-space-between gap-y-2 mt-2">
