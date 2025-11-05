@@ -9,6 +9,9 @@ import { deleteProduct, getProductsWithSizes } from '../../../services/products'
 import type { FilterRequest } from '../../../types/filter';
 import type { WbProduct } from '../../../types/product';
 
+// @ts-ignore
+const globalThisRef = globalThis
+
 const router = useRouter()
 
 const entityData = ref<WbProduct[]>([])
@@ -34,8 +37,9 @@ const headers = [
   { title: 'Товар', key: 'name' },
   { title: 'Цвет', key: 'color' },
   { title: 'Размеры', key: 'sizes', sortable: false },
+  { title: 'Количество', key: 'stock', width: '50px' },
   { title: 'Ярлыки', key: 'badges', sortable: false },
-  { title: 'Изменено', key: 'updated_at' },
+  //{ title: 'Изменено', key: 'updated_at' },
   { title: 'Действия', key: 'actions', sortable: false },
 ]
 
@@ -229,10 +233,10 @@ function formatDate(date: string | Date) {
 type ProductLabel = { id: string; name: string; color: string }
 
 const LS_KEY_LIBRARY = 'labels:library'
-const libCache = ref<ProductLabel[] | null>(null)
+const libCache = ref<ProductLabel[]>([])
+
 
 function readLibrary(): ProductLabel[] {
-  if (libCache.value) return libCache.value
   try {
     libCache.value = JSON.parse(localStorage.getItem(LS_KEY_LIBRARY) || '[]') ?? []
   } catch {
@@ -240,6 +244,7 @@ function readLibrary(): ProductLabel[] {
   }
   return libCache.value
 }
+
 function readAppliedIds(productId: number | 'new'): string[] {
   const key = `product:${productId}:labelsApplied`
   try { return JSON.parse(localStorage.getItem(key) || '[]') ?? [] }
@@ -261,7 +266,8 @@ function openLabelsDrawer(pid: number) {
 }
 
 function onLabelsChanged(payload: { applied: Array<{ id: number; name: string; color?: string }>; appliedIds: number[]; library: any[] }) {
-  libCache.value = null
+libCache.value = []
+
   labelsRefreshTick.value++
 
   const pid = labelsDrawerProductId.value
@@ -434,8 +440,15 @@ onMounted(fetchAccounts)
             </div>
 
             <div class="d-flex flex-column">
-              <div class="d-flex align-center gap-2">
-                <RouterLink :to="{ name: 'product-details-id', params: { id: item.id } }" class="text-high-emphasis hoverable">
+              <div
+                class="d-flex align-center gap-2 text-truncate hoverable"
+                style="max-width: 420px;"
+                :title="item.name"
+              >
+                <RouterLink
+                  :to="{ name: 'product-details-id', params: { id: item.id } }"
+                  class="text-high-emphasis text-truncate"
+                >
                   {{ item.name }}
                 </RouterLink>
               </div>
@@ -453,27 +466,30 @@ onMounted(fetchAccounts)
                 </template>
 
                 <template v-if="item.article">
-                  <span
-                    class="user-select-none d-inline-flex align-center"
-                  >
-                    <RouterLink
-                      :to="{ name: 'product-details-id', params: { id: item.id } }"
-                      class="text-high-emphasis cursor-pointer hoverable-revert"
+                  <span class="user-select-none d-inline-flex align-center">
+                    <span
+                        :class="[
+                          'text-high-emphasis ',
+                          item.is_wb_import ? 'hoverable-revert cursor-pointer' : 'c-default'
+                        ]"
                       style="text-decoration: none;"
+                      :title="item.is_wb_import ? 'Открыть на Wildberries' : ''"
+                      @click.stop="item.is_wb_import && globalThisRef.open(`https://www.wildberries.ru/catalog/${item.article}/detail.aspx`, '_blank')"
+                  
                     >
                       {{ item.article }}
-                    </RouterLink>
+                    </span>
                   
                     <VIcon
                       size="14"
-                      class="ms-1 cursor-pointer"
+                      class="ms-1 cursor-pointer "
                       icon="tabler-copy"
                       title="Скопировать артикул"
                       @click.stop="copyArticle(item.article)"
                     />
                   </span>
-
                 </template>
+
               </div>
 
               <div class="mt-2 d-flex align-center gap-2">
@@ -508,7 +524,7 @@ onMounted(fetchAccounts)
         </template>
 
         <template #item.color="{ item }">
-          <div class="d-flex flex-column">
+          <div class="d-flex flex-column c-default">
             <span>{{ item.color }}</span>
           </div>
         </template>
@@ -549,6 +565,11 @@ onMounted(fetchAccounts)
                 </tbody>
               </VTable>
             </VTooltip>
+          </div>
+        </template>
+        <template #item.stock="{ item }">
+          <div class="d-flex align-center justify-center c-default">
+            <span>{{ item.stock ?? '—' }}</span>
           </div>
         </template>
 

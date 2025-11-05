@@ -20,6 +20,7 @@ export interface WbProduct {
   client_id: number | null
   brand_id: number | null
   brand: Brand | null
+  stock?: string
   productSizes?: ProductSize[];
   tags?: ProductTag[]
   labels: ProductLabel[]

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import FileHistoryDialog from '@/components/dialogs/FileHistoryDialog.vue'
+import UpdateChzLabel from '@/components/dialogs/UpdateChzLabel.vue'
 import { getProductMainImage } from '@/services/productImages'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -32,7 +33,7 @@ const fileData = ref<FileData[]>([])
 
 const onChange = (cb: (files: File[] | null) => void) => { }
 const useDropZone = (_el: any, _fn: any) => { }
-
+const showLabelDialog = ref(false)
 const isCreate = computed(() => mode.value === 'create')
 const currentTitle = computed(() => form.name)
 const productColor = computed(() => form.product?.color || '')
@@ -434,6 +435,15 @@ function openSizeMappingModal() {
               <span>Честный знак</span>
               
               <div>
+
+                <VTooltip open-delay="600">
+                  <template #activator="{ props }">
+                    <IconBtn v-bind="props" @click="showLabelDialog = true"  >
+                      <VIcon icon="tabler-arrows-shuffle" />
+                    </IconBtn>
+                  </template>
+                  <span>Перенести на другой товар</span>
+                </VTooltip>
                 <VTooltip>
                   <template #activator="{ props }">
                     <IconBtn @click="showHistory = true" v-bind="props">
@@ -560,6 +570,12 @@ function openSizeMappingModal() {
   </VDialog>
 
   <CustomLoading :loading="loading" />
+  <UpdateChzLabel
+    v-if="markingData?.product"
+    v-model="showLabelDialog"
+    :product="markingData.product"
+  />
+
 </template>
 
 <style lang="scss" scoped></style>

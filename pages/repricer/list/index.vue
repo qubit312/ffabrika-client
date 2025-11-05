@@ -205,21 +205,21 @@ const resetFilters = () => {
 
         <!-- Колонка типа -->
         <template #item.type="{ item }" >
-          <div class="hoverable pointer">
+          <div class="c-default">
             <span>{{ getTypeText(item.type) }}</span>
           </div>
         </template>
 
         <!-- Колонка товаров -->
         <template #item.items_count="{ item }">
-          <div class="hoverable pointer">
+          <div class="c-default">
             <span>{{ item.items_count }}</span>
           </div>
         </template>
 
         <!-- Колонка даты создания -->
         <template #item.created_at="{ item }">
-            <div class="hoverable pointer">
+            <div class="c-default">
             {{ formatDate(item.created_at || '') }}
             </div>
         </template>
