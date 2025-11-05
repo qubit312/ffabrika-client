@@ -37,6 +37,7 @@ const typeOptions = [
 
 const org = reactive<CreateClientDto>({
   name: '',
+  short_name: '',
   type: '',
   email: '',
   phone: '',
@@ -48,6 +49,7 @@ const org = reactive<CreateClientDto>({
   correspondent_account: '',
   bic: '',
   legal_address: '',
+  short_address: '',
   vat: 0,
 })
 
@@ -63,6 +65,7 @@ function toVatPercent(v: any): string {
 
 function mapServerResponseToForm(serverData: any): void {
   org.name = serverData.name || ''
+  org.short_name = serverData.short_name || ''
   org.type = serverData.type || ''
   org.email = serverData.email || ''
   org.phone = serverData.phone || ''
@@ -74,6 +77,7 @@ function mapServerResponseToForm(serverData: any): void {
   org.correspondent_account = serverData.correspondent_account || ''
   org.bic = serverData.bic || ''
   org.legal_address = serverData.legal_address || ''
+  org.short_address = serverData.short_address || ''
 
   org.vat = serverData.vat
 
@@ -149,6 +153,7 @@ const vatRules: Rule[] = [vatPercentRule]
 const legalAddressRules: Rule[] = []
 
 const nameState = useFieldState(nameRules, computed(() => org.name), submitted)
+const shortNameState = useFieldState(nameRules, computed(() => org.short_name), submitted)
 const typeState = useFieldState(typeRules, computed(() => org.type), submitted)
 const emailState = useFieldState(emailRules, computed(() => org.email), submitted)
 const phoneState = useFieldState(phoneRules, computed(() => org.phone), submitted)
@@ -161,6 +166,7 @@ const bankState = useFieldState(bankRules, computed(() => org.bank), submitted)
 const bicState = useFieldState(bicRules, computed(() => org.bic), submitted)
 const vatState = useFieldState(vatRules, computed(() => org.vat), submitted)
 const addrState = useFieldState(legalAddressRules, computed(() => org.legal_address), submitted)
+const shortAddrState = useFieldState(legalAddressRules, computed(() => org.short_address), submitted)
 
 const startEdit = () => {
   isEdit.value = true
@@ -183,6 +189,7 @@ const save = async () => {
   try {
     const dto = {
       name: org.name?.trim() || '',
+      short_name: org.short_name?.trim() || '',
       type: org.type || '',
       email: org.email || '',
       phone: org.phone || '',
@@ -194,6 +201,7 @@ const save = async () => {
       correspondent_account: org.correspondent_account || '',
       bic: org.bic || '',
       legal_address: org.legal_address || '',
+      short_address: org.short_address || '',
       vat: Number(org.vat) || 0,
     }
     const { data, error } = await updateClient(Number(currentClient.value?.id), dto)
@@ -240,6 +248,17 @@ onMounted(fetchClient)
                       <span v-bind="props">{{ org.name || 'Не указано' }}</span>
                     </template>
                     {{ copiedField === 'name' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+                  </VTooltip>
+                </VListItemSubtitle>
+              </VListItem>
+              <VListItem @click="copyToClipboard(org.short_name, 'short_name')">
+                <VListItemTitle>Короткое название</VListItemTitle>
+                <VListItemSubtitle>
+                  <VTooltip :model-value="copiedField === 'short_name'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'short_name'">
+                    <template #activator="{ props }">
+                      <span v-bind="props">{{ org.short_name || 'Не указано' }}</span>
+                    </template>
+                    {{ copiedField === 'short_name' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
                   </VTooltip>
                 </VListItemSubtitle>
               </VListItem>
@@ -332,6 +351,17 @@ onMounted(fetchClient)
                   </VTooltip>
                 </VListItemSubtitle>
               </VListItem>
+              <VListItem @click="copyToClipboard(org.short_address, 'short_address')">
+                <VListItemTitle>Короткий адрес</VListItemTitle>
+                <VListItemSubtitle>
+                  <VTooltip :model-value="copiedField === 'short_address'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'short_address'">
+                    <template #activator="{ props }">
+                      <span v-bind="props">{{ org.short_address || 'Не указано' }}</span>
+                    </template>
+                    {{ copiedField === 'short_address' ? 'Скопировано!' : 'Нажмите, чтобы скопировать' }}
+                  </VTooltip>
+                </VListItemSubtitle>
+              </VListItem>
             </VList>
           </VCol>
           <VCol cols="12" class="d-flex flex-wrap gap-4">
@@ -351,10 +381,17 @@ onMounted(fetchClient)
           <VCol cols="12" md="6">
             <AppTextField
               v-model="org.name"
-              label="Краткое название"
+              label="Название"
               outlined
               :rules="nameRules"
               v-bind="nameState"
+            />
+            <AppTextField
+              v-model="org.short_name"
+              outlined
+              label="Короткое название"
+              :rules="nameRules"
+              v-bind="shortNameState"
             />
             <AppSelect
               v-model="org.type"
@@ -444,6 +481,13 @@ onMounted(fetchClient)
               outlined
               :rules="legalAddressRules"
               v-bind="addrState"
+            />
+            <AppTextField
+              v-model="org.short_address"
+              label="Короткий адрес"
+              outlined
+              :rules="legalAddressRules"
+              v-bind="shortAddrState"
             />
           </VCol>
           <VCol cols="12" class="d-flex flex-wrap gap-4">

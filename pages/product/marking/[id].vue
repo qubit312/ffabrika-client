@@ -1,17 +1,17 @@
 <script setup lang="ts">
+import CustomLoading from '@/components/CustomLoading.vue'
 import FileHistoryDialog from '@/components/dialogs/FileHistoryDialog.vue'
+import PrintCardModule from '@/components/dialogs/PrintCardModule.vue'
+import SizeMappingModal from '@/components/dialogs/SizeMappingModal.vue'
 import UpdateChzLabel from '@/components/dialogs/UpdateChzLabel.vue'
+import PrinterInfo from '@/components/PrinterInfo.vue'
+import { createLabel, getLabel, updateLabel } from '@/services/labels'
+import { getPrinter } from '@/services/printers'
 import { getProductMainImage } from '@/services/productImages'
+import type { Label, NewLabelInterface } from '@/types/label'
+import type { Printer } from '@/types/printer'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import CustomLoading from '../../../components/CustomLoading.vue'
-import PrintCardModule from '../../../components/dialogs/PrintCardModule.vue'
-import SizeMappingModal from '../../../components/dialogs/SizeMappingModal.vue'
-import PrinterInfo from '../../../components/PrinterInfo.vue'
-import { createLabel, getLabel, updateLabel } from '../../../services/labels'
-import { getPrinter } from '../../../services/printers'
-import type { Label, NewLabelInterface } from '../../../types/label'
-import type { Printer } from '../../../types/printer'
 
 const route = useRoute()
 const router = useRouter()
@@ -22,20 +22,12 @@ const snackbar = ref<boolean>(false)
 const snackMessage = ref<string>('')
 const snackColor = ref<'success' | 'error'>('success')
 
+const showLabelDialog = ref<boolean>(false)
 const showFileMappingModal = ref<boolean>(false)
 const csvFiles = ref<File[]>([])
 const uploadType = ref<'csv' | 'pdf'>('csv')
 const pdfFiles = ref<File[]>([])
 
-const dropZoneRef = ref<HTMLDivElement>()
-interface FileData { file: File; url: string }
-const fileData = ref<FileData[]>([])
-
-const onChange = (cb: (files: File[] | null) => void) => { }
-const useDropZone = (_el: any, _fn: any) => { }
-const showLabelDialog = ref(false)
-const isCreate = computed(() => mode.value === 'create')
-const currentTitle = computed(() => form.name)
 const productColor = computed(() => form.product?.color || '')
 const mainImage = ref<string | null>(null)
 const breadcrumbs = computed(() => {
@@ -61,23 +53,6 @@ const breadcrumbs = computed(() => {
     },
   ]
 })
-
-
-function onDrop(files: File[] | null) {
-  files?.forEach(file => {
-    if (!file.type.startsWith('image/')) {
-      alert('Only image files are allowed')
-      return
-    }
-    fileData.value.push({
-      file,
-      url: URL.createObjectURL(file)
-    })
-  })
-}
-
-onChange(selected => onDrop(selected))
-useDropZone(dropZoneRef, onDrop)
 
 const markingData = ref<Label | null>(null)
 const printer = ref<Printer>({
@@ -109,7 +84,10 @@ const form = reactive<NewLabelInterface>({
   duplicate_chz: false,
   product: null,
   label_template_id: 1,
-  size_display_type: 'RUS'
+  size_display_type: 'RUS',
+  manufacturer: '',
+  manufacture_date: null,
+  country: '',
 })
 
 watch(
@@ -133,9 +111,11 @@ function mapLabelResponseToForm(response: any) {
   form.product = response.product ?? null
   form.label_template_id = response.label_template_id ?? 1
   form.size_display_type = response.size_display_type ?? ''
+  form.country = response.country ?? ''
+  form.manufacturer = response.manufacturer ?? ''
+  form.manufacture_date = response.manufacture_date ?? null
 }
 
-const showDefectiveModal = ref(false)
 const fetchLabel = async (id: number) => {
   if (id <= 0) {
     mode.value = 'create'
@@ -169,13 +149,15 @@ async function onSubmit() {
   const payload = {
     name: form.name,
     product_id: form.product_id ?? null,
-    client_name: form.client_name,
     printer_id: form.printer_id,
     print_single_ean13: form.print_single_ean13,
     print_double_ean13: form.print_double_ean13,
     duplicate_chz: form.duplicate_chz,
     label_template_id: form.label_template_id,
-    size_display_type: form.size_display_type
+    size_display_type: form.size_display_type,
+    country: form.country,
+    manufacturer: form.manufacturer,
+    manufacture_date: form.manufacture_date
   }
   
   try {
@@ -229,10 +211,6 @@ onMounted(async () => {
   
   loading.value = false
 })
-
-function openDefective() {
-  showDefectiveModal.value = true
-}
 
 watch(uploadType, () => { 
   csvFiles.value = []
@@ -320,7 +298,6 @@ watch(uploadType, () => {
 })
 
 function openSizeMappingModal() {
-  console.log(allFiles)
   if (allFiles.value.length === 0) {
     maxSizeDialogForm.message = 'Пожалуйста, загрузите хотя бы один файл.'
     maxSizeDialogVisible.value = true
@@ -330,6 +307,16 @@ function openSizeMappingModal() {
   showFileMappingModal.value = true
 }
 
+const clearAllFiles = (): void => {
+  csvFiles.value = []
+  pdfFiles.value = []
+  allFiles.value = []
+}
+
+const handleImportCzFile = (result: any) => {
+  showFileMappingModal.value = false
+  clearAllFiles()
+}
 </script>
 
 <template>
@@ -452,20 +439,6 @@ function openSizeMappingModal() {
                   </template>
                   <span>История загрузок</span>
                 </VTooltip>
-                
-                <VMenu>
-                  <template #activator="{ props }">
-                    <IconBtn v-bind="props">
-                      <VIcon icon="tabler-dots-vertical" />
-                    </IconBtn>
-                  </template>
-
-                  <VList>
-                    <VListItem @click="openDefective">
-                      <VListItemTitle>Бракованная этикетка</VListItemTitle>
-                    </VListItem>
-                  </VList>
-                </VMenu>
               </div>
 
               
@@ -509,6 +482,7 @@ function openSizeMappingModal() {
 
               <!-- Загрузка CSV -->
               <VFileInput
+                show-size
                 v-if="uploadType === 'csv'"
                 accept=".csv,text/csv"
                 label="Загрузить CSV файл"
@@ -518,6 +492,7 @@ function openSizeMappingModal() {
 
               <!-- Загрузка PDF -->
               <VFileInput
+                show-size
                 v-else
                 accept=".pdf,application/pdf"
                 label="Загрузить PDF файл"
@@ -549,7 +524,13 @@ function openSizeMappingModal() {
     {{ snackMessage }}
   </VSnackbar>
 
-  <SizeMappingModal v-model="showFileMappingModal" :productId="markingData ? markingData.product_id ? markingData.product_id : 0 : 0" :files="allFiles" :type="uploadType" />
+  <SizeMappingModal 
+    v-model="showFileMappingModal" 
+    :productId="markingData ? markingData.product_id ? markingData.product_id : 0 : 0" 
+    :files="allFiles" 
+    :type="uploadType" 
+    @import-success="handleImportCzFile"
+  />
 
   <VDialog v-model="maxSizeDialogVisible" max-width="500">
     <VCard>
@@ -569,13 +550,13 @@ function openSizeMappingModal() {
     </VCard>
   </VDialog>
 
-  <CustomLoading :loading="loading" />
   <UpdateChzLabel
     v-if="markingData?.product"
     v-model="showLabelDialog"
     :product="markingData.product"
   />
 
+  <CustomLoading :loading="loading" />
 </template>
 
 <style lang="scss" scoped></style>

@@ -105,25 +105,45 @@ interface ErrorSummary {
 
 function showErrorDetails(item: FileOperation) {
   let parsedError: ErrorSummary | null = null
+  const rawMessage = item.error_message
 
   try {
-    // error_message приходит как JSON-строка
     parsedError =
-      typeof item.error_message === 'string'
-        ? JSON.parse(item.error_message)
-        : item.error_message
+      typeof rawMessage === 'string'
+        ? JSON.parse(rawMessage)
+        : rawMessage
+
+    console.log(parsedError)
   } catch {
-    parsedError = { details: { [item.error_message || 'Неизвестная ошибка']: 1 } }
+    parsedError = {
+      details: {
+        [rawMessage || 'Произошла ошибка при выполнении операции']: 1,
+      },
+    }
+  }
+
+  if (item.status === 'failed') {
+    parsedError = {
+      details: {
+        [rawMessage || 'Произошла ошибка при выполнении операции']: 1,
+      },
+    }
+  }
+
+  if (!parsedError?.details && !parsedError?.summary) {
+    parsedError = {
+      details: {
+        [rawMessage || 'Ошибка при обработке']: 1,
+      },
+    }
   }
 
   errorDetails.value = {
     file_name: item.file_name,
     error: parsedError,
   }
-
   errorDialog.value = true
 }
-
 
 </script>
 
@@ -134,15 +154,14 @@ function showErrorDetails(item: FileOperation) {
         <div class="d-flex align-center">
           <span>История загрузок</span>
           <VBtn
-            class="ms-2"
-            icon
-            variant="text"
+            class="ms-4"
+            variant="flat"
+            density="comfortable"
             color="primary"
-            :loading="loading"
             @click="fetchFileOperations()"
-            title="Обновить список"
           >
-            <VIcon icon="tabler-refresh" />
+            <VIcon class="me-2" icon="tabler-refresh" />
+            Обновить список
           </VBtn>
         </div>
         <VBtn icon="tabler-x" variant="text" @click="isOpen = false" />
@@ -152,7 +171,7 @@ function showErrorDetails(item: FileOperation) {
         <VDataTable
           :headers="headers"
           :items="operations"
-          class="text-no-wrap product-table"
+          class="product-table"
           :items-per-page="itemsPerPage"
           :page="page"
           :loading="loading"
@@ -247,52 +266,48 @@ function showErrorDetails(item: FileOperation) {
           <VAlert
             type="warning"
             variant="tonal"
-            :icon="false"
             class="mb-4"
           >
-            <div class="d-flex align-center">
-              <div class="me-4">
-                <VIcon
-                  icon="tabler-info-circle"
-                  size="32"
-                  class="text-info"
-                  color="warning"
-                />
-              </div>
+            <div>
+              Успешно обработано:
+              <strong>{{ errorDetails.error.summary.success }}</strong>
+              из
+              <strong>{{ errorDetails.error.summary.total }}</strong><br />
+              Ошибки:
+              <strong>{{ errorDetails.error.summary.failed }}</strong>
+            </div>
+            
+          </VAlert>
+          <div v-if="errorDetails.error.details">
+            <span>Детали: </span>
+            <div
+              v-for="(count, msg) in errorDetails.error.details"
+              :key="msg"
+            >
+              <span class="ms-8">{{ msg }}</span>
+              <template v-if="count && count > 1"> — {{ count }} шт.</template>
+            </div>
+          </div>
+        </template>
 
-              <div>
-                <div>
-                  Успешно обработано:
-                  <strong>{{ errorDetails.error.summary.success }}</strong>
-                  из
-                  <strong>{{ errorDetails.error.summary.total }}</strong>
-                </div>
-                <div class="mt-1">
-                  Ошибки:
-                  <strong>{{ errorDetails.error.summary.failed }}</strong>
-                </div>
-              </div>
+        <template v-else-if="errorDetails.error?.details && Object.keys(errorDetails.error.details).length">
+          <VAlert
+            type="error"
+            variant="tonal"
+            class="mb-4 text-pre-wrap"
+          >
+            <div
+              v-for="(count, msg) in errorDetails.error.details"
+              :key="msg"
+            >
+              <span>{{ msg }}</span>
+              <template v-if="count && count > 1"> — {{ count }} шт.</template>
             </div>
           </VAlert>
         </template>
 
-        <template v-if="errorDetails.error?.details">
-          <h4 class="text-subtitle-1 mb-2">Сводка ошибок:</h4>
-          <VList density="compact" class="border rounded">
-            <VListItem
-              v-for="(count, msg) in errorDetails.error.details"
-              :key="msg"
-            >
-              <VListItemTitle>{{ msg }}</VListItemTitle>
-              <VListItemSubtitle>{{ count }} строк(и)</VListItemSubtitle>
-            </VListItem>
-          </VList>
-        </template>
-
-        <template
-          v-if="!errorDetails.error?.summary && !errorDetails.error?.details"
-        >
-          <VAlert type="error" variant="tonal" class="text-pre-wrap mt-3">
+        <template v-else>
+          <VAlert type="error" variant="tonal">
             Неизвестная ошибка
           </VAlert>
         </template>

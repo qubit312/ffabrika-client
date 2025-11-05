@@ -90,6 +90,7 @@ async function fetchAccounts() {
   } catch (err) {
     accounts.value = []
     console.error('Ошибка загрузки магазинов:', err)
+    loading.value = false
   } finally {
     loading.value = false
   }
@@ -98,20 +99,32 @@ async function fetchAccounts() {
 const fetchStrategy = async () => {
   strategyLoading.value = true 
   const id = Number(route.params.id)
-  if (!id) return
+  if (!id) {
+    strategyLoading.value = false
+    return
+  }
 
   try {
-    const { data } = await getStrategy(id)
-    strategy.value = data.value
-    strategyName.value = data.value.name
-    strategyType.value = data.value.type
-    strategyStatus.value = data.value.status
-    strategyAccountId.value = data.value.account_id
+    const { data, error } = await getStrategy(id)
+    const fetchResult = handleUpdateResponse(
+      data, error, undefined, undefined,
+      'Не удалось получить информацию по стратегии'
+    )
+    const strategy = data.value.data
 
-    sortField.value = data.value.order_by_field
-    sortOrder.value = data.value.order_direction
+    if (fetchResult && strategy) {
+      strategy.value = strategy
+      strategyName.value = strategy.name
+      strategyType.value = strategy.type
+      strategyStatus.value = strategy.status
+      strategyAccountId.value = strategy.account_id
+
+      sortField.value = strategy.order_by_field
+      sortOrder.value = strategy.order_direction
+    }
   } catch (e) {
     console.error('Ошибка при загрузке стратегии', e)
+    strategyLoading.value = false
   } finally {
     strategyLoading.value = false
   }
@@ -122,17 +135,23 @@ const applyGlobalEnd = async () => {
   if (!id) return
 
   try {
-    const data = {
+    const payload = {
       field: 'ends_at',
       value: globalEndTime.value
     }
 
-    const { data: response } = await updateStrategyItemTime(id, data)
+    const { data, error } = await updateStrategyItemTime(id, payload)
     
-    if (response.value?.updated) {     
-      showSuccessNotification(`Обновлено элементов: ${response.value.updated}`)
-      fetchProducts()
-    }
+    handleUpdateResponse(
+      data, error,
+      () => {
+        const count = data.value.data?.updated
+        if (count) showSuccessNotification(`Обновлено элементов: ${count}`)
+        fetchProducts()
+      },
+      undefined,
+      'Не удалось обновить время для товаров'
+    )
     
     isSetEndDialogOpen.value = false
   } catch (error) {
@@ -146,17 +165,23 @@ const applyGlobalStart = async () => {
   if (!id) return
 
   try {
-    const data = {
+    const payload = {
       field: 'starts_at',
       value: globalStartTime.value
     }
 
-    const { data: response } = await updateStrategyItemTime(id, data)
+    const { data, error } = await updateStrategyItemTime(id, payload)
     
-    if (response.value?.updated) {
-      showSuccessNotification(`Обновлено элементов: ${response.value.updated}`)
-      fetchProducts()
-    }
+    handleUpdateResponse(
+      data, error,
+      () => {
+        const count = data.value.data?.updated
+        if (count) showSuccessNotification(`Обновлено элементов: ${count}`)
+        fetchProducts()
+      },
+      undefined,
+      'Не удалось обновить время для товаров'
+    )
     
     isSetStartDialogOpen.value = false
   } catch (error) {
@@ -194,9 +219,11 @@ const updateStrategySort = useDebounceFn(async () => {
       order_by_field: sortField.value,
       order_direction: sortOrder.value,
     })
-    if (!data.value || error.value) {
-      console.error('Ошибка при обновлении сортировки стратегии', error.value)
-    }
+
+    handleUpdateResponse(
+      data, error, undefined, undefined,
+      'Не удалось обновить сортировку стратегии'
+    )
   } catch (e) {
     console.error('Ошибка при обновлении сортировки стратегии', e)
   }
@@ -226,9 +253,20 @@ const fetchProducts = async () => {
       ],
     }
 
-    const { data } = await getStrategyItems(strategyId, requestBody)
-    products.value = data.value.data
-    productsLength.value = data.value.total
+    const { data, error } = await getStrategyItems(strategyId, requestBody)
+    handleUpdateResponse(
+      data, error, 
+      () => {
+        products.value = data.value.data
+        productsLength.value = data.value.total
+      },
+      () => {
+        products.value = []
+        productsLength.value = 0
+      },
+      'Не удалось обновить сортировку стратегии'
+    )
+    
   } finally {
     loading.value = false
   }
@@ -253,14 +291,31 @@ const saveStrategy = async () => {
 
   try {
     if (id === 0) {
-      const { data } = await createStrategy(payload)
-      strategy.value = data.value
-      router.push(`/repricer/details/${data.value.id}`)
+      const { data, error } = await createStrategy(payload)
+
+      handleUpdateResponse(
+        data, error,
+        () => {
+          const createdStrategy = data.value?.data
+          if (createdStrategy) strategy.value = createdStrategy
+          if (createdStrategy?.id) router.push(`/repricer/details/${createdStrategy.id}`)
+        },
+        undefined,
+        'Не удалось обновить стратегию'
+      )
     } else {
-      await updateStrategy(id, payload)
+      const { data, error } = await updateStrategy(id, payload)
+
+      handleUpdateResponse(
+        data, error,
+        undefined,
+        undefined,
+        'Не удалось обновить стратегию'
+      )
     }
   } catch (e) {
     console.error('Ошибка при сохранении стратегии', e)
+    strategyLoading.value = false
   } finally {
     strategyLoading.value = false
   }
@@ -283,6 +338,11 @@ const copyArticle = (article: string) => {
   navigator.clipboard.writeText(article)
 }
 
+const formatTime = (time?: string | null): string | null => {
+  if (!time) return null
+  return time.length > 5 ? time.slice(0, 5) : time
+}
+
 const updateDiscount = async (item: StrategyItem) => {
   if (item.status === 'applied') {
     if(_oldDiscount.value) item.temp_discount = _oldDiscount.value
@@ -302,12 +362,11 @@ const updateDiscount = async (item: StrategyItem) => {
       temp_discount: discountValue,
     })
 
-    if (!data.value?.success || error.value) {
-      const errorMessage = error.value?.data?.message || data.value?.message
-      showErrorNotification(errorMessage || 'Не удалось обновить скидку')
-
-      if(_oldDiscount.value) item.temp_discount = _oldDiscount.value
-    }
+    handleUpdateResponse(
+      data, error, undefined,
+      () => { if(_oldDiscount.value) item.temp_discount = _oldDiscount.value },
+      'Не удалось обновить скидку'
+    )
   } catch (e: any) {
     console.error('Ошибка при обновлении скидки', e)
     showErrorNotification('Ошибка при обновлении скидки')
@@ -315,11 +374,6 @@ const updateDiscount = async (item: StrategyItem) => {
       item.temp_discount = _oldDiscount.value
     }
   }
-}
-
-const formatTime = (time?: string | null): string | null => {
-  if (!time) return null
-  return time.length > 5 ? time.slice(0, 5) : time
 }
 
 const updateTime = async (item: StrategyItem, field: 'starts_at' | 'ends_at') => {
@@ -351,16 +405,60 @@ const updateTime = async (item: StrategyItem, field: 'starts_at' | 'ends_at') =>
 
     const { data, error } = await updateStrategyItem(item.id, payload)
 
-    if (!data.value?.success || error.value) {
-      const errorMessage = error.value?.data?.message || data.value?.message
-      showErrorNotification(errorMessage || 'Не удалось обновить время')
-      rollbackTimeValue(item, field)
-    }
+    handleUpdateResponse(
+      data, error, undefined,
+      () => rollbackTimeValue(item, field),
+      'Не удалось обновить время'
+    )
   } catch (e: any) {
     console.error('Ошибка при обновлении времени', e)
     showErrorNotification('Ошибка при обновлении времени')
     rollbackTimeValue(item, field)
   }
+}
+
+const toggleStatus = async (item: StrategyItem | null) => {
+  toggleStatusDialog.value = false
+  if (!item) return
+
+  const currentStatus = item.status
+  let newStatus: 'active' | 'paused' | 'applied' = 'paused'
+
+  if (currentStatus === 'active') newStatus = 'paused'
+  else if (currentStatus === 'paused') newStatus = 'active'
+  else if (currentStatus === 'applied') newStatus = 'paused'
+
+  try {
+    const { data, error } = await updateStrategyItem(item.id, { status: newStatus })
+    handleUpdateResponse(
+      data, error,
+      () => { item.status = newStatus },
+      () => { if(_oldStatus.value) item.status = _oldStatus.value },
+      'Не удалось обновить статус'
+    )
+  } catch (e) {
+    console.error('Ошибка при обновлении статуса', e)
+    showErrorNotification('Не удалось обновить статус')
+    if(_oldStatus.value) item.status = _oldStatus.value
+  }
+}
+
+const handleUpdateResponse = (
+  data: any,
+  error: any,
+  successCallback?: () => void,
+  errorCallback?: () => void,
+  defaultErrorMessage: string = 'Не удалось выполнить обновление'
+): boolean => {
+  if (!data.value?.success || error.value) {
+    const errorMessage = error.value?.data?.message || data.value?.message
+    showErrorNotification(errorMessage || defaultErrorMessage)
+    errorCallback?.()
+    return false
+  }
+
+  successCallback?.()
+  return true
 }
 
 const rollbackTimeValue = (item: StrategyItem, field: 'starts_at' | 'ends_at') => {
@@ -417,34 +515,6 @@ watch([debouncedQuery, debouncedArticle, debouncedCategory], () => {
   page.value = 1
   fetchProducts()
 })
-
-const toggleStatus = async (item: StrategyItem | null) => {
-  toggleStatusDialog.value = false
-  if (!item) return
-
-  const currentStatus = item.status
-  let newStatus: 'active' | 'paused' | 'applied' = 'paused'
-
-  if (currentStatus === 'active') newStatus = 'paused'
-  else if (currentStatus === 'paused') newStatus = 'active'
-  else if (currentStatus === 'applied') newStatus = 'paused'
-
-  try {
-    const { data, error } = await updateStrategyItem(item.id, { status: newStatus })
-    if (!data.value?.success || error.value) {
-      const errorMessage = error.value?.data?.message || data.value?.message
-      showErrorNotification(errorMessage || 'Не удалось обновить время')
-      if(_oldStatus.value) item.status = _oldStatus.value
-      return
-    }
-
-    item.status = newStatus
-  } catch (e) {
-    console.error('Ошибка при обновлении статуса', e)
-    showErrorNotification('Не удалось обновить статус')
-    if(_oldStatus.value) item.status = _oldStatus.value
-  }
-}
 
 const getStatusVisibleName = (status: string) => {
   switch(status) {

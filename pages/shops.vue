@@ -63,26 +63,24 @@ async function onSubmit() {
     }
 
     const { data, error: apiError } = await createMarketplaceAccount(createDto)
-    if (apiError.value) {
-      console.error('Ошибка создания аккаунта:', apiError.value)
+    if (apiError.value || !apiError.value.data.success) {
+      const errorMessage = apiError.value.data.message || "Ошибка при добавлении магазина"
+      notify(errorMessage, 'error')
+      saving.value = false
       return
     }
 
-if (data.value) {
-  const newAccount = data.value
-  rows.value.unshift(newAccount)
+    if (data.value.success) {
+      const newAccount = data.value.data
+      rows.value.unshift(newAccount)
 
-  notify('Магазин успешно добавлен')  // ← вот эта строка
+      notify('Магазин успешно добавлен')  // ← вот эта строка
 
-  form.name = ''
-  form.api_token_enc = ''
-  formRef.value?.resetValidation?.()
-}
- else {
-      // error.value = 'Сервер вернул пустой ответ'
+      form.name = ''
+      form.api_token_enc = ''
+      formRef.value?.resetValidation?.()
     }
   } catch (err: any) {
-    // error.value = err.message || 'Неизвестная ошибка при создании аккаунта'
     console.error('Неожиданная ошибка:', err)
   } finally {
     saving.value = false

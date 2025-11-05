@@ -29,6 +29,7 @@ interface Props {
 const props = defineProps<Props>()
 const emit = defineEmits<{
   (e: 'update:modelValue', v: boolean): void
+  (e: 'import-success', v: boolean): void
 }>()
 
 const isOpen = ref(props.modelValue)
@@ -38,6 +39,8 @@ const { onLabelsUpdated } = useLabelEvents()
 const localMap = ref<Record<number, string>>({})
 const sizeOptions = ref<{ label: string; value: string }[]>([])
 const loading = ref(false)
+
+const showHistory = ref(false)
 
 const resultDialog = reactive({
   show: false,
@@ -52,6 +55,11 @@ const pdfResultDialog = reactive({
 function showResultDialog(errors: ImportCsvResponce[] | null) {
   resultDialog.show = true
   resultDialog.items = errors
+}
+
+function onFileImported(success: boolean) {
+  localMap.value = {}
+  emit('import-success', success)
 }
 
 watch(
@@ -106,19 +114,16 @@ async function onSave() {
   loading.value = true
   try {
     if (props.type === 'pdf') {
-      // 🔹 импорт PDF
       const { data, error } = await importCzPdf(formData)
       if (error.value) throw new Error(error.value)
 
-      // результат PDF
       const pdfResults: ImportPdfResponce[] = data.value.data ?? []
       pdfResultDialog.items = pdfResults
       pdfResultDialog.show = true
 
-      // закрываем окно, если нужно
+      onFileImported(true)
       close()
     } else {
-      // 🔹 импорт CSV
       const { data, error } = await importCzCsv(formData)
       if (error.value) throw new Error(error.value)
 
@@ -126,10 +131,15 @@ async function onSave() {
       const hasErrors = csvResults.some(f => f.errors?.length)
       showResultDialog(csvResults)
 
-      if (!hasErrors) close()
+      if (!hasErrors) {
+        close()
+      }
+
+      onFileImported(true)
       onLabelsUpdated()
     }
   } catch (err: any) {
+    onFileImported(false)
     console.error('Ошибка при импорте:', err)
   } finally {
     loading.value = false
@@ -181,8 +191,11 @@ function getStatusColor(errors: number, created: number): string {
 
 <template>
   <VDialog v-model="isOpen" max-width="700px">
-    <VCard class="pt-2 pb-2">
-      <VCardTitle>Соответствие размеров</VCardTitle>
+    <VCard class="pb-2">
+      <VCardTitle class="text-h6">
+        Соответствие размеров
+      </VCardTitle>
+      <VDivider />
       <VCardText class="pa-4">
         <div v-if="loading && sizeOptions.length === 0" class="text-center">
           <VProgressCircular indeterminate size="40" width="4" />
@@ -218,7 +231,7 @@ function getStatusColor(errors: number, created: number): string {
       </VCardText>
       <VCardActions class="pe-4">
         <VSpacer />
-        <VBtn @click="close">Закрыть</VBtn>
+        <VBtn variant="outlined" @click="close">Закрыть</VBtn>
         <VBtn
           variant="flat"
           color="primary"
@@ -242,11 +255,10 @@ function getStatusColor(errors: number, created: number): string {
 
   <VDialog v-model="resultDialog.show" max-width="650px" persistent>
     <VCard>
-      <VCardTitle class="d-flex align-center">
-        <span>
-          Результат обработки CSV
-        </span>
+      <VCardTitle class="text-h6">
+        Результат обработки CSV
       </VCardTitle>
+      <VDivider />
 
       <VCardText class="pt-2 pb-2 ps-4 pe-4">
         <div>
@@ -284,7 +296,7 @@ function getStatusColor(errors: number, created: number): string {
               <span v-if="item.errorCount"></span>
               <ul style="list-style-type: none;" class="mt-1 ps-8">
                 <li v-for="(err, idx) in item.errors" :key="idx">
-                   {{ err.message }} — {{ err.quantity }} шт.
+                    {{ err.message }} — {{ err.quantity }} шт.
                 </li>
               </ul>
             </li>
@@ -294,6 +306,7 @@ function getStatusColor(errors: number, created: number): string {
 
       <VCardActions>
         <VSpacer />
+        <VBtn variant="outlined" color="primary" @click="showHistory = true"> <VIcon class="me-1" size="18" icon="tabler-file-time" /> История загрузок</VBtn>
         <VBtn variant="flat" color="primary" @click="resultDialog.show = false">Закрыть</VBtn>
       </VCardActions>
     </VCard>
@@ -302,9 +315,10 @@ function getStatusColor(errors: number, created: number): string {
   <!-- Окно для PDF -->
   <VDialog v-model="pdfResultDialog.show" max-width="600px" persistent>
     <VCard>
-      <VCardTitle class="d-flex align-center">
-        <span>Результат обработки PDF</span>
+      <VCardTitle class="text-h6">
+        Результат обработки PDF
       </VCardTitle>
+      <VDivider />
 
       <VCardText class="pt-2 pb-2 ps-4 pe-4">
         <div v-if="pdfResultDialog.items && pdfResultDialog.items.length">
@@ -330,9 +344,11 @@ function getStatusColor(errors: number, created: number): string {
 
       <VCardActions>
         <VSpacer />
+        <VBtn variant="outlined" color="primary" @click="showHistory = true"> <VIcon class="me-1" size="18" icon="tabler-file-time" /> История загрузок</VBtn>
         <VBtn variant="flat" color="primary" @click="pdfResultDialog.show = false">Закрыть</VBtn>
       </VCardActions>
     </VCard>
   </VDialog>
 
+  <FileHistoryDialog v-model="showHistory" />
 </template>
