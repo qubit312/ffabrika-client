@@ -9,12 +9,12 @@ export default defineNuxtConfig({
   app: {
     head: {
       titleTemplate: '%s',
-      title: 'FF-WMS',
+      title: 'FastWms',
 
       link: [{
         rel: 'icon',
         type: 'image/x-icon',
-        href: '/logo.svg',
+        href: '/favicon.svg',
       }],
     },
   },

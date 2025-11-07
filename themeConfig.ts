@@ -5,17 +5,17 @@ import { breakpointsVuetify } from '@vueuse/core'
 import { h } from 'vue'
 import { VIcon } from 'vuetify/components/VIcon'
 
-import logo from '@images/logo_wms.png'
+import logo from '@images/logo_fastwms.png'
 
 export const { themeConfig, layoutConfig } = defineThemeConfig({
   app: {
-    title: 'ffwms',
+    title: 'fastwms',
     logo: h('img', {
       src: logo,
-      alt: 'Ffabrika Logo',
+      alt: 'FastWms Logo',
       class: 'logo-container',
       style: `
-        height: 50px;
+        height: 18px;
         display: inline-block;
       `,
     }),

@@ -5,7 +5,7 @@ import { breakpointsVuetify } from '@vueuse/core'
 export const layoutConfig: LayoutConfig = {
   app: {
     title: 'my-layout',
-    logo: h('img', { src: '/src/assets/logo_wms.png' }),
+    logo: h('img', { src: '/src/assets/logo_fastwms.png' }),
     contentWidth: ContentWidth.Boxed,
     contentLayoutNav: AppContentLayoutNav.Vertical,
     overlayNavFromBreakpoint: breakpointsVuetify.md,
