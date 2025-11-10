@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { getFileOperations, type FileOperation, type PaginatedResponse } from '@/services/fileOperations'
-import { ref, watch } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -18,12 +18,42 @@ const page = ref(1)
 const itemsPerPage = ref(10)
 const loading = ref(false)
 
+const refreshInterval = ref<number | null>(null)
+
+const startAutoRefresh = () => {
+  if (refreshInterval.value) {
+    clearInterval(refreshInterval.value)
+  }
+  refreshInterval.value = setInterval(() => {
+    if (isOpen.value) {
+      fetchFileOperations(false)
+    }
+  }, 3000) as unknown as number
+}
+
+const stopAutoRefresh = () => {
+  if (refreshInterval.value) {
+    clearInterval(refreshInterval.value)
+    refreshInterval.value = null
+  }
+}
+
 watch(() => [page.value, itemsPerPage.value], () => {
   fetchFileOperations()
 })
 
-async function fetchFileOperations() {
-  loading.value = true
+onMounted(() => {
+  if (isOpen.value) {
+    startAutoRefresh()
+  }
+})
+
+onUnmounted(() => {
+  stopAutoRefresh()
+})
+
+async function fetchFileOperations(showLoading: boolean = true) {
+  loading.value = true && showLoading
   const { data, error } = await getFileOperations({
     page: page.value,
     per_page: itemsPerPage.value,
@@ -41,7 +71,10 @@ async function fetchFileOperations() {
 }
 
 watch(isOpen, val => {
-  if (val) fetchFileOperations()
+  if (val) {
+    fetchFileOperations()
+  }
+  startAutoRefresh()
 })
 
 const formatSize = (size?: number) => {
@@ -77,14 +110,14 @@ const getStatusVisibleName = (status: string) => {
     case 'in_progress':
       return 'В процессе'
     case 'partial_success':
-      return 'Выполнено с замечаниями'
+      return 'С замечаниями'
     default:
       return status || ''
   }
 }
 
 const headers = [
-  { title: 'Имя файла', key: 'file_name', sortable: false },
+  { title: 'Имя файла', key: 'file_name', sortable: false, width: 200 },
   { title: 'Размер', key: 'file_size', sortable: false },
   { title: 'Статус', key: 'status', sortable: false },
   { title: 'Создан', key: 'created_at', sortable: false },
@@ -167,11 +200,11 @@ function showErrorDetails(item: FileOperation) {
         <VBtn icon="tabler-x" variant="text" @click="isOpen = false" />
       </VCardTitle>
 
-      <VCardText>
+      <VCardText class="table-container">
         <VDataTable
           :headers="headers"
           :items="operations"
-          class="product-table"
+          class="product-table text-wrap"
           :items-per-page="itemsPerPage"
           :page="page"
           :loading="loading"
@@ -186,8 +219,18 @@ function showErrorDetails(item: FileOperation) {
             <div class="text-medium-emphasis text-center py-8">Данных не найдено</div>
           </template>
 
-          <template #item.file_name="{ item }">
-            {{ item.file_name }}
+          <template #item.file_name="{ item }" class="min-width: 420px">
+            <VTooltip location="top">
+              <template #activator="{ props }">
+                <span
+                  v-bind="props"
+                  class="truncate-cell cursor-pointer"
+                >
+                  {{ item.file_name }}
+                </span>
+              </template>
+              <span>{{ item.file_name }}</span>
+            </VTooltip>
           </template>
 
           <template #item.file_size="{ item }">
@@ -210,8 +253,10 @@ function showErrorDetails(item: FileOperation) {
                 icon
                 variant="text"
                 color="error"
+                density="compact"
                 @click.stop="showErrorDetails(item)"
                 title="Подробнее об ошибке"
+                height="24"
               >
                 <VIcon icon="tabler-alert-circle" />
               </VBtn>
@@ -227,27 +272,21 @@ function showErrorDetails(item: FileOperation) {
           </template>
 
           <template #bottom>
-            <VCardText class="pt-2">
-              <div class="d-flex flex-wrap justify-center justify-sm-space-between gap-y-2 mt-2">
-                <div class="d-flex align-center gap-2">
-                  <span>Записей на странице</span>
-                  <VSelect
-                    v-model="itemsPerPage"
-                    :items="[5, 10, 25, 50]"
-                    style="max-inline-size: 8rem;min-inline-size: 5rem;"
-                  />
-                </div>
-
-                <VPagination
-                  v-model="page"
-                  :total-visible="5"
-                  :length="Math.ceil(totalOperations / itemsPerPage)"
-                />
-              </div>
-            </VCardText>
+            
           </template>
         </VDataTable>
       </VCardText>
+
+      <VCardActions>
+        <VSpacer />
+        <div class="ms-6 me-6 mb-6">
+          <VPagination
+            v-model="page"
+            :total-visible="5"
+            :length="Math.ceil(totalOperations / itemsPerPage)"
+          />
+        </div>
+      </VCardActions>
     </VCard>
   </VDialog>
 
@@ -318,5 +357,24 @@ function showErrorDetails(item: FileOperation) {
       </VCardActions>
     </VCard>
   </VDialog>
-
 </template>
+
+<style lang="css">
+.table-container {
+  min-height: 610px;
+  max-height: 610px;
+}
+
+.product-table {
+  flex: 1 1 auto;
+  min-height: 550px;
+  min-height: 550px;
+}
+
+.product-table .v-data-table__td {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 420px;
+}
+</style>

@@ -63,8 +63,8 @@ async function onSubmit() {
     }
 
     const { data, error: apiError } = await createMarketplaceAccount(createDto)
-    if (apiError.value || !apiError.value.data.success) {
-      const errorMessage = apiError.value.data.message || "Ошибка при добавлении магазина"
+    if (apiError.value?.data) {
+      const errorMessage = apiError.value?.data?.message || "Ошибка при добавлении магазина"
       notify(errorMessage, 'error')
       saving.value = false
       return
@@ -84,6 +84,7 @@ async function onSubmit() {
     console.error('Неожиданная ошибка:', err)
   } finally {
     saving.value = false
+    load()
   }
 }
 
@@ -257,7 +258,8 @@ async function saveRename() {
     const { data, error: apiError } = await updateMarketplaceAccount(renameTarget.id, updateDto)
     
     if (apiError.value) {
-      error.value = apiError.value.message || 'Ошибка при сохранении изменений'
+      console.log(apiError.value.data)
+      error.value = apiError.value.data.message || 'Ошибка при сохранении изменений'
       console.error('Ошибка обновления аккаунта:', apiError.value)      
       return
     }
@@ -280,6 +282,7 @@ async function saveRename() {
     saving.value = false
     renameDialog.value = false
     renameTarget = null
+    load()
   }
 }
 

@@ -352,7 +352,7 @@ onMounted(fetchClient)
                 </VListItemSubtitle>
               </VListItem>
               <VListItem @click="copyToClipboard(org.short_address, 'short_address')">
-                <VListItemTitle>Короткий адрес</VListItemTitle>
+                <VListItemTitle>Короткий адрес для печати</VListItemTitle>
                 <VListItemSubtitle>
                   <VTooltip :model-value="copiedField === 'short_address'" location="top" :open-on-click="false" :open-on-hover="copiedField !== 'short_address'">
                     <template #activator="{ props }">

@@ -208,6 +208,7 @@ async function saveUser() {
       const { data, error } = await inviteUser(payload)
       if (error.value || !data.value?.mail_sent) throw new Error(data.value?.message || 'Не удалось пригласить')
       notify('Пользователь приглашен')
+      editUserRoleDialog.value = false
       fetchInvitations()
     } else if (editedClientUserId.value) {
       const dto: UpdateClientUserDto = { role_id:  payload.role_id }
