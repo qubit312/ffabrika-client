@@ -567,9 +567,16 @@ onMounted(fetchAccounts)
             </VTooltip>
           </div>
         </template>
-        <template #item.stock="{ item }">
-          <div class="d-flex align-center justify-center c-default">
-            <span>{{ item.stock ?? '—' }}</span>
+        <template #item.stock="{ item }: { item: any }">
+          <div class="d-flex align-center justify-center">
+            <span
+              :class="[
+                'font-weight-medium',
+                Number(item.stock) === 0 ? 'text-error' : 'text-high-emphasis'
+              ]"
+            >
+              {{ item.stock ?? '—' }}
+            </span>
           </div>
         </template>
 

@@ -1,8 +1,23 @@
 <script setup lang="ts">
 import { getMarketplaceAccounts } from '@/services/marketplaceAccounts'
-import { createStrategy, deleteStrategyItem, getStrategy, getStrategyItems, updateStrategy, updateStrategyItem, updateStrategyItemTime } from '@/services/pricingStrategies'
+import {
+  createStrategy,
+  deleteStrategyItem,
+  getStrategy,
+  getStrategyItems,
+  updateStrategy,
+  updateStrategyItem,
+  updateStrategyItemTime
+} from '@/services/pricingStrategies'
 import type { FilterRequest } from '@/types/filter'
-import type { CreateStrategyDto, PricingStrategy, StrategyAccount, StrategyItem, StrategyStatus, StrategyType } from '@/types/pricingStrategy'
+import type {
+  CreateStrategyDto,
+  PricingStrategy,
+  StrategyAccount,
+  StrategyItem,
+  StrategyStatus,
+  StrategyType
+} from '@/types/pricingStrategy'
 import type { CustomInputContent } from '@core/types'
 import { useDebounce, useDebounceFn } from '@vueuse/core'
 import { computed, onMounted, ref, watch } from 'vue'
@@ -10,7 +25,10 @@ import { useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
 const router = useRouter()
-const isEdit = computed(() => route.name === 'repricer-edit')
+const isEdit = computed(() => String(route.params.id) !== '0')
+
+const unwrap = <T = any>(v: any): T | undefined =>
+  v?.value?.data ?? v?.value ?? v?.data ?? v
 
 const radioContent: CustomInputContent[] = [
   {
@@ -64,67 +82,53 @@ const page = ref(1)
 const onOptionsUpdate = (options: any) => {
   page.value = options.page
   itemsPerPage.value = options.itemsPerPage
-
-  if (options.sortBy?.length > 0) {
-    sortBy.value = options.sortBy[0]
-  } else {
-    sortBy.value = null
-  }
+  sortBy.value = options.sortBy?.length > 0 ? options.sortBy[0] : null
   fetchProducts()
 }
 
 async function fetchAccounts() {
   loading.value = true
-  
   try {
     const { data, error: fetchError } = await getMarketplaceAccounts()
-    
-    if (fetchError.value) {
-      throw new Error(fetchError.value.message || 'Ошибка загрузки данных')
-    }
-    
-    accounts.value = (data.value || []).map((a: any) => ({
+    if (fetchError?.value) throw new Error(fetchError.value.message || 'Ошибка загрузки данных')
+    const result = unwrap<any[]>(data) ?? []
+    accounts.value = result.map((a: any) => ({
       id: a.id,
       name: a.name || `Кабинет #${a.id}`,
     })) as StrategyAccount[]
   } catch (err) {
     accounts.value = []
     console.error('Ошибка загрузки магазинов:', err)
-    loading.value = false
   } finally {
     loading.value = false
   }
 }
 
 const fetchStrategy = async () => {
-  strategyLoading.value = true 
+  strategyLoading.value = true
   const id = Number(route.params.id)
   if (!id) {
     strategyLoading.value = false
     return
   }
-
   try {
     const { data, error } = await getStrategy(id)
-    const fetchResult = handleUpdateResponse(
+    const ok = handleUpdateResponse(
       data, error, undefined, undefined,
       'Не удалось получить информацию по стратегии'
     )
-    const strategy = data.value.data
-
-    if (fetchResult && strategy) {
-      strategy.value = strategy
-      strategyName.value = strategy.name
-      strategyType.value = strategy.type
-      strategyStatus.value = strategy.status
-      strategyAccountId.value = strategy.account_id
-
-      sortField.value = strategy.order_by_field
-      sortOrder.value = strategy.order_direction
+    const strategyData = unwrap<PricingStrategy>(data)
+    if (ok && strategyData) {
+      strategy.value = strategyData
+      strategyName.value = strategyData.name
+      strategyType.value = strategyData.type
+      strategyStatus.value = strategyData.status
+      strategyAccountId.value = strategyData.account?.id ?? (strategyData as any).account_id ?? null
+      sortField.value = (strategyData as any).order_by_field ?? 'name'
+      sortOrder.value = ((strategyData as any).order_direction ?? 'asc') as 'asc' | 'desc'
     }
   } catch (e) {
     console.error('Ошибка при загрузке стратегии', e)
-    strategyLoading.value = false
   } finally {
     strategyLoading.value = false
   }
@@ -133,26 +137,18 @@ const fetchStrategy = async () => {
 const applyGlobalEnd = async () => {
   const id = Number(route.params.id)
   if (!id) return
-
   try {
-    const payload = {
-      field: 'ends_at',
-      value: globalEndTime.value
-    }
-
-    const { data, error } = await updateStrategyItemTime(id, payload)
-    
+    const { data, error } = await updateStrategyItemTime(id, { field: 'ends_at', value: globalEndTime.value })
     handleUpdateResponse(
       data, error,
       () => {
-        const count = data.value.data?.updated
+        const count = unwrap<any>(data)?.updated ?? unwrap<any>(data)?.data?.updated
         if (count) showSuccessNotification(`Обновлено элементов: ${count}`)
         fetchProducts()
       },
       undefined,
       'Не удалось обновить время для товаров'
     )
-    
     isSetEndDialogOpen.value = false
   } catch (error) {
     console.error('Error updating end time:', error)
@@ -163,26 +159,18 @@ const applyGlobalEnd = async () => {
 const applyGlobalStart = async () => {
   const id = Number(route.params.id)
   if (!id) return
-
   try {
-    const payload = {
-      field: 'starts_at',
-      value: globalStartTime.value
-    }
-
-    const { data, error } = await updateStrategyItemTime(id, payload)
-    
+    const { data, error } = await updateStrategyItemTime(id, { field: 'starts_at', value: globalStartTime.value })
     handleUpdateResponse(
       data, error,
       () => {
-        const count = data.value.data?.updated
+        const count = unwrap<any>(data)?.updated ?? unwrap<any>(data)?.data?.updated
         if (count) showSuccessNotification(`Обновлено элементов: ${count}`)
         fetchProducts()
       },
       undefined,
       'Не удалось обновить время для товаров'
     )
-    
     isSetStartDialogOpen.value = false
   } catch (error) {
     console.error('Error updating start time:', error)
@@ -213,13 +201,11 @@ const sortFields = [
 const updateStrategySort = useDebounceFn(async () => {
   const strategyId = Number(route.params.id)
   if (!strategyId || strategyId === 0) return
-
   try {
     const { data, error } = await updateStrategy(strategyId, {
       order_by_field: sortField.value,
       order_direction: sortOrder.value,
     })
-
     handleUpdateResponse(
       data, error, undefined, undefined,
       'Не удалось обновить сортировку стратегии'
@@ -240,7 +226,6 @@ const fetchProducts = async () => {
   loading.value = true
   try {
     const strategyId = Number(route.params.id)
-
     const requestBody: FilterRequest = {
       page: page.value,
       per_page: itemsPerPage.value,
@@ -252,74 +237,137 @@ const fetchProducts = async () => {
         ...(searchCategory.value ? [{ field: 'category', op: 'like' as const, value: searchCategory.value }] : []),
       ],
     }
-
     const { data, error } = await getStrategyItems(strategyId, requestBody)
     handleUpdateResponse(
-      data, error, 
+      data, error,
       () => {
-        products.value = data.value.data
-        productsLength.value = data.value.total
+        const resp = unwrap<any>(data) ?? {}
+        const items = resp.data ?? resp.items ?? (Array.isArray(resp) ? resp : [])
+        const total = resp.total ?? resp.meta?.total ?? items.length ?? 0
+        products.value = items
+        productsLength.value = total
       },
       () => {
         products.value = []
         productsLength.value = 0
       },
-      'Не удалось обновить сортировку стратегии'
+      'Не удалось получить список товаров'
     )
-    
   } finally {
     loading.value = false
   }
 }
 
+const currentStep = computed<number>({
+  get: () => (Number(route.query.step) === 2 ? 2 : 1),
+  set: (val: number) => {
+    router.replace({
+      name: 'repricer-details-id',
+      params: route.params,
+      query: { ...route.query, step: String(val === 2 ? 2 : 1) },
+    })
+  },
+})
+
+
 onMounted(async () => {
   await fetchAccounts()
   await fetchStrategy()
   if (route.params.id !== '0') await fetchProducts()
+
+  if (route.query.created === '1') {
+    showSuccessNotification('Стратегия успешно создана')
+    router.replace({
+      name: route.name as string,
+      params: route.params,
+      query: { ...route.query, created: undefined },
+    })
+  }
 })
 
 
 const saveStrategy = async () => {
+  if (strategyLoading.value) return
+
   strategyLoading.value = true
+
   const id = Number(route.params.id)
+  const prevStep = currentStep.value
+
+  if (id === 0 && currentStep.value !== 2) {
+    currentStep.value = 2
+  }
+
   const payload: CreateStrategyDto = {
     name: strategyName.value,
     type: strategyType.value,
     status: strategyStatus.value,
-    account_id: strategyAccountId.value || null
+    account_id: strategyAccountId.value || null,
   }
 
   try {
     if (id === 0) {
       const { data, error } = await createStrategy(payload)
-
-      handleUpdateResponse(
-        data, error,
-        () => {
-          const createdStrategy = data.value?.data
-          if (createdStrategy) strategy.value = createdStrategy
-          if (createdStrategy?.id) router.push(`/repricer/details/${createdStrategy.id}`)
-        },
-        undefined,
-        'Не удалось обновить стратегию'
+      const ok = handleUpdateResponse(
+        data, error, undefined, undefined,
+        'Не удалось создать стратегию'
       )
+      if (!ok) {
+        currentStep.value = prevStep
+        return
+      }
+
+      const created = unwrap<PricingStrategy>(data)
+      if (!created?.id) {
+        showErrorNotification('Бэкенд вернул неожиданный ответ при создании')
+        currentStep.value = prevStep
+        return
+      }
+
+      strategy.value = created
+
+      await router.replace({
+        name: 'repricer-details-id',
+        params: { id: String(created.id) },
+        query: { step: '2', created: '1' },
+      })
+
+      await fetchProducts()
+      showSuccessNotification('Стратегия успешно создана')
     } else {
       const { data, error } = await updateStrategy(id, payload)
-
-      handleUpdateResponse(
-        data, error,
-        undefined,
-        undefined,
+      const ok = handleUpdateResponse(
+        data, error, undefined, undefined,
         'Не удалось обновить стратегию'
       )
+
+      if (!ok) {
+        currentStep.value = prevStep
+        return
+      }
+
+      if (currentStep.value !== 2) {
+        currentStep.value = 2
+      } else {
+        await router.replace({
+          name: 'repricer-details-id',
+          params: route.params,
+          query: { ...route.query, step: '2' },
+        })
+      }
+
+      showSuccessNotification('Изменения сохранены')
+      // await fetchProducts()
     }
   } catch (e) {
     console.error('Ошибка при сохранении стратегии', e)
-    strategyLoading.value = false
+    showErrorNotification('Ошибка при сохранении стратегии')
+    currentStep.value = prevStep
   } finally {
     strategyLoading.value = false
   }
 }
+
 
 const deleteItem = async () => {
   if (!itemToDelete.value) return
@@ -345,34 +393,27 @@ const formatTime = (time?: string | null): string | null => {
 
 const updateDiscount = async (item: StrategyItem) => {
   if (item.status === 'applied') {
-    if(_oldDiscount.value) item.temp_discount = _oldDiscount.value
+    if (_oldDiscount.value) item.temp_discount = _oldDiscount.value
     return
   }
   const discountValue = Math.round(Number(item.temp_discount) || 0)
-
   if (discountValue >= 100 || discountValue < 0) {
     showErrorNotification('Скидка должна быть от 1 до 99')
-    if(_oldDiscount.value) item.temp_discount = _oldDiscount.value
+    if (_oldDiscount.value) item.temp_discount = _oldDiscount.value
     return
   }
-
   item.temp_discount = discountValue
   try {
-    const { data, error } = await updateStrategyItem(item.id, {
-      temp_discount: discountValue,
-    })
-
+    const { data, error } = await updateStrategyItem(item.id, { temp_discount: discountValue })
     handleUpdateResponse(
       data, error, undefined,
-      () => { if(_oldDiscount.value) item.temp_discount = _oldDiscount.value },
+      () => { if (_oldDiscount.value) item.temp_discount = _oldDiscount.value },
       'Не удалось обновить скидку'
     )
   } catch (e: any) {
     console.error('Ошибка при обновлении скидки', e)
     showErrorNotification('Ошибка при обновлении скидки')
-    if(_oldDiscount.value) {
-      item.temp_discount = _oldDiscount.value
-    }
+    if (_oldDiscount.value) item.temp_discount = _oldDiscount.value
   }
 }
 
@@ -404,7 +445,6 @@ const updateTime = async (item: StrategyItem, field: 'starts_at' | 'ends_at') =>
     }
 
     const { data, error } = await updateStrategyItem(item.id, payload)
-
     handleUpdateResponse(
       data, error, undefined,
       () => rollbackTimeValue(item, field),
@@ -417,13 +457,15 @@ const updateTime = async (item: StrategyItem, field: 'starts_at' | 'ends_at') =>
   }
 }
 
+const toggleStatusDialog = ref(false)
+const toggleStatusItem = ref<StrategyItem | null>(null)
+
 const toggleStatus = async (item: StrategyItem | null) => {
   toggleStatusDialog.value = false
   if (!item) return
 
   const currentStatus = item.status
   let newStatus: 'active' | 'paused' | 'applied' = 'paused'
-
   if (currentStatus === 'active') newStatus = 'paused'
   else if (currentStatus === 'paused') newStatus = 'active'
   else if (currentStatus === 'applied') newStatus = 'paused'
@@ -433,13 +475,22 @@ const toggleStatus = async (item: StrategyItem | null) => {
     handleUpdateResponse(
       data, error,
       () => { item.status = newStatus },
-      () => { if(_oldStatus.value) item.status = _oldStatus.value },
+      () => { if (_oldStatus.value) item.status = _oldStatus.value },
       'Не удалось обновить статус'
     )
   } catch (e) {
     console.error('Ошибка при обновлении статуса', e)
     showErrorNotification('Не удалось обновить статус')
-    if(_oldStatus.value) item.status = _oldStatus.value
+    if (_oldStatus.value) item.status = _oldStatus.value
+  }
+}
+
+const confirmStatusDialog = (item: StrategyItem) => {
+  if (item.status === 'applied') {
+    toggleStatusDialog.value = true
+    toggleStatusItem.value = item
+  } else {
+    toggleStatus(item)
   }
 }
 
@@ -448,15 +499,23 @@ const handleUpdateResponse = (
   error: any,
   successCallback?: () => void,
   errorCallback?: () => void,
-  defaultErrorMessage: string = 'Не удалось выполнить обновление'
+  defaultErrorMessage: string = 'Не удалось выполнить обновление',
+  validateOk?: (val: any) => boolean,
 ): boolean => {
-  if (!data.value?.success || error.value) {
-    const errorMessage = error.value?.data?.message || data.value?.message
-    showErrorNotification(errorMessage || defaultErrorMessage)
+  if (error?.value) {
+    const errMsg = error.value?.data?.message || error.value?.message
+    showErrorNotification(errMsg || defaultErrorMessage)
     errorCallback?.()
     return false
   }
-
+  const val = data?.value ?? data
+  const ok = validateOk ? validateOk(val) : true
+  if (!ok) {
+    const errMsg = val?.message
+    showErrorNotification(errMsg || defaultErrorMessage)
+    errorCallback?.()
+    return false
+  }
   successCallback?.()
   return true
 }
@@ -472,44 +531,27 @@ const rollbackTimeValue = (item: StrategyItem, field: 'starts_at' | 'ends_at') =
 
 const timeOptions = computed(() => {
   const options: { title: string; value: string }[] = []
-
   for (let hour = 0; hour < 24; hour++) {
     for (let minute = 0; minute < 60; minute += 30) {
       const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
-      options.push({
-        title: timeString,
-        value: timeString,
-      })
+      options.push({ title: timeString, value: timeString })
     }
   }
-
   return options
 })
 
 const normalizeTime = (time?: string) => time ? time.slice(0, 5) : ''
 
-const currentStep = ref(1)
 const loading = ref(false)
+
 const isAddProductsModalOpen = ref(false)
 
 const searchName = ref<string>('')
 const debouncedQuery = useDebounce(searchName, 400)
 const searchCategory = ref<string>('') 
 const debouncedCategory = useDebounce(searchCategory, 400)
-const searchArticle = ref<string>('')
+const searchArticle = ref<string>('') 
 const debouncedArticle = useDebounce(searchArticle, 400) 
-
-const toggleStatusDialog = ref(false)
-const toggleStatusItem = ref<StrategyItem | null>(null)
-
-const confirmStatusDialog = (item: StrategyItem) => {
-  if (item.status === 'applied') {
-    toggleStatusDialog.value = true
-    toggleStatusItem.value = item
-  } else {
-    toggleStatus(item)
-  }
-}
 
 watch([debouncedQuery, debouncedArticle, debouncedCategory], () => {
   page.value = 1
@@ -517,15 +559,11 @@ watch([debouncedQuery, debouncedArticle, debouncedCategory], () => {
 })
 
 const getStatusVisibleName = (status: string) => {
-  switch(status) {
-    case 'active':
-      return 'Активно'
-    case 'paused':
-      return 'Пауза'
-    case 'applied':
-      return 'В работе'
-    default:
-      return status
+  switch (status) {
+    case 'active': return 'Активно'
+    case 'paused': return 'Пауза'
+    case 'applied': return 'В работе'
+    default: return status
   }
 }
 
@@ -545,8 +583,8 @@ const confirmDelete = (item: StrategyItem) => {
   itemToDelete.value = item
   isDeleteDialogOpen.value = true
 }
-
 </script>
+
 
 <template>
 
@@ -556,8 +594,8 @@ const confirmDelete = (item: StrategyItem) => {
           {{ isEdit ? 'Редактирование стратегии' : 'Создание стратегии репрайсера' }}
         </h1>
         
-        <VStepper v-model="currentStep" editable>
-          <VStepperHeader style="max-width: 500px;">
+        <VStepper v-model="currentStep" editable >
+          <VStepperHeader style="max-width: 500px; box-shadow: none;">
             <VStepperItem 
               title="Настройка" 
               :value="1"
@@ -585,8 +623,7 @@ const confirmDelete = (item: StrategyItem) => {
               </template>    
             </VStepperItem> -->
           </VStepperHeader>
-
-          <VStepperWindow>
+          <VStepperWindow v-model="currentStep" >
             <VStepperWindowItem :value="1">
               <VCard>
                 <h3 class="text-h6">Шаг 1: Настройка</h3>
@@ -994,19 +1031,28 @@ const confirmDelete = (item: StrategyItem) => {
 
           <VStepperActions>
             <template #prev>
-              <!-- Скрываем кнопку "Назад" -->
+              <VBtn
+                v-if="currentStep === 2"
+                variant="text"
+                prepend-icon="tabler-arrow-left"
+                @click="() => { currentStep = 1 }"
+              >
+                Назад
+              </VBtn>
             </template>
-            
+          <template  />
             <template #next>
-              <!-- <VBtn 
-                color="primary" 
+              <VBtn
+                v-if="currentStep === 1 && isEdit"
+                color="primary"
                 :loading="loading"
-                @click="handleNext"
+                append-icon="tabler-arrow-right"
+                @click="() => { currentStep = 2; fetchProducts() }"
               >
                 Далее
-              </VBtn> -->
+              </VBtn>
             </template>
-            
+          
             <VBtn variant="outlined" @click="$router.back()">
               Отмена
             </VBtn>

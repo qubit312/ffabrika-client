@@ -268,18 +268,19 @@ const resetFilters = () => {
       <VCardActions>
         <VSpacer />
         <VBtn
-          variant="outlined"
-          @click="isOpen = false"
-        >
-          Отмена
-        </VBtn>
-        <VBtn
-          color="primary"
+          variant="elevated"
           :disabled="selectedProducts.length === 0"
           @click="addSelectedProducts"
         >
           Добавить выбранные ({{ selectedProducts.length }})
         </VBtn>
+        <VBtn
+          variant="outlined"
+          @click="isOpen = false"
+        >
+          Отмена
+        </VBtn>
+
       </VCardActions>
     </VCard>
   </VDialog>

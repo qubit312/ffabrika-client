@@ -457,10 +457,19 @@ onMounted(load)
 
   <VDialog v-model="importResult.show" max-width="520" transition="scale-transition" persistent>
     <VCard
-      class="rounded-l pa-4"
+      class="rounded-l pa-4 position-relative"
       :color="importResult.success ? 'success-container' : 'error-container'"
       elevation="12"
     >
+      <IconBtn
+        class="position-absolute"
+        style="top: 10px; right: 10px; z-index: 10;"
+        @click="importResult.show = false"
+        title="Закрыть"
+      >
+        <VIcon icon="tabler-x" />
+      </IconBtn>
+    
       <div class="text-center mb-2">
         <VAvatar
           size="72"
@@ -473,7 +482,7 @@ onMounted(load)
             color="white"
           />
         </VAvatar>
-
+      
         <h3 class="text-h6 font-weight-bold mb-1">
           {{ importResult.success ? 'Импорт завершён успешно!' : 'Импорт завершён с ошибками' }}
         </h3>
@@ -483,12 +492,8 @@ onMounted(load)
             : 'Некоторые товары не удалось импортировать.' }}
         </p>
       </div>
-
-      <VSheet
-        class="pa-4 rounded-lg mb-4"
-        color="surface"
-        elevation="1"
-      >
+    
+      <VSheet class="pa-4 rounded-lg mb-4" color="surface" elevation="1">
         <VRow>
           <VCol cols="4" sm="4" class="d-flex flex-column align-center justify-center text-center">
             <div class="text-body-2 text-medium-emphasis">Обработано товаров</div>
@@ -504,7 +509,7 @@ onMounted(load)
           </VCol>
         </VRow>
       </VSheet>
-
+    
       <VAlert
         v-if="importResult.errors.length"
         type="error"
@@ -518,7 +523,7 @@ onMounted(load)
           <li v-for="(error, i) in importResult.errors" :key="i">{{ error }}</li>
         </ul>
       </VAlert>
-
+    
       <VAlert
         v-else
         type="success"
@@ -529,20 +534,24 @@ onMounted(load)
       >
         Все товары успешно обработаны!
       </VAlert>
-
+    
       <VCardActions class="justify-center">
         <VBtn
           color="primary"
           variant="flat"
           size="large"
           rounded="lg"
-          prepend-icon="tabler-check"
-          @click="importResult.show = false"
+          append-icon="tabler-arrow-right"
+          @click="
+            importResult.show = false;
+            $router.push('/product/list');
+          "
         >
-          Отлично
+          Посмотреть товары
         </VBtn>
       </VCardActions>
     </VCard>
+
   </VDialog>
   <VSnackbar v-model="snack.show" :color="snack.color" location="top end" timeout="2500">
     {{ snack.text }}

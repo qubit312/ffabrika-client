@@ -252,7 +252,7 @@ function openLabels(productId: number, sizeId: number, sizeValue: string, used: 
 
         <template #item.product_name="{ item }">
          <span class="pointer hoverable">
-          <RouterLink :to="{ name: 'product-details-id', params: { id: item.id } }" class="text-primary">
+          <RouterLink :to="{ name: 'product-marking-id', params: { id: item.id } }" class="text-primary">
             {{ item.product_name }}
           </RouterLink>
           </span>

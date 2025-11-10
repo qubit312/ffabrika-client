@@ -37,6 +37,29 @@ const headers = [
   { title: 'Действия', key: 'actions', sortable: false },
 ]
 
+const isDeleteDialogOpen = ref(false)
+const strategyToDelete = ref<PricingStrategy | null>(null)
+
+const confirmRemove = (strategy: PricingStrategy) => {
+  strategyToDelete.value = strategy
+  isDeleteDialogOpen.value = true
+}
+
+const deleteConfirmed = async () => {
+  if (!strategyToDelete.value) return
+
+  try {
+    await deleteStrategy(strategyToDelete.value.id)
+    strategies.value = strategies.value.filter(s => s.id !== strategyToDelete.value?.id)
+  } catch (e) {
+    console.error('Ошибка при удалении стратегии', e)
+  } finally {
+    isDeleteDialogOpen.value = false
+    strategyToDelete.value = null
+  }
+}
+
+
 const fetchStrategies = async () => {
   loading.value = true
   try {
@@ -253,10 +276,11 @@ const resetFilters = () => {
               size="small"
               variant="text"
               color="error"
-              @click="removeStrategy(item)"
+              @click="confirmRemove(item)"
             >
               <VIcon icon="tabler-trash" size="small" />
             </VBtn>
+
           </div>
         </template>
 
@@ -278,6 +302,30 @@ const resetFilters = () => {
     </VCard>
     </VCard>
   </div>
+  <VDialog v-model="isDeleteDialogOpen" max-width="480">
+    <VCard>
+      <VCardTitle class="text-h6">
+        Удалить стратегию
+      </VCardTitle>
+      <VDivider />
+      <VCardText>
+        <p>
+          Вы уверены, что хотите удалить стратегию
+          <strong>{{ strategyToDelete?.name }}</strong>?
+        </p>
+        <p class="text-medium-emphasis text-caption">
+          Это действие нельзя отменить.
+        </p>
+      </VCardText>
+      <VCardActions>
+        <VSpacer />
+        <VBtn variant="text" @click="isDeleteDialogOpen = false">Отмена</VBtn>
+        <VBtn color="error" variant="flat" @click="deleteConfirmed">
+          Удалить
+        </VBtn>
+      </VCardActions>
+    </VCard>
+  </VDialog>
 
 </template>
 
